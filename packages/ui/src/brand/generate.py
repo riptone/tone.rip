@@ -77,7 +77,7 @@ GLYPHS = {
     # to "o" and "e"; the spike breaking the arch's left-right symmetry is
     # what let the lines go back in without that happening.
     "n": [
-        ".....",
+        "#....",
         ".###.",
         "#...#",
         "#...#",
