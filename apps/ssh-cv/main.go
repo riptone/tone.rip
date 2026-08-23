@@ -1,15 +1,15 @@
-// Command ssh-cv serves a CV - and, for authorized keys, a dotfiles browser -
-// over SSH.
+// Command ssh-cv serves a CV over SSH.
 //
 //	ssh cv.no-tone.com
 //
-// One caveat shapes the whole design: SSH has no SNI. The client never tells
-// the server which hostname it dialled, so `cv.no-tone.com` and
-// `dot.no-tone.com` pointing at the same address are indistinguishable here.
-// Rather than split them across ports (`ssh -p 2222` is not a thing anyone
-// wants to type) both names resolve to this one server, and what you see
-// depends on your key: everyone gets the CV, authorized keys additionally get
-// a dotfiles tab. See README.md.
+// It is the long version of the CV the website prints: the same content
+// module, but with the company names and the per-role detail that /cv leaves
+// out. Anyone may read it - typing that command is the only credential it
+// asks for.
+//
+// One caveat shapes the deployment: SSH has no SNI. The client never tells
+// the server which hostname it dialled, so every name pointing at this
+// address is the same connection here. See README.md.
 package main
 
 import (
@@ -17,6 +17,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -26,11 +27,14 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
 	"github.com/charmbracelet/wish/activeterm"
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
+	"github.com/charmbracelet/wish/recover"
+	"github.com/muesli/termenv"
 	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/no-tone/tonil/apps/ssh-cv/internal/authz"
@@ -46,9 +50,9 @@ const grantKey contextKey = "tonil.grant"
 const fingerprintKey contextKey = "tonil.fingerprint"
 
 type config struct {
+	preview        bool
 	addr           string
 	hostKeyPath    string
-	dotfilesRoot   string
 	authorizeURL   string
 	authorizeToken string
 	authorizedKeys string
@@ -65,12 +69,12 @@ func envOr(name, fallback string) string {
 
 func parseFlags() config {
 	var cfg config
+	flag.BoolVar(&cfg.preview, "preview", false,
+		"render the CV in this terminal instead of serving it over SSH")
 	flag.StringVar(&cfg.addr, "addr", envOr("SSH_ADDR", ":22"),
 		"address to listen on")
 	flag.StringVar(&cfg.hostKeyPath, "host-key", envOr("SSH_HOST_KEY", ".ssh/ssh_cv_ed25519"),
 		"path to the host key; generated on first run if absent")
-	flag.StringVar(&cfg.dotfilesRoot, "dotfiles", os.Getenv("DOTFILES_DIR"),
-		"directory holding the dotfiles checkout; empty disables the pane")
 	flag.StringVar(&cfg.authorizeURL, "authorize-url", os.Getenv("SSH_AUTHORIZE_URL"),
 		"apps/api endpoint that resolves a key fingerprint to a grant")
 	flag.StringVar(&cfg.authorizedKeys, "authorized-keys", os.Getenv("SSH_AUTHORIZED_KEYS_FILE"),
@@ -87,6 +91,12 @@ func parseFlags() config {
 	return cfg
 }
 
+// buildAuthorizer resolves where key labels come from.
+//
+// Nothing in the CV is gated on the answer - it is public, the same way the
+// website is - so a server with no allowlist configured is fully functional.
+// What a recognised key buys is its label in the footer, and the scopes it
+// carries are there for whatever asks for one next.
 func buildAuthorizer(cfg config) (authz.Authorizer, string, error) {
 	if cfg.authorizedKeys != "" {
 		data, err := os.ReadFile(cfg.authorizedKeys)
@@ -116,27 +126,31 @@ func buildAuthorizer(cfg config) (authz.Authorizer, string, error) {
 		}, "apps/api at " + cfg.authorizeURL, nil
 	}
 
-	return authz.Denier{}, "none - the CV is public, dotfiles are disabled", nil
+	return authz.Denier{}, "none - the CV is public", nil
 }
 
 func main() {
 	cfg := parseFlags()
 
-	content, langs, err := cv.Load()
+	doc, err := cv.Load()
 	if err != nil {
 		log.Fatalf("ssh-cv: %v", err)
+	}
+
+	// `bun run preview`. The TUI is the product here, and everything about a
+	// session except the transport is local: same model, same content, same
+	// keys. Checking a spacing change should not cost a host key, an
+	// allowlist and a second terminal.
+	if cfg.preview {
+		if err := runPreview(doc); err != nil {
+			log.Fatalf("ssh-cv: preview: %v", err)
+		}
+		return
 	}
 
 	authorizer, source, err := buildAuthorizer(cfg)
 	if err != nil {
 		log.Fatalf("ssh-cv: %v", err)
-	}
-
-	if cfg.dotfilesRoot != "" {
-		if info, statErr := os.Stat(cfg.dotfilesRoot); statErr != nil || !info.IsDir() {
-			log.Printf("ssh-cv: dotfiles dir %q unreadable, disabling that pane", cfg.dotfilesRoot)
-			cfg.dotfilesRoot = ""
-		}
 	}
 
 	server, err := wish.NewServer(
@@ -145,7 +159,7 @@ func main() {
 		wish.WithIdleTimeout(cfg.idleTimeout),
 		wish.WithMaxTimeout(cfg.maxTimeout),
 
-		// Accept every key, then decide what it may see. Refusing unknown
+		// Accept every key, then decide what it is called. Refusing unknown
 		// keys at the handshake would make the CV private, which defeats the
 		// point - the whole appeal is that `ssh cv.no-tone.com` just works.
 		wish.WithPublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
@@ -155,18 +169,31 @@ func main() {
 			return true
 		}),
 		// Keyboard-interactive with no prompts lets a client that offers no
-		// key connect anyway, and get the public CV.
+		// key connect anyway, and get the CV.
 		wish.WithKeyboardInteractiveAuth(func(ssh.Context, gossh.KeyboardInteractiveChallenge) bool {
 			return true
 		}),
 
+		// Composed first to last, executed last to first: logging wraps
+		// activeterm, which wraps recover, which wraps the program. So
+		//
+		//   - every session is logged, including the ones rejected below it;
+		//   - sessions with no PTY (`ssh host command`, scp, port forwards)
+		//     are refused, because a Bubble Tea program needs a terminal and
+		//     without this they hang instead of failing;
+		//   - the client's terminal is asked to make its own default colours
+		//     black and white, and told to put them back when the session
+		//     ends;
+		//   - a panic in one session is logged and ends that session, rather
+		//     than unwinding into the server and taking every other
+		//     connection down with it.
 		wish.WithMiddleware(
-			bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-				return newSession(s, content, langs, cfg.dotfilesRoot)
-			}),
-			// Reject sessions with no PTY (`ssh host command`, scp, port
-			// forwards): a Bubble Tea program needs a terminal, and without
-			// this they hang instead of failing.
+			recover.Middleware(
+				bubbletea.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
+					return newSession(s, doc)
+				}),
+			),
+			terminalColours,
 			activeterm.Middleware(),
 			logging.Middleware(),
 		),
@@ -179,10 +206,7 @@ func main() {
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	log.Printf("ssh-cv: listening on %s", cfg.addr)
-	log.Printf("ssh-cv: authorization source: %s", source)
-	if cfg.dotfilesRoot != "" {
-		log.Printf("ssh-cv: dotfiles from %s", cfg.dotfilesRoot)
-	}
+	log.Printf("ssh-cv: key labels from: %s", source)
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil &&
@@ -201,39 +225,134 @@ func main() {
 	}
 }
 
-func newSession(
-	s ssh.Session,
-	content map[string]cv.Content,
-	langs []string,
-	dotfilesRoot string,
-) (tea.Model, []tea.ProgramOption) {
+// runPreview renders one session on this terminal.
+//
+// No grant is passed, so what you see is what a stranger sees - the common
+// case, and the one worth looking at while changing the layout.
+func runPreview(doc *cv.Document) error {
+	// The same request a session makes of its client, so the preview looks
+	// like the thing it is previewing.
+	fmt.Print(setTerminalColours)
+	defer fmt.Print(resetTerminalColours)
+
+	program := tea.NewProgram(
+		tui.New(tui.Config{Doc: doc}),
+		tea.WithAltScreen(),
+	)
+	_, err := program.Run()
+	return err
+}
+
+// The client terminal's own default colours, set for the duration of a session
+// and put back afterwards.
+//
+// OSC 11 is the default background, OSC 10 the default foreground; 111 and 110
+// reset them. The session paints its own cells black already (see
+// internal/tui/theme.go), so this is for the one thing painting cannot reach:
+// the emulator's *own* chrome. A terminal colours its tab bar and its status
+// line from the default background, and no program can touch those by drawing.
+//
+// A terminal that ignores these is no worse off than before - the session is
+// still black inside - and one that honours them goes black to the edges of
+// its window.
+const (
+	setTerminalColours   = "\x1b]11;#000000\x07\x1b]10;#ffffff\x07"
+	resetTerminalColours = "\x1b]111\x07\x1b]110\x07"
+)
+
+// terminalColours wraps a session in that change and its undo.
+func terminalColours(next ssh.Handler) ssh.Handler {
+	return func(s ssh.Session) {
+		if _, _, ok := s.Pty(); ok {
+			_, _ = io.WriteString(s, setTerminalColours)
+			// Deferred rather than written after next(): a session that ends
+			// with the client vanishing still runs this, and a terminal left
+			// black after the CV has gone would be the CV's fault.
+			defer func() { _, _ = io.WriteString(s, resetTerminalColours) }()
+		}
+		next(s)
+	}
+}
+
+// sessionRenderer builds the renderer a session paints with.
+//
+// **Why it cannot be lipgloss's default one.** That renderer is bound to
+// *this process's* stdout, which under systemd is a pipe rather than a
+// terminal - so its colour profile resolves to Ascii and every colour is
+// silently stripped from every session. That was a real bug: a window whose
+// three buttons came out grey, on a CV whose whole point is that it looks like
+// a window. Colour has to be decided per session, from the client's terminal.
+//
+// **Why not wish's MakeRenderer.** It does the above correctly, and then also
+// queries the client for its background colour - which blocks for up to two
+// seconds on any terminal that does not answer, eating the reader's first
+// keystrokes while it waits. The palette here is fixed (see theme.go), so the
+// answer would be thrown away. Nothing is gained for the stall.
+//
+// **Why the floor.** TERM under-reports constantly over SSH: ssh forwards it
+// and little else, and plain `xterm` means sixteen colours to termenv. Hex
+// degrades gracefully, but three window buttons deserve better than the
+// nearest sixteen, so anything that reports less than 256 is treated as 256.
+// A terminal that says it is `dumb` is taken at its word and gets none: escape
+// sequences it cannot render are worse than grey.
+func sessionRenderer(s ssh.Session) *lipgloss.Renderer {
+	pty, _, ok := s.Pty()
+	if !ok || pty.Term == "" || pty.Term == "dumb" {
+		r := lipgloss.NewRenderer(s)
+		r.SetColorProfile(termenv.Ascii)
+		return r
+	}
+
+	out := io.Writer(s)
+	if pty.Slave != nil {
+		out = pty.Slave
+	}
+	r := lipgloss.NewRenderer(out,
+		termenv.WithEnvironment(sessionEnv(append(s.Environ(), "TERM="+pty.Term))),
+		// The writer is the client's terminal, which this process cannot
+		// isatty(); without this, detection declines to look at all.
+		termenv.WithUnsafe(),
+		termenv.WithColorCache(true),
+	)
+	// Profiles are ordered most-colours-first, so ">" means "fewer than".
+	if r.ColorProfile() > termenv.ANSI256 {
+		r.SetColorProfile(termenv.ANSI256)
+	}
+	return r
+}
+
+// sessionEnv is the client's environment, for termenv to read TERM and
+// COLORTERM out of.
+type sessionEnv []string
+
+func (e sessionEnv) Environ() []string { return e }
+
+func (e sessionEnv) Getenv(key string) string {
+	for _, entry := range e {
+		if value, found := strings.CutPrefix(entry, key+"="); found {
+			return value
+		}
+	}
+	return ""
+}
+
+func newSession(s ssh.Session, doc *cv.Document) (tea.Model, []tea.ProgramOption) {
 	pty, _, _ := s.Pty()
 
 	grant, _ := s.Context().Value(grantKey).(authz.Grant)
 	fingerprint, _ := s.Context().Value(fingerprintKey).(string)
 
 	// The SSH username is not an identity here - anyone can type anything -
-	// but `ssh pt@cv.no-tone.com` is a pleasant way to land in Portuguese,
-	// so it is honoured as a preference and nothing more.
-	ordered := langs
-	if requested := strings.ToLower(s.User()); requested != "" {
-		for i, lang := range langs {
-			if lang == requested && i != 0 {
-				ordered = append([]string{lang}, append(
-					append([]string{}, langs[:i]...), langs[i+1:]...)...)
-				break
-			}
-		}
-	}
-
+	// but `ssh pt@cv.no-tone.com` is a pleasant way to land in Portuguese, so
+	// it is honoured as a preference and nothing more. Prefer returns a copy,
+	// so one session's language never reaches another's.
 	model := tui.New(tui.Config{
-		Content:      content,
-		Langs:        ordered,
-		Grant:        grant,
-		DotfilesRoot: dotfilesRoot,
-		Width:        pty.Window.Width,
-		Height:       pty.Window.Height,
-		Fingerprint:  fingerprint,
+		Doc:         doc.Prefer(s.User()),
+		Grant:       grant,
+		Width:       pty.Window.Width,
+		Height:      pty.Window.Height,
+		Fingerprint: fingerprint,
+		Renderer:    sessionRenderer(s),
 	})
 	return model, []tea.ProgramOption{tea.WithAltScreen()}
 }

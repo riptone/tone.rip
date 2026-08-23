@@ -141,8 +141,10 @@ live at `/v2`, which has a frames-per-second readout so idle cost is visible.
 $ ssh cv.no-tone.com
 ```
 
-Anyone can connect and read the CV. An allowlisted key additionally gets a
-read-only dotfiles browser.
+Anyone can connect and read the CV - the long version of it: the same content
+module the website renders, plus the company names and the per-role detail
+`/cv` leaves out. It reads as an index of sections and one page each, inside a
+window at most 78 columns wide, and switches language with `l`.
 
 It is a Go binary rather than a Worker because a Worker is *invoked with a
 request* - it cannot bind a listening socket, so it cannot accept TCP on port
@@ -152,9 +154,10 @@ SSH server runs on a small box and **the authorization endpoint stays on
 Workers**, which is the half that changes often: the key allowlist lives in a
 Worker secret, so access is granted or revoked by editing one value.
 
-SSH has no SNI, so the server never learns which hostname you dialled. Rather
-than split names across ports, **your key decides what you see** - and an
-unauthorized session gets no dotfiles tab at all, not a locked one.
+SSH has no SNI, so the server never learns which hostname you dialled. Nothing
+is therefore decided by hostname and nothing is split across ports: every name
+reaches one server and every session gets the whole CV. A recognised key buys
+its label in the footer and gates nothing.
 
 Setup and hardening: [`docs/ssh-cv-deployment.md`](./docs/ssh-cv-deployment.md).
 

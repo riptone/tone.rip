@@ -15,10 +15,13 @@
  *
  * What is deliberately absent, and stays absent:
  *
- *   - `worksFor` / `alumniOf`. The CV names roles and degrees but not
- *     employers or institutions - see the note on the CV page, which says
- *     organisations are described by what they do rather than named. Filling
- *     these in would mean inventing names the site declines to print.
+ *   - `worksFor` / `alumniOf`. The pages print roles and degrees, and
+ *     describe organisations by what they do rather than naming them - see
+ *     the note on the CV page. `Experience.company` does now carry a name,
+ *     because `apps/ssh-cv` prints it, but this node describes *this page*:
+ *     structured data that claims more than the markup shows is a spam
+ *     signal, so the name stays out of here for as long as it stays out of
+ *     the page.
  *   - `email`. The address is available from llms.txt, the markdown homepage
  *     and the API's info route, and is deliberately not in the rendered
  *     markup. JSON-LD is rendered markup.

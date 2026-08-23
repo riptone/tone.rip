@@ -45,8 +45,8 @@ ssh cv.no-tone.com  ──:22──►  ssh-cv (Go)  ──https──►    app
                                 │  fingerprint only        │
                                 │  ◄───────────────────────  allowed + scopes
                                 ▼
-                          CV          → everyone
-                          dotfiles    → allowlisted keys only
+                          the CV      → everyone
+                          key label   → allowlisted keys
 ```
 
 Your public key never leaves the box. Only the SHA256 fingerprint is sent.
@@ -178,25 +178,17 @@ for `ssh-cv` itself. Two things are needed by the *steps*, not by the service:
 
 ```bash
 sudo apt update
-sudo apt install -y git iptables-persistent
+sudo apt install -y iptables-persistent
 ```
 
-- **`git`** - step 3 clones the dotfiles repository onto the box. Skip it if
-  you are going to copy the dotfiles across by other means, or if you are
-  running without the dotfiles pane.
 - **`iptables-persistent`** - provides `netfilter-persistent`, which is what
   makes the firewall rule below survive a reboot. Without it the rule works
   until the first restart and then silently disappears, which is a genuinely
   confusing way to lose the service. Its installer asks whether to save the
   current rules; say yes.
 
-On Oracle Linux images, neither applies: `git` is `sudo dnf install -y git`,
-and the firewall is `firewalld`, which persists on its own.
-
-> **If the dotfiles repository is private**, `git clone` over HTTPS will
-> prompt for credentials the service account cannot answer. Either make it
-> public, use a deploy key, or copy the directory over with `scp -r` and skip
-> git on the box entirely. The pane only ever reads the directory.
+On Oracle Linux images that does not apply: the firewall is `firewalld`, which
+persists on its own.
 
 ### Build for the right architecture
 
@@ -368,20 +360,21 @@ ssh-keygen -lf ~/.ssh/id_ed25519.pub | awk '{print $2}'
 ```
 
 ```bash
-printf '%s' 'SHA256:YOUR_FINGERPRINT laptop dotfiles' | bunx wrangler secret put SSH_AUTHORIZED_KEYS
+printf '%s' 'SHA256:YOUR_FINGERPRINT laptop' | bunx wrangler secret put SSH_AUTHORIZED_KEYS
 ```
 
 Format is `fingerprint  label  scopes…`, one key per line:
 
 ```
-SHA256:AbCd…  laptop  dotfiles
+SHA256:AbCd…  laptop  notes
 SHA256:EfGh…  phone
 # comments and blank lines are ignored
 ```
 
 The label shows in the SSH footer so you can tell which of your machines you
-are on. A key with a label but no scopes is *recognised and granted nothing* -
-a useful way to name a key without giving it access.
+are on, and that is all a recognised key buys today: the CV is public, and
+`apps/ssh-cv` gates nothing on a scope. Scopes are parsed and carried through
+anyway, for whatever needs gating first.
 
 `printf '%s'` rather than `echo`: `echo` appends a newline, which becomes part
 of the secret and silently breaks the comparison.
@@ -407,11 +400,11 @@ sudo install -m 755 /tmp/ssh-cv /usr/local/bin/ssh-cv
 sudo useradd --system --home /var/lib/ssh-cv --shell /usr/sbin/nologin ssh-cv
 sudo mkdir -p /var/lib/ssh-cv
 sudo chown ssh-cv:ssh-cv /var/lib/ssh-cv
-sudo -u ssh-cv git clone https://github.com/no-tone/dotfiles.git /var/lib/ssh-cv/dotfiles
 ```
 
-The service account has `nologin` and owns only its own directory. It needs no
-privileges - binding port 22 is granted by systemd below rather than by
+The service account has `nologin` and owns only its own directory - which holds
+one file, the host key. The CV itself is embedded in the binary. It needs no
+privileges either: binding port 22 is granted by systemd below rather than by
 running as root.
 
 ---
@@ -437,14 +430,13 @@ Environment=SSH_AUTHORIZE_TOKEN=REPLACE_WITH_THE_TOKEN_FROM_STEP_2
 ExecStart=/usr/local/bin/ssh-cv \
   --addr :22 \
   --host-key /var/lib/ssh-cv/host_ed25519 \
-  --authorize-url https://api.no-tone.com/ssh/authorize \
-  --dotfiles /var/lib/ssh-cv/dotfiles
+  --authorize-url https://api.no-tone.com/ssh/authorize
 
 # Bind :22 without running as root.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
-# It reads one directory and talks to one API. Nothing else.
+# It writes one file and talks to one API. Nothing else.
 NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes
@@ -503,9 +495,8 @@ ssh-keygen -lf /var/lib/ssh-cv/host_ed25519.pub
 `cv.no-tone.com` → the box's IPv4 (and AAAA if it has one), **grey cloud**.
 
 The orange-cloud proxy is HTTP only; proxying an SSH host through it makes the
-name unreachable on 22. Add `dot.no-tone.com` pointing at the same address if
-you want both names - SSH has no SNI, so they are the same endpoint either
-way, and what you see depends on your key.
+name unreachable on 22. Any other name pointing at the same address reaches
+the same session - SSH has no SNI, so the server cannot tell them apart.
 
 ---
 
@@ -521,8 +512,8 @@ ssh <public-ip>                       # the CV, from the box itself
 Then, once DNS resolves:
 
 ```bash
-ssh cv.no-tone.com                    # CV, three panes
-ssh -o IdentitiesOnly=yes -i /dev/null cv.no-tone.com   # as a stranger: still the CV, no dotfiles tab
+ssh cv.no-tone.com                    # the CV; the footer names your key
+ssh -o IdentitiesOnly=yes -i /dev/null cv.no-tone.com   # as a stranger: the same CV, no label
 ssh pt@cv.no-tone.com                 # opens in Portuguese
 ```
 
@@ -538,8 +529,8 @@ In the order these actually happen:
 | `Connection refused` | The service is not running. `sudo systemctl status ssh-cv` |
 | Connection hangs, no prompt | Port 22 open in the VCN security list but not in `iptables` - the trap in step 0 |
 | `Exec format error` in the journal | Binary built for the wrong architecture. See *Build for the right architecture* |
-| Works, but no `dotfiles` tab with an allowlisted key | `--dotfiles` points at something unreadable; the service logs this on startup. Or the fingerprint does not match - compare `ssh-keygen -lf` output against the secret |
-| Works, no `dotfiles` tab for *any* key, journal says `authorization source: none - the CV is public, dotfiles are disabled` | `--authorize-url` unset, so the binary is in its public-CV-only mode |
+| Works, but the footer shows a fingerprint instead of your label | The fingerprint does not match - compare `ssh-keygen -lf` output against the secret |
+| Works, no label for *any* key, journal says `key labels from: none - the CV is public` | `--authorize-url` unset, so no allowlist is consulted at all |
 | Refuses to start: `SSH_AUTHORIZE_TOKEN is required when --authorize-url is set` | The token in the unit file is missing or empty. Deliberate - see step 2 |
 | `Requires an active PTY` | Expected. `activeterm` rejects sessions with no terminal - see *This does not use OpenSSH* |
 
@@ -553,16 +544,13 @@ cache. No deploy.
 
 **Revoke a key:** remove its line, put the secret again. Same 60 seconds.
 
-**Update the dotfiles:** `sudo -u ssh-cv git -C /var/lib/ssh-cv/dotfiles pull`.
-Read at request time, so no restart.
-
 **Update the CV:** edit `packages/content/src/cv.ts`, `bun run build` in
 `apps/ssh-cv`, redeploy the binary. CI fails if the generated JSON has drifted
 from the source module.
 
-**If the API is down:** sessions still get the CV. Every authorization failure
-resolves to *no scopes*, so an outage costs the dotfiles pane and nothing
-else.
+**If the API is down:** sessions still get the whole CV. Every authorization
+failure resolves to *no label and no scopes*, so an outage costs one word in a
+footer and nothing else.
 
 ---
 

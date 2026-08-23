@@ -4,8 +4,21 @@
     "en",
     "pt"
   ],
+  "contact": {
+    "web": "no-tone.com",
+    "email": "msg@no-tone.com",
+    "github": "github.com/no-tone",
+    "ssh": "ssh cv.no-tone.com"
+  },
   "byLang": {
     "en": {
+      "labels": {
+        "experience": "Experience",
+        "education": "Education",
+        "certifications": "Certifications",
+        "bestAt": "Best at",
+        "skills": "Skills"
+      },
       "bestAt": [
         {
           "k": "Full-stack product engineering",
@@ -13,7 +26,7 @@
         },
         {
           "k": "Cross-platform apps",
-          "v": "Ionic daily, Tauri for desktop. One codebase, native where it matters."
+          "v": "Ionic and Capacitor daily, Tauri for desktop. One codebase, native where it matters."
         },
         {
           "k": "Web components & design systems",
@@ -34,8 +47,18 @@
           "org": "digital solutions studio",
           "period": "feb 2026 - now",
           "place": "hybrid",
+          "stack": [
+            "Angular",
+            "TypeScript",
+            "Ionic",
+            "Capacitor"
+          ],
           "bullets": [
             "Websites, online stores and applications with management-system integration, supporting businesses' digital transformation."
+          ],
+          "detail": [
+            "Angular and TypeScript on the web side; Ionic and Capacitor so one codebase ships as an app on iOS and Android.",
+            "Most of it is integration work: a site or an app is only useful to a client once it reads and writes the management system the business already runs on."
           ]
         },
         {
@@ -43,9 +66,16 @@
           "org": "public-sector AI project",
           "period": "sep 2025 - jan 2026",
           "place": "remote",
+          "stack": [
+            "Python"
+          ],
           "bullets": [
             "Built a chatbot avatar and voice system: speech-to-text, response integration and realistic lip-sync for natural interactions between citizens and staff.",
             "Applied NLP, generative AI and data science to streamline administrative processes and digital governance."
+          ],
+          "detail": [
+            "Python throughout: the speech-to-text step, the response integration, and the timing that drives the lip-sync.",
+            "Both sides of the conversation were real users - citizens and public-sector staff - so the bar was interaction that felt natural rather than a demo that looked good."
           ]
         },
         {
@@ -53,9 +83,19 @@
           "org": "cloud management provider",
           "period": "aug 2024 - jul 2025",
           "place": "hybrid",
+          "stack": [
+            "Lit",
+            "JavaScript",
+            "Bun"
+          ],
           "bullets": [
             "Built interactive onboarding sliders that cut onboarding time ~15% for a banking platform.",
             "Led a web component for managing document elements; shipped a new expression editor from usability testing."
+          ],
+          "detail": [
+            "Lit and plain JavaScript, so the components stayed framework-agnostic and dropped into anything.",
+            "Bun as the toolchain, early enough that it was still new.",
+            "The onboarding sliders went into a banking platform's own flow; the expression editor came out of usability testing rather than a spec."
           ]
         }
       ],
@@ -75,12 +115,19 @@
           ]
         }
       ],
+      "certifications": [
+        {
+          "title": "Scrum certification",
+          "note": "Sprints, backlog refinement, reviews and retrospectives - delivery inside a team rather than around one."
+        }
+      ],
       "skills": [
         {
           "label": "languages",
           "items": [
             "TypeScript",
             "JavaScript",
+            "Go",
             "Kotlin",
             "Python",
             "C#",
@@ -94,6 +141,8 @@
             "Astro",
             "Angular",
             "Ionic",
+            "Capacitor",
+            "Lit",
             "Next.js",
             "Svelte",
             "Tauri"
@@ -112,7 +161,8 @@
           "label": "infra",
           "items": [
             "Docker",
-            "Cloudflare Workers"
+            "Cloudflare Workers",
+            "Bun"
           ]
         }
       ],
@@ -129,6 +179,13 @@
       ]
     },
     "pt": {
+      "labels": {
+        "experience": "Experiência",
+        "education": "Formação",
+        "certifications": "Certificações",
+        "bestAt": "Melhor em",
+        "skills": "Competências"
+      },
       "bestAt": [
         {
           "k": "Engenharia de produto full-stack",
@@ -136,7 +193,7 @@
         },
         {
           "k": "Aplicações multiplataforma",
-          "v": "Ionic no dia a dia, Tauri para desktop. Uma base de código, nativo onde é preciso."
+          "v": "Ionic e Capacitor no dia a dia, Tauri para desktop. Uma base de código, nativo onde é preciso."
         },
         {
           "k": "Web components e design systems",
@@ -157,8 +214,18 @@
           "org": "estúdio de soluções digitais",
           "period": "fev 2026 - agora",
           "place": "híbrido",
+          "stack": [
+            "Angular",
+            "TypeScript",
+            "Ionic",
+            "Capacitor"
+          ],
           "bullets": [
             "Sites, lojas online e aplicações com integração de sistemas de gestão, apoiando a transformação digital das empresas."
+          ],
+          "detail": [
+            "Angular e TypeScript no lado web; Ionic e Capacitor para que uma base de código chegue a iOS e Android como aplicação.",
+            "A maior parte é trabalho de integração: um site ou uma aplicação só é útil ao cliente quando lê e escreve no sistema de gestão que a empresa já usa."
           ]
         },
         {
@@ -166,9 +233,16 @@
           "org": "projeto de IA no setor público",
           "period": "set 2025 - jan 2026",
           "place": "remoto",
+          "stack": [
+            "Python"
+          ],
           "bullets": [
             "Construí um avatar de chatbot e sistema de voz: speech-to-text, integração de respostas e lip-sync realista para interações naturais entre cidadãos e funcionários.",
             "Apliquei PLN, IA generativa e ciência de dados para simplificar processos administrativos e a governação digital."
+          ],
+          "detail": [
+            "Python em todo o projeto: o speech-to-text, a integração das respostas e o tempo que comanda a sincronização labial.",
+            "Dos dois lados da conversa estavam utilizadores reais - cidadãos e funcionários públicos - por isso a fasquia era interação que parecesse natural e não uma demonstração bonita."
           ]
         },
         {
@@ -176,9 +250,19 @@
           "org": "fornecedor de gestão cloud",
           "period": "ago 2024 - jul 2025",
           "place": "híbrido",
+          "stack": [
+            "Lit",
+            "JavaScript",
+            "Bun"
+          ],
           "bullets": [
             "Construí sliders de onboarding interativos que reduziram o tempo de onboarding em ~15% numa plataforma bancária.",
             "Liderei um componente web para gerir elementos de documentos; lancei um novo editor de expressões a partir de testes de usabilidade."
+          ],
+          "detail": [
+            "Lit e JavaScript simples, para que os componentes ficassem agnósticos ao framework e encaixassem em qualquer sítio.",
+            "Bun como toolchain, numa altura em que ainda era novo.",
+            "Os sliders de onboarding entraram no fluxo de uma plataforma bancária; o editor de expressões saiu de testes de usabilidade e não de uma especificação."
           ]
         }
       ],
@@ -198,12 +282,19 @@
           ]
         }
       ],
+      "certifications": [
+        {
+          "title": "Certificação Scrum",
+          "note": "Sprints, refinamento de backlog, revisões e retrospetivas - entrega dentro de uma equipa e não ao lado dela."
+        }
+      ],
       "skills": [
         {
           "label": "linguagens",
           "items": [
             "TypeScript",
             "JavaScript",
+            "Go",
             "Kotlin",
             "Python",
             "C#",
@@ -217,6 +308,8 @@
             "Astro",
             "Angular",
             "Ionic",
+            "Capacitor",
+            "Lit",
             "Next.js",
             "Svelte",
             "Tauri"
@@ -235,7 +328,8 @@
           "label": "infra",
           "items": [
             "Docker",
-            "Cloudflare Workers"
+            "Cloudflare Workers",
+            "Bun"
           ]
         }
       ],

@@ -7,7 +7,7 @@ How the three apps and five packages fit together, and why things live where the
 - **`apps/web`** - the public site, no-tone.com. Astro, server-rendered, its own Cloudflare Worker.
 - **`apps/dashboard`** - the self-hosted-services launcher, dash.no-tone.com. Astro, its own Cloudflare Worker, gated behind a Cloudflare Access policy (not app-level auth code).
 - **`apps/api`** - api.no-tone.com. Hono, Cloudflare Workers, the single source of truth for anything both apps (or an external agent) might need.
-- **`apps/ssh-cv`** - the CV over SSH (`ssh cv.no-tone.com`). Go, not Workers, for the reason below. Serves the same CV content the website renders, plus a key-gated dotfiles browser.
+- **`apps/ssh-cv`** - the CV over SSH (`ssh cv.no-tone.com`). Go, not Workers, for the reason below. Serves the same CV content the website renders, at more depth: the company names and the per-role detail `/cv` leaves out.
 
 Both Astro apps are deliberately thin: they render markup and ship the client-side interaction (globe, panels, filters, theme toggle). Neither has its own API routes for data that isn't page-specific - that's what `apps/api` is for.
 
@@ -38,12 +38,12 @@ no shell on the SSH host. That endpoint is deliberately absent from the RFC
 public API.
 
 A second constraint shapes the UX: **SSH has no SNI.** The server never learns
-which hostname you dialled, so `cv.no-tone.com` and `dot.no-tone.com` pointing
-at one address are indistinguishable. Rather than split them across ports,
-both names reach one server and the key decides: no key or an unknown key gets
-the CV, an allowlisted key with the `dotfiles` scope also gets the dotfiles
-pane. An unauthorized session sees no dotfiles tab at all, not a locked one.
-See `apps/ssh-cv/README.md`.
+which hostname you dialled, so two names pointing at one address are
+indistinguishable there. Nothing is therefore decided by hostname, and nothing
+is split across ports (`ssh -p 2222 …` is not a thing anyone wants to type):
+every name reaches one server and every session gets the whole CV. A
+recognised key changes one word in the footer - its label - and gates nothing,
+because the CV is as public as the website. See `apps/ssh-cv/README.md`.
 
 ## Why `apps/dashboard` is gated by Cloudflare Access, not app code
 
@@ -61,8 +61,17 @@ server-rendered homepage block that crawlers and LLMs read, and `apps/ssh-cv`
 over SSH. The Go binary cannot import TypeScript, so
 `apps/ssh-cv/scripts/generate-content.ts` compiles the module to a JSON file
 that Go embeds - and CI fails if the committed copy has drifted from the
-source. Organisations are described by what they do rather than named; that is
-an editorial choice, applied at the source so every surface inherits it.
+source.
+
+Organisations are described by what they do rather than named - an editorial
+choice, applied at the source so every surface inherits it. The SSH CV is the
+one exception, and it is deliberate: `Experience.company` and
+`Experience.detail` are authored in the same module and rendered only there.
+Typing `ssh cv.no-tone.com` is a deliberate act by someone who wants the long
+version; a search result is not. Which is also why `packages/content`'s
+`buildPersonSchema` still omits `worksFor` - JSON-LD describes the page it
+sits on, and structured data claiming more than the markup shows is a spam
+signal.
 
 `packages/content/src/site-info.ts` defines each site's name, tagline, description, links, and agent-readable markdown once. `apps/api`'s `/info/:slug` route serves that same record three ways - as JSON, as markdown (via `Accept: text/markdown` content negotiation), and as server-rendered HTML via `hono/jsx` - so there's one source of truth instead of three copies of the same "here's who we are" text drifting apart.
 

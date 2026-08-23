@@ -141,6 +141,22 @@ body {
   color: var(--text-faint);
 }
 
+/* The languages and frameworks a role actually used. Same mono treatment as
+   the dates above it - these are a list of names, not prose - but at muted
+   rather than faint, because the stack is content and the dates are labels.
+   `:has` pulls the line above it tight so the two read as one header block
+   instead of a header and a stray paragraph. */
+.cv__meta:has(+ .cv__stack) {
+  margin-bottom: 0.15rem;
+}
+
+.cv__stack {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--text-muted);
+}
+
 .cv__list {
   margin: 0;
   padding-left: 1.1rem;

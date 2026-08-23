@@ -1,19 +1,21 @@
-// Package authz decides what an SSH session is allowed to see.
+// Package authz resolves an SSH key to who it belongs to.
 //
-// The CV is public: anyone who connects gets it, the same way the website is
-// public. The dotfiles are not - they come from a private repository, so the
-// server has to know who is asking.
+// Nothing this server renders is gated on the answer. The CV is public - as
+// public as the website - so a session with no key at all gets everything.
+// What a recognised key buys today is its label in the footer, which is how
+// you tell which of your own machines you are looking at.
 //
-// SSH already solves "who is asking" better than a password would: the client
-// proves possession of a private key during the handshake, and the server
-// gets the public half. All that is left is deciding which keys are allowed,
-// and that decision lives in apps/api rather than here.
+// The scopes are still parsed and still resolved, because the mechanism is
+// the useful part and it is not worth rebuilding the day something here does
+// need gating. SSH already solves "who is asking" better than a password
+// would: the client proves possession of a private key during the handshake,
+// and the server gets the public half.
 //
-// Keeping the allowlist in the API rather than in this binary or a file next
-// to it means access can be granted or revoked by editing a Worker secret,
-// with no rebuild, no redeploy, and no SSH into the box that serves SSH. The
-// fingerprint is the only thing that crosses the wire; the public key itself
-// never leaves the host.
+// Keeping the allowlist in apps/api rather than in this binary or a file next
+// to it means a key can be recognised or forgotten by editing a Worker
+// secret, with no rebuild, no redeploy, and no SSH into the box that serves
+// SSH. The fingerprint is the only thing that crosses the wire; the public
+// key itself never leaves the host.
 package authz
 
 import (
@@ -33,12 +35,11 @@ import (
 )
 
 // Scope names a thing a session may do. Absence of a scope is denial.
+//
+// No named constant lives here on purpose: this server gates nothing, so a
+// constant would be a scope with no reader. Scopes are carried through from
+// the allowlist as written, for whatever asks for one first.
 type Scope string
-
-const (
-	// ScopeDotfiles allows browsing the dotfiles tree.
-	ScopeDotfiles Scope = "dotfiles"
-)
 
 // Grant is the answer for one public key.
 type Grant struct {
@@ -96,7 +97,7 @@ func (s StaticAuthorizer) Authorize(_ context.Context, fingerprint string) Grant
 // Scopes come from the comment field, which is where OpenSSH already puts
 // free text and what `ssh-keygen` writes your `user@host` into:
 //
-//	ssh-ed25519 AAAA... laptop dotfiles
+//	ssh-ed25519 AAAA... laptop notes
 //	ssh-ed25519 AAAA... phone
 //
 // The first word of the comment is the label; any remaining words are

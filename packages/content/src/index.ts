@@ -5,6 +5,10 @@ export {
 export {
   BEST_AT,
   type BestAt,
+  CERTIFICATIONS,
+  type Certification,
+  CV_LABELS,
+  type CvLabels,
   type CvLang,
   EDUCATION,
   type Education,

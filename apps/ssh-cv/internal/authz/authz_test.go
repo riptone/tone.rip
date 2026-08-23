@@ -14,6 +14,11 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
+// A scope name to test with. authz has no constants of its own: the server
+// gates nothing today, so the allowlist's words are carried through as
+// written and it is the caller who decides what they mean.
+const scopeNotes Scope = "notes"
+
 // Real ed25519 keys, generated from a fixed seed so the fixtures are stable
 // across runs. Hand-written key bytes are not worth the trouble: the wire
 // format has to actually parse for Fingerprint to mean anything.
@@ -58,15 +63,15 @@ func TestFingerprintMatchesOpenSSHFormat(t *testing.T) {
 }
 
 func TestGrantHas(t *testing.T) {
-	grant := Grant{Scopes: []Scope{ScopeDotfiles}}
-	if !grant.Has(ScopeDotfiles) {
-		t.Error("expected the dotfiles scope")
+	grant := Grant{Scopes: []Scope{scopeNotes}}
+	if !grant.Has(scopeNotes) {
+		t.Error("expected the notes scope")
 	}
 	if grant.Has("admin") {
 		t.Error("did not expect an admin scope")
 	}
 	// The zero grant is what an unknown key gets; it must deny everything.
-	if (Grant{}).Has(ScopeDotfiles) {
+	if (Grant{}).Has(scopeNotes) {
 		t.Error("the zero Grant must not carry any scope")
 	}
 }
@@ -74,7 +79,7 @@ func TestGrantHas(t *testing.T) {
 func TestParseAuthorizedKeys(t *testing.T) {
 	laptopKey := testKey(t, 1)
 	phoneKey := testKey(t, 90)
-	data := []byte(authorizedLine(t, laptopKey, "laptop dotfiles") +
+	data := []byte(authorizedLine(t, laptopKey, "laptop notes") +
 		authorizedLine(t, phoneKey, "phone"))
 	grants, err := ParseAuthorizedKeys(data)
 	if err != nil {
@@ -88,8 +93,8 @@ func TestParseAuthorizedKeys(t *testing.T) {
 	if laptop.Label != "laptop" {
 		t.Errorf("label = %q, want laptop", laptop.Label)
 	}
-	if !laptop.Has(ScopeDotfiles) {
-		t.Error("laptop should hold the dotfiles scope")
+	if !laptop.Has(scopeNotes) {
+		t.Error("laptop should hold the notes scope")
 	}
 
 	// A key listed with only a label is recognised but granted nothing.
@@ -139,13 +144,13 @@ func TestAPIAuthorizerGrantsOnAllowed(t *testing.T) {
 			t.Errorf("fingerprint = %q", body.Fingerprint)
 		}
 		_ = json.NewEncoder(w).Encode(authorizeResponse{
-			Allowed: true, Label: "laptop", Scopes: []Scope{ScopeDotfiles},
+			Allowed: true, Label: "laptop", Scopes: []Scope{scopeNotes},
 		})
 	})
 
 	grant := auth.Authorize(context.Background(), "SHA256:abc")
-	if !grant.Has(ScopeDotfiles) {
-		t.Fatalf("expected the dotfiles scope, got %+v", grant)
+	if !grant.Has(scopeNotes) {
+		t.Fatalf("expected the notes scope, got %+v", grant)
 	}
 	if grant.Label != "laptop" {
 		t.Errorf("label = %q", grant.Label)
@@ -157,10 +162,10 @@ func TestAPIAuthorizerDeniesWhenNotAllowed(t *testing.T) {
 		// Scopes present but allowed=false must still deny - the flag is
 		// authoritative, not the presence of a scope list.
 		_ = json.NewEncoder(w).Encode(authorizeResponse{
-			Allowed: false, Scopes: []Scope{ScopeDotfiles},
+			Allowed: false, Scopes: []Scope{scopeNotes},
 		})
 	})
-	if grant := auth.Authorize(context.Background(), "SHA256:abc"); grant.Has(ScopeDotfiles) {
+	if grant := auth.Authorize(context.Background(), "SHA256:abc"); grant.Has(scopeNotes) {
 		t.Error("allowed=false must deny regardless of the scope list")
 	}
 }
@@ -217,12 +222,12 @@ func TestAPIAuthorizerCaches(t *testing.T) {
 	auth, _ := newAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		_ = json.NewEncoder(w).Encode(authorizeResponse{
-			Allowed: true, Label: "laptop", Scopes: []Scope{ScopeDotfiles},
+			Allowed: true, Label: "laptop", Scopes: []Scope{scopeNotes},
 		})
 	})
 
 	for i := 0; i < 5; i++ {
-		if !auth.Authorize(context.Background(), "SHA256:abc").Has(ScopeDotfiles) {
+		if !auth.Authorize(context.Background(), "SHA256:abc").Has(scopeNotes) {
 			t.Fatal("expected a grant")
 		}
 	}

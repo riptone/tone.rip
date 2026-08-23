@@ -26,11 +26,11 @@ import (
 // same code.
 //
 // So the mitigation is architectural: this server registers a bubbletea
-// program, activeterm and logging, and no file-transfer handler at all. There
-// is nothing for a traversal to traverse. Two independent things would have
-// to change for that to stop being true - an import here, and a middleware in
-// main.go - and neither would fail to compile, fail another test, or look
-// wrong in review. Hence this.
+// program, recover, activeterm and logging, and no file-transfer handler at
+// all. There is nothing for a traversal to traverse. Two independent things
+// would have to change for that to stop being true - an import here, and a
+// middleware in main.go - and neither would fail to compile, fail another
+// test, or look wrong in review. Hence this.
 //
 // If a genuine need for file transfer ever arrives, it does not arrive by
 // deleting this test. It arrives by validating the path against the root in
