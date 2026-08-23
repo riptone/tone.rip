@@ -14,17 +14,14 @@ import { projectsRoute } from "./routes/projects";
 import { sshRoute } from "./routes/ssh";
 import { statusRoute } from "./routes/status";
 
-const API_ORIGIN = "https://api.no-tone.com";
+const API_ORIGIN = "https://api.tone.rip";
 
-// /projects is fetched client-side from no-tone.com's browser scripts, so it
+// /projects is fetched client-side from tone.rip's browser scripts, so it
 // needs real CORS. /status and /csp-report aren't browser cross-origin
 // fetches - status is proxied server-to-server by apps/dashboard (see its
 // api/status.ts), and csp-report is posted by the browser's own CSP
 // reporting mechanism, not application JS subject to CORS.
-const ALLOWED_ORIGINS = new Set([
-  "https://no-tone.com",
-  "https://www.no-tone.com",
-]);
+const ALLOWED_ORIGINS = new Set(["https://tone.rip", "https://www.tone.rip"]);
 const LOCAL_DEV_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 /** Hostnames this Worker is allowed to *be* when it honours a localhost origin. */
 const DEV_HOSTNAMES = new Set(["localhost", "127.0.0.1"]);
@@ -52,7 +49,7 @@ app.use(
       if (ALLOWED_ORIGINS.has(origin)) return origin;
       // The localhost allowance is for running apps/web against this API
       // locally, and it is gated on *this Worker* also being local. It used
-      // to be unconditional, which meant production api.no-tone.com replied
+      // to be unconditional, which meant production api.tone.rip replied
       // `Access-Control-Allow-Origin: http://localhost:5173` to anything
       // served from a visitor's own machine - a dev server, an Electron app,
       // anything squatting a local port. Nothing here is credentialed, so the

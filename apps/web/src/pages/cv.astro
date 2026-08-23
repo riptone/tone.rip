@@ -25,11 +25,11 @@ const profile = buildProfilePageSchema(
   buildPersonSchema({
     name: SITE_NAME,
     url: SITE_URL,
-    sameAs: ["https://github.com/no-tone"],
+    sameAs: ["https://github.com/riptone"],
   }),
 );
 
-/* The same CV `ssh cv.no-tone.com` serves, from @repo/content.
+/* The same CV `ssh cv.tone.rip` serves, from @repo/content.
 
    Both languages are authored there, and both are rendered into the page -
    the entries are zipped by index, which is safe because the two arrays are
@@ -53,8 +53,8 @@ const bestAt = zip(BEST_AT.en, BEST_AT.pt);
 ---
 
 <SiteLayout
-  title="CV · experience, education and skills · no-tone"
-  description="Roles and dates, education, the languages and frameworks used day to day, and the infrastructure behind them. Also readable in a terminal: ssh cv.no-tone.com."
+  title="CV · experience, education and skills · tone"
+  description="Roles and dates, education, the languages and frameworks used day to day, and the infrastructure behind them. Also readable in a terminal: ssh cv.tone.rip."
   section="cv"
   ramp="dusk"
   schema={profile}

@@ -1,8 +1,8 @@
 /* ============================================================
-   no-tone wordmark - see src/brand/Logo.astro
+   tone wordmark - see src/brand/Logo.astro
    ============================================================ */
 
-.ntl {
+.tw {
   display: block;
   width: 100%;
   height: auto;
@@ -10,76 +10,63 @@
   overflow: visible;
 }
 
-/* The assemble animation: every letter starts collapsed onto the backslash
-   and slides out to its real position. `transform-box: fill-box` plus a
-   per-letter origin means each glyph scales from its own centre rather than
-   from the SVG's, which is what makes them look like they are unfolding from
-   the mark instead of sliding as a block.
-
-   Left-hand letters travel right-to-left and right-hand ones the reverse, so
-   the two halves separate outward from the backslash at the centre. */
-.ntl--animate .ntl__glyph {
+/* Type-in: each letter is invisible until its delay, then snaps to visible
+   in one frame - `steps(1)` rather than an eased transition, so it reads as
+   a character arriving rather than fading in. Matches the snap the footer's
+   own terminal caret uses (site-footer.css's `reveal-blink`) rather than
+   this site's usual eased motion - the one place the wordmark is allowed to
+   feel like a different material (a terminal) than the page around it. */
+.tw--animate .tw__glyph {
   opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: ntl-unfold 620ms cubic-bezier(0.16, 0.84, 0.28, 1) forwards;
+  animation: tw-appear 1ms steps(1) forwards;
 }
 
-.ntl--animate .ntl__mark {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: ntl-mark 480ms cubic-bezier(0.16, 0.84, 0.28, 1) backwards;
+.tw--animate .tw__glyph[data-index="0"] {
+  animation-delay: 0ms;
+}
+.tw--animate .tw__glyph[data-index="1"] {
+  animation-delay: 90ms;
+}
+.tw--animate .tw__glyph[data-index="2"] {
+  animation-delay: 180ms;
+}
+.tw--animate .tw__glyph[data-index="3"] {
+  animation-delay: 270ms;
 }
 
-/* Stagger outward from the mark: the letters nearest the backslash move
-   first, so the wordmark reads as unfolding rather than as six things
-   arriving at once. */
-.ntl--animate [data-side="left"][data-index="1"],
-.ntl--animate [data-side="right"][data-index="3"] {
-  animation-delay: 120ms;
-}
-.ntl--animate [data-side="left"][data-index="0"],
-.ntl--animate [data-side="right"][data-index="4"] {
-  animation-delay: 190ms;
-}
-.ntl--animate [data-side="right"][data-index="5"] {
-  animation-delay: 260ms;
+/* The cursor arrives with the last letter, then blinks in place - the same
+   read a terminal gives a line once it's done printing. */
+.tw--animate .tw__cursor {
+  opacity: 0;
+  animation:
+    tw-appear 1ms steps(1) forwards,
+    tw-blink 1.06s step-end infinite;
+  animation-delay: 270ms, 360ms;
 }
 
-.ntl--animate [data-side="left"] {
-  --ntl-from: 340px;
-}
-.ntl--animate [data-side="right"] {
-  --ntl-from: -340px;
-}
-
-@keyframes ntl-unfold {
-  from {
-    opacity: 0;
-    transform: translateX(var(--ntl-from, 0)) scaleX(0.86);
-  }
+@keyframes tw-appear {
   to {
     opacity: 1;
-    transform: translateX(0) scaleX(1);
   }
 }
 
-@keyframes ntl-mark {
-  from {
-    transform: scaleY(0.2);
+@keyframes tw-blink {
+  0%,
+  50% {
+    opacity: 1;
   }
-  to {
-    transform: scaleY(1);
+  50.01%,
+  100% {
+    opacity: 0;
   }
 }
 
 /* Motion here is decoration, not information - the wordmark is legible
    without it, so reduced-motion gets the finished state directly. */
 @media (prefers-reduced-motion: reduce) {
-  .ntl--animate .ntl__glyph,
-  .ntl--animate .ntl__mark {
+  .tw--animate .tw__glyph,
+  .tw--animate .tw__cursor {
     animation: none;
     opacity: 1;
-    transform: none;
   }
 }

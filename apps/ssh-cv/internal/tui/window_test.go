@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"github.com/no-tone/tonil/apps/ssh-cv/internal/authz"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/authz"
 )
 
 var sgr = regexp.MustCompile(`\x1b\[[0-9;]*m`)

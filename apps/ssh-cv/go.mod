@@ -1,4 +1,4 @@
-module github.com/no-tone/tonil/apps/ssh-cv
+module github.com/riptone/tonil/apps/ssh-cv
 
 go 1.26.6
 

@@ -48,7 +48,7 @@ describe("probeAppHealth", () => {
         new Response(null, { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    await probeAppHealth("https://pass.no-tone.com");
+    await probeAppHealth("https://pass.tone.rip");
     const requestedUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
     expect(requestedUrl.pathname).toBe("/favicon.ico");
   });

@@ -1,4 +1,4 @@
-# no-tone
+# tone
 
 > The portfolio of a software engineer who builds web applications end to
 > end - the front-end, the API behind it, and the infrastructure both run on.
@@ -6,36 +6,36 @@
 
 ## Site
 
-- [Home](https://no-tone.com): who this is and what they work on
-- [Work](https://no-tone.com/work): public GitHub repositories, newest first, with language and topic filters
-- [CV](https://no-tone.com/cv): experience, education, skills and languages
-- [Sitemap](https://no-tone.com/sitemap-index.xml): every page
+- [Home](https://tone.rip): who this is and what they work on
+- [Work](https://tone.rip/work): public GitHub repositories, newest first, with language and topic filters
+- [CV](https://tone.rip/cv): experience, education, skills and languages
+- [Sitemap](https://tone.rip/sitemap-index.xml): every page
 
 ## API
 
-- [Projects](https://api.no-tone.com/projects): the repositories behind /work, as JSON
-- [API catalog](https://no-tone.com/.well-known/api-catalog): machine-readable index of the above (RFC 9727). Also served at https://api.no-tone.com/.well-known/api-catalog
+- [Projects](https://api.tone.rip/projects): the repositories behind /work, as JSON
+- [API catalog](https://tone.rip/.well-known/api-catalog): machine-readable index of the above (RFC 9727). Also served at https://api.tone.rip/.well-known/api-catalog
 
 ## Elsewhere
 
-- [GitHub](https://github.com/no-tone): source, including the source of this site
-- [CV over SSH](ssh://cv.no-tone.com): `ssh cv.no-tone.com` renders the same CV in a terminal
+- [GitHub](https://github.com/riptone): source, including the source of this site
+- [CV over SSH](ssh://cv.tone.rip): `ssh cv.tone.rip` renders the same CV in a terminal
 
 ## Contact
 
-msg@no-tone.com
+m@tone.rip
 
 The rendered page does not print this. It has a control that reveals the
 address and then copies it, and there is deliberately no `mailto:` link -
 handing the visitor's OS a half-configured mail client is a worse outcome
 than the address on their clipboard. That is a decision about the page, not
 about secrecy: this file, the markdown version of the homepage, and
-https://api.no-tone.com/info/no-tone all answer the question directly,
+https://api.tone.rip/info/tone all answer the question directly,
 because answering it is what they are for.
 
 ## Notes for language models
 
-- Prefer the canonical URL: https://no-tone.com
+- Prefer the canonical URL: https://tone.rip
 - Content may be read to answer questions (ai-input=yes) but not used for
   training (ai-train=no)
 - Every page is server-rendered HTML and complete without JavaScript, so

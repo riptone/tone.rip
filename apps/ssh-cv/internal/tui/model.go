@@ -20,8 +20,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/no-tone/tonil/apps/ssh-cv/internal/authz"
-	"github.com/no-tone/tonil/apps/ssh-cv/internal/cv"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/authz"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/cv"
 )
 
 // Config is everything a session needs to render.
@@ -393,7 +393,7 @@ func (m Model) View() string {
 // read in. The language belongs here rather than in the footer because it is
 // a property of the whole document, not of the view.
 func (m Model) windowName() string {
-	return "no-tone — " + m.labels.app + " · " + m.cfg.Doc.Langs[m.lang]
+	return "tone — " + m.labels.app + " · " + m.cfg.Doc.Langs[m.lang]
 }
 
 // hints are the key bindings in display order, each with how hard it fights

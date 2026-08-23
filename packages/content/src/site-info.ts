@@ -9,21 +9,21 @@ export interface SiteInfo {
   markdown: string;
 }
 
-export const NO_TONE_INFO: SiteInfo = {
-  slug: "no-tone",
-  name: "no-tone",
+export const TONE_INFO: SiteInfo = {
+  slug: "tone",
+  name: "tone",
   tagline: "Software engineer",
   description:
     "Personal site of a software engineer: work, CV and contact. Web applications end to end, from the front-end to the API and the infrastructure under it.",
-  url: "https://no-tone.com",
+  url: "https://tone.rip",
   links: [
-    { label: "Work", href: "https://no-tone.com/work" },
-    { label: "CV", href: "https://no-tone.com/cv" },
-    { label: "GitHub", href: "https://github.com/no-tone" },
-    { label: "Contact", href: "mailto:msg@no-tone.com" },
+    { label: "Work", href: "https://tone.rip/work" },
+    { label: "CV", href: "https://tone.rip/cv" },
+    { label: "GitHub", href: "https://github.com/riptone" },
+    { label: "Contact", href: "mailto:m@tone.rip" },
   ],
   markdown: [
-    "# no-tone",
+    "# tone",
     "",
     "Personal site of a software engineer. Web applications end to end: the",
     "front-end, the API behind it, and the infrastructure it runs on.",
@@ -34,16 +34,16 @@ export const NO_TONE_INFO: SiteInfo = {
     "- **/cv** - experience, education, skills",
     "",
     "## Elsewhere",
-    "- GitHub: https://github.com/no-tone",
-    "- Contact: msg@no-tone.com",
-    "- CV over SSH: `ssh cv.no-tone.com`",
+    "- GitHub: https://github.com/riptone",
+    "- Contact: m@tone.rip",
+    "- CV over SSH: `ssh cv.tone.rip`",
     "",
     "## API",
-    "- `GET https://api.no-tone.com/projects` - public repositories as JSON",
+    "- `GET https://api.tone.rip/projects` - public repositories as JSON",
     "",
     "## More",
-    "- Sitemap: https://no-tone.com/sitemap-index.xml",
-    "- API catalog: https://api.no-tone.com/.well-known/api-catalog",
+    "- Sitemap: https://tone.rip/sitemap-index.xml",
+    "- API catalog: https://api.tone.rip/.well-known/api-catalog",
     "",
   ].join("\n"),
 };
@@ -53,13 +53,13 @@ export const DASHBOARD_INFO: SiteInfo = {
   name: "main-menu",
   tagline: "Self-hosted services launcher",
   description:
-    "A minimal launcher and live health/status board for no-tone's self-hosted services.",
-  url: "https://dash.no-tone.com",
-  links: [{ label: "Status API", href: "https://api.no-tone.com/status" }],
+    "A minimal launcher and live health/status board for tone's self-hosted services.",
+  url: "https://dash.tone.rip",
+  links: [{ label: "Status API", href: "https://api.tone.rip/status" }],
   markdown: [
     "# main-menu",
     "",
-    "A minimal launcher for no-tone's self-hosted services, with live up/down status.",
+    "A minimal launcher for tone's self-hosted services, with live up/down status.",
     "",
     "## API",
     "- `GET /status` - health of every registered app, plus Tailscale device status",

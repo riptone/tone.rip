@@ -38,4 +38,4 @@ export {
   SELF_HOSTED_APPS,
   type SelfHostedApp,
 } from "./self-hosted-apps";
-export { DASHBOARD_INFO, NO_TONE_INFO, type SiteInfo } from "./site-info";
+export { DASHBOARD_INFO, type SiteInfo, TONE_INFO } from "./site-info";

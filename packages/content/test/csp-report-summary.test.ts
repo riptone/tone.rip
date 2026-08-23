@@ -5,10 +5,10 @@ describe("summarizeCspReport", () => {
   it("sanitizes a real CSP report to origins/paths, dropping querystrings", () => {
     const body = JSON.stringify({
       "csp-report": {
-        "document-uri": "https://no-tone.com/?utm_source=x",
+        "document-uri": "https://tone.rip/?utm_source=x",
         "violated-directive": "script-src",
         "blocked-uri": "https://evil.example.com/payload.js?x=1",
-        "source-file": "https://no-tone.com/scripts/main.js",
+        "source-file": "https://tone.rip/scripts/main.js",
       },
     });
     const summary = summarizeCspReport(body, "/api/csp-report");
@@ -44,8 +44,8 @@ describe("summarizeCspReport", () => {
         "csp-report": {
           "effective-directive": "style-src-elem",
           "blocked-uri": "inline",
-          "source-file": "https://no-tone.com/_astro/injected.js",
-          "document-uri": "https://no-tone.com/work",
+          "source-file": "https://tone.rip/_astro/injected.js",
+          "document-uri": "https://tone.rip/work",
         },
       }),
       "/csp-report",

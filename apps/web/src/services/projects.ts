@@ -18,7 +18,7 @@
 import { fetchWithTimeout } from "@repo/content";
 import { type Project, projectsResponseSchema } from "@repo/validation";
 
-const PROJECTS_URL = "https://api.no-tone.com/projects";
+const PROJECTS_URL = "https://api.tone.rip/projects";
 /**
  * How long this page will wait for the list before rendering without it.
  *

@@ -4,7 +4,7 @@ import { markdownNegotiation } from "../src/markdown-negotiation";
 
 function buildApp() {
   const app = new Hono();
-  app.use(markdownNegotiation({ markdown: "# no-tone" }));
+  app.use(markdownNegotiation({ markdown: "# tone" }));
   app.get("/", (c) => c.html("<html>app shell</html>"));
   return app;
 }
@@ -18,7 +18,7 @@ describe("markdownNegotiation", () => {
       "text/markdown; charset=utf-8",
     );
     expect(res.headers.get("Vary")).toBe("Accept");
-    expect(await res.text()).toBe("# no-tone");
+    expect(await res.text()).toBe("# tone");
   });
 
   it("falls through to the normal app for browsers", async () => {

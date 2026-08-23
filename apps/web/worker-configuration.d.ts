@@ -3,7 +3,7 @@
 // Runtime types generated with workerd@1.20260811.1 2025-10-08 disable_nodejs_process_v2,nodejs_compat
 interface __BaseEnv_Env {
     ASSETS: Fetcher;
-    SITE_ORIGIN: "https://dev.no-tone.com" | "https://no-tone.com";
+    SITE_ORIGIN: "https://dev.tone.rip" | "https://tone.rip";
 }
 declare namespace Cloudflare {
     interface GlobalProps {
@@ -11,7 +11,7 @@ declare namespace Cloudflare {
     }
     interface DevEnv {
         ASSETS: Fetcher;
-        SITE_ORIGIN: "https://dev.no-tone.com";
+        SITE_ORIGIN: "https://dev.tone.rip";
     }
     interface Env extends __BaseEnv_Env { }
 }

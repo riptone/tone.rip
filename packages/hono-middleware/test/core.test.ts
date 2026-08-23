@@ -4,7 +4,7 @@ import { buildApiCatalogBody, buildSecurityHeaders } from "../src/core";
 describe("buildSecurityHeaders", () => {
   it("builds a nonce'd CSP with the requested connect-src additions", () => {
     const { csp, headers, isLocalDev } = buildSecurityHeaders({
-      url: new URL("https://no-tone.com/"),
+      url: new URL("https://tone.rip/"),
       nonce: "abc123",
       connectSrc: ["https://api.github.com"],
     });
@@ -33,7 +33,7 @@ describe("buildSecurityHeaders", () => {
        `wrangler dev` does not run the edge injectors. So the safe value is
        the one you get by not thinking about it. */
     const { csp } = buildSecurityHeaders({
-      url: new URL("https://no-tone.com/"),
+      url: new URL("https://tone.rip/"),
       nonce: "abc123",
     });
     expect(csp).not.toContain("require-trusted-types-for");
@@ -42,7 +42,7 @@ describe("buildSecurityHeaders", () => {
 
   it("enforces Trusted Types when asked, allowing exactly one policy", () => {
     const { csp } = buildSecurityHeaders({
-      url: new URL("https://no-tone.com/"),
+      url: new URL("https://tone.rip/"),
       nonce: "abc123",
       trustedTypes: true,
     });
@@ -69,7 +69,7 @@ describe("buildSecurityHeaders", () => {
 
   it("defaults Cross-Origin-Resource-Policy to same-origin", () => {
     const { headers } = buildSecurityHeaders({
-      url: new URL("https://no-tone.com/"),
+      url: new URL("https://tone.rip/"),
       nonce: "abc123",
     });
     expect(headers["Cross-Origin-Resource-Policy"]).toBe("same-origin");
@@ -77,7 +77,7 @@ describe("buildSecurityHeaders", () => {
 
   it("allows overriding Cross-Origin-Resource-Policy (apps/api needs cross-origin)", () => {
     const { headers } = buildSecurityHeaders({
-      url: new URL("https://api.no-tone.com/"),
+      url: new URL("https://api.tone.rip/"),
       nonce: "abc123",
       crossOriginResourcePolicy: "cross-origin",
     });
@@ -88,10 +88,8 @@ describe("buildSecurityHeaders", () => {
 describe("buildApiCatalogBody", () => {
   it("builds an RFC 9727 linkset for the given entries", () => {
     const body = JSON.parse(
-      buildApiCatalogBody([{ href: "https://no-tone.com/api/projects.json" }]),
+      buildApiCatalogBody([{ href: "https://tone.rip/api/projects.json" }]),
     );
-    expect(body.linkset[0].anchor).toBe(
-      "https://no-tone.com/api/projects.json",
-    );
+    expect(body.linkset[0].anchor).toBe("https://tone.rip/api/projects.json");
   });
 });

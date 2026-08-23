@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 
 export interface DevRobotsOptions {
-  /** Hostnames that should be excluded from indexing, e.g. "dev.no-tone.com". */
+  /** Hostnames that should be excluded from indexing, e.g. "dev.tone.rip". */
   devHostnames: string[];
   body?: string;
   xRobotsTag?: string;

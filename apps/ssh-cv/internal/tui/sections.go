@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/no-tone/tonil/apps/ssh-cv/internal/cv"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/cv"
 )
 
 // One page per index row.

@@ -6,7 +6,7 @@ export default defineConfig({
     environment: "jsdom",
     environmentOptions: {
       jsdom: {
-        url: "https://no-tone.com/",
+        url: "https://tone.rip/",
       },
     },
     setupFiles: ["./test/setup.ts"],

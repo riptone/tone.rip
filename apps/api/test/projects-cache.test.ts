@@ -6,7 +6,7 @@ import {
 
 const REPO = {
   name: "tonil",
-  html_url: "https://github.com/no-tone/tonil",
+  html_url: "https://github.com/riptone/tonil",
   updated_at: "2026-01-01T00:00:00Z",
 };
 

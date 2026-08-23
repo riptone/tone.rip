@@ -29,7 +29,7 @@ export interface SimplifiedRepo {
   updatedAt: string;
 }
 
-/** Ported from no-tone.com's src/utils/projects-api.ts. */
+/** Ported from tone.rip's src/utils/projects-api.ts. */
 export function simplifyRepos(repos: unknown): SimplifiedRepo[] {
   if (!Array.isArray(repos)) return [];
   return repos

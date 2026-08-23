@@ -1,12 +1,12 @@
 import { handle } from "@astrojs/cloudflare/handler";
 
 // The projects API (GitHub repos, caching/ETag revalidation) now lives on
-// apps/api's own Worker at api.no-tone.com, not on this Worker. Warming its
+// apps/api's own Worker at api.tone.rip, not on this Worker. Warming its
 // cache on our cron tick still makes sense operationally (keeps the edge
 // cache hot ahead of real traffic), so we just hit that Worker's public
 // endpoint over the network instead of calling `handle()` against our own
 // (now nonexistent) local route.
-const PROJECTS_API_URL = "https://api.no-tone.com/projects";
+const PROJECTS_API_URL = "https://api.tone.rip/projects";
 
 const warmProjectsCache = async (): Promise<void> => {
   try {
@@ -15,7 +15,7 @@ const warmProjectsCache = async (): Promise<void> => {
       headers: {
         accept: "application/json",
         "x-tonil-revalidate": "1",
-        "user-agent": "no-tone-web-cron-warmup",
+        "user-agent": "tone-web-cron-warmup",
       },
     });
 

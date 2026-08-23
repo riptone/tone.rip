@@ -49,7 +49,7 @@ function malformedSummary(reportPath: string, size: number): CspReportSummary {
 }
 
 /**
- * Ported from no-tone.com's src/utils/csp-report.ts. Takes an already-validated
+ * Ported from tone.rip's src/utils/csp-report.ts. Takes an already-validated
  * (via @repo/validation's cspReportBodySchema) report body and reduces it to a
  * loggable summary - sanitizing origins/paths so we never log full querystrings
  * or credentials that might leak into a blocked-uri.

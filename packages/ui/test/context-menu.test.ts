@@ -26,11 +26,11 @@ function markup(): HTMLElement {
       </a>
       <div class="ctxmenu__sep" role="separator"></div>
       <button class="ctxmenu__item" role="menuitem" type="button" tabindex="-1"
-              data-ctx-copy="msg@no-tone.com">
+              data-ctx-copy="m@tone.rip">
         <span class="ctxmenu__label" data-ctx-label>copy email</span>
       </button>
       <button class="ctxmenu__item" role="menuitem" type="button" tabindex="-1"
-              data-ctx-copy="ssh cv.no-tone.com">
+              data-ctx-copy="ssh cv.tone.rip">
         <span class="ctxmenu__label" data-ctx-label>ssh</span>
       </button>
     </div>`;
@@ -193,7 +193,7 @@ describe("mountContextMenu", () => {
     item.dispatchEvent(click);
 
     expect(click.defaultPrevented).toBe(true);
-    expect(writeText).toHaveBeenCalledWith("msg@no-tone.com");
+    expect(writeText).toHaveBeenCalledWith("m@tone.rip");
 
     // The confirmation is the item changing its own word - see the CSS note
     // on why there is no separate toast.

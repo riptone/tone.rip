@@ -1,7 +1,7 @@
 /**
  * Fetches apps/api's /status endpoint (server-side app health + Tailscale
  * device status - see apps/api/src/routes/status.ts) via this app's own
- * same-origin api/status.ts proxy, not api.no-tone.com directly - that
+ * same-origin api/status.ts proxy, not api.tone.rip directly - that
  * route requires a Cloudflare Access JWT this page's own Access session can
  * supply, but only via a same-origin request (see api/status.ts's comment).
  *

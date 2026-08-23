@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 
 export interface WwwRedirectOptions {
-  /** The canonical apex host, e.g. "no-tone.com". */
+  /** The canonical apex host, e.g. "tone.rip". */
   apexHost: string;
   /** Defaults to `www.${apexHost}`. */
   wwwHost?: string;

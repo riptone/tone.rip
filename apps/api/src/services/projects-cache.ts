@@ -5,7 +5,7 @@ import {
 } from "@repo/content";
 
 const GITHUB_API_URL =
-  "https://api.github.com/users/no-tone/repos?per_page=100&sort=updated";
+  "https://api.github.com/users/riptone/repos?per_page=100&sort=updated";
 const CACHE_KEY_URL = "https://projects-api.tonil.internal/cache-v1";
 const EDGE_TTL_SECONDS = 900;
 // GitHub has been observed taking 10s+ and returning 504s; without a bound
@@ -83,7 +83,7 @@ interface FetchProjectsOptions {
 }
 
 /**
- * Ported from no-tone.com's src/pages/api/projects.json.ts, split out of the
+ * Ported from tone.rip's src/pages/api/projects.json.ts, split out of the
  * route handler so the caching/revalidation logic (the bulk of that file) can
  * be unit-tested independently of Hono/HTTP concerns.
  */

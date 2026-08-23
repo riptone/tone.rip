@@ -25,7 +25,7 @@ function control(label: string, value: string): string {
     </button>`;
 }
 
-function markup(email = "msg@no-tone.com"): HTMLButtonElement {
+function markup(email = "m@tone.rip"): HTMLButtonElement {
   document.body.innerHTML = control("contact", email);
   const el = document.querySelector<HTMLButtonElement>("[data-copy]");
   if (!el) throw new Error("fixture is missing the control");
@@ -66,7 +66,7 @@ describe("mountContact", () => {
     expect(writeText).not.toHaveBeenCalled();
     // A first click that copied would put the address on the clipboard of
     // anyone who merely wanted to see it.
-    await vi.waitFor(() => expect(typed()).toBe("msg@no-tone.com"), TYPED_MS);
+    await vi.waitFor(() => expect(typed()).toBe("m@tone.rip"), TYPED_MS);
   });
 
   it("copies on the second click and confirms", async () => {
@@ -81,7 +81,7 @@ describe("mountContact", () => {
     el.click();
     el.click();
 
-    expect(writeText).toHaveBeenCalledWith("msg@no-tone.com");
+    expect(writeText).toHaveBeenCalledWith("m@tone.rip");
     await vi.waitFor(() => {
       expect(badge()).toBe("Copied");
       expect(el.dataset.copied).toBe("1");
@@ -97,7 +97,7 @@ describe("mountContact", () => {
     mountContact();
     el.click();
 
-    expect(typed()).toBe("msg@no-tone.com");
+    expect(typed()).toBe("m@tone.rip");
   });
 
   it("does not throw when the clipboard is unavailable", async () => {
@@ -112,7 +112,7 @@ describe("mountContact", () => {
     expect(() => el.click()).not.toThrow();
     // The address is on screen either way, so a refused copy costs nothing
     // but a manual selection.
-    await vi.waitFor(() => expect(typed()).toBe("msg@no-tone.com"), TYPED_MS);
+    await vi.waitFor(() => expect(typed()).toBe("m@tone.rip"), TYPED_MS);
     expect(badge()).toBe("");
   });
 
@@ -145,18 +145,14 @@ describe("mountContact", () => {
      only ever has to fit one address. */
   it("collapses any other revealed control when one is opened", async () => {
     document.body.innerHTML =
-      control("cv", "ssh cv.no-tone.com") +
-      control("contact", "msg@no-tone.com");
+      control("cv", "ssh cv.tone.rip") + control("contact", "m@tone.rip");
     const [cv, contact] = Array.from(
       document.querySelectorAll<HTMLButtonElement>("[data-copy]"),
     );
     mountContact();
 
     cv.click();
-    await vi.waitFor(
-      () => expect(typed()).toBe("ssh cv.no-tone.com"),
-      TYPED_MS,
-    );
+    await vi.waitFor(() => expect(typed()).toBe("ssh cv.tone.rip"), TYPED_MS);
 
     contact.click();
     expect(cv.dataset.revealed).toBeUndefined();

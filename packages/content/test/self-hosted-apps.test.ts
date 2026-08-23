@@ -25,12 +25,12 @@ describe("ALL_APP_TAGS", () => {
 
 describe("resolveProbePath", () => {
   it("probes Vaultwarden's favicon instead of / (it 200s behind an auth wall)", () => {
-    expect(resolveProbePath(new URL("https://pass.no-tone.com"))).toBe(
+    expect(resolveProbePath(new URL("https://pass.tone.rip"))).toBe(
       "/favicon.ico",
     );
   });
 
   it("probes / for every other app", () => {
-    expect(resolveProbePath(new URL("https://photos.no-tone.com"))).toBe("/");
+    expect(resolveProbePath(new URL("https://photos.tone.rip"))).toBe("/");
   });
 });

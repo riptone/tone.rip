@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/no-tone/tonil/apps/ssh-cv/internal/cv"
+import "github.com/riptone/tonil/apps/ssh-cv/internal/cv"
 
 // The words around the CV, per language.
 //

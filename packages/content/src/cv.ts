@@ -14,7 +14,7 @@
    organisation does - and never `company`, which is the editorial choice
    described on the CV page and in docs/architecture.md. apps/ssh-cv prints
    the name, the per-role `detail`, and everything else here: typing
-   `ssh cv.no-tone.com` is a deliberate act by someone who wants the long
+   `ssh cv.tone.rip` is a deliberate act by someone who wants the long
    version, not a search result someone landed on.
 
    So: `org`, `period`, `place`, `stack` and `bullets` are public on both.

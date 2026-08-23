@@ -48,12 +48,12 @@ describe("GET /status", () => {
   });
 
   it("rejects requests missing the Access JWT header", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/status");
+    const res = await SELF.fetch("https://api.tone.rip/status");
     expect(res.status).toBe(401);
   });
 
   it("rejects requests bearing an invalid Access JWT", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/status", {
+    const res = await SELF.fetch("https://api.tone.rip/status", {
       headers: { [ACCESS_HEADER]: "not-a-real-token" },
     });
     expect(res.status).toBe(401);
@@ -79,7 +79,7 @@ describe("GET /status", () => {
       }),
     );
 
-    const res = await SELF.fetch("https://api.no-tone.com/status", {
+    const res = await SELF.fetch("https://api.tone.rip/status", {
       headers: { [ACCESS_HEADER]: token },
     });
     expect(res.status).toBe(200);

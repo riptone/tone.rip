@@ -7,21 +7,17 @@ describe("apiCatalog", () => {
     const app = new Hono();
     app.use(
       apiCatalog({
-        entries: [{ href: "https://no-tone.com/api/projects.json" }],
+        entries: [{ href: "https://tone.rip/api/projects.json" }],
       }),
     );
     app.get("/*", (c) => c.text("not the catalog"));
 
-    const res = await app.request(
-      "https://no-tone.com/.well-known/api-catalog",
-    );
+    const res = await app.request("https://tone.rip/.well-known/api-catalog");
     expect(res.headers.get("Content-Type")).toBe(
       "application/linkset+json; charset=utf-8",
     );
     const body = await res.json();
-    expect(body.linkset[0].anchor).toBe(
-      "https://no-tone.com/api/projects.json",
-    );
+    expect(body.linkset[0].anchor).toBe("https://tone.rip/api/projects.json");
     expect(body.linkset[0]["service-desc"][0].type).toBe("application/json");
   });
 
@@ -30,7 +26,7 @@ describe("apiCatalog", () => {
     app.use(apiCatalog({ entries: [] }));
     app.get("/*", (c) => c.text("passthrough"));
 
-    const res = await app.request("https://no-tone.com/");
+    const res = await app.request("https://tone.rip/");
     expect(await res.text()).toBe("passthrough");
   });
 });

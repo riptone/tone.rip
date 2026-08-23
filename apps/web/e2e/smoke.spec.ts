@@ -14,10 +14,10 @@ test("home page loads clean and the language switch works", async ({
 
   await page.goto("/");
   const heading = page.locator("h1");
-  await expect(heading).toHaveText("Hi, I'm no-tone.");
+  await expect(heading).toHaveText("Hi, I'm tone.");
 
   await page.locator('[data-lang-set="pt"]').click();
-  await expect(heading).toHaveText("Olá, sou o no-tone.");
+  await expect(heading).toHaveText("Olá, sou o tone.");
 
   expect(problems.errors, problems.errors.join("\n")).toEqual([]);
   expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);

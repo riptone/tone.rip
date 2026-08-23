@@ -22,7 +22,7 @@ import "@repo/ui/styles/filter.css";
 import "../styles/dashboard.css";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "../consts";
 
-/* The launcher, rebuilt on the same frame as no-tone.com.
+/* The launcher, rebuilt on the same frame as tone.rip.
 
    It used to be a "window" card with a titlebar, floating on a black page -
    a desktop metaphor inherited from the old site. The site has since dropped
@@ -38,8 +38,8 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "../consts";
 
 const EAGER_ICON_COUNT = 8;
 
-const GITHUB = "https://github.com/no-tone";
-const EMAIL = "msg@no-tone.com";
+const GITHUB = "https://github.com/riptone";
+const EMAIL = "m@tone.rip";
 
 /* The counterpart to the site's "log in": this app is gated by Cloudflare
    Access, and /cdn-cgi/access/logout is the endpoint that actually drops the
@@ -49,9 +49,9 @@ const MENU: ContextMenuEntry[] = [
   { label: "copy email", kind: "copy", value: EMAIL, hint: "mail" },
   "separator",
   {
-    label: "no-tone.com",
+    label: "tone.rip",
     kind: "link",
-    value: "https://no-tone.com",
+    value: "https://tone.rip",
     hint: "site",
     external: true,
   },
@@ -89,8 +89,8 @@ const MENU: ContextMenuEntry[] = [
       <div class="shell__reading">
         <a
           class="shell__brand"
-          href="https://no-tone.com"
-          aria-label="no-tone, home"
+          href="https://tone.rip"
+          aria-label="tone, home"
         >
           <Logo label="" />
         </a>
@@ -196,8 +196,8 @@ const MENU: ContextMenuEntry[] = [
 
         <Footer
           class="dashfoot"
-          github="https://no-tone.com"
-          handle="no-tone.com"
+          github="https://tone.rip"
+          handle="tone.rip"
           email={EMAIL}
           links={[{ label: "status", href: "/api/status" }]}
         />

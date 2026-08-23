@@ -1,4 +1,4 @@
-/* Shared site chrome - the parts of a page that are the same on no-tone.com
+/* Shared site chrome - the parts of a page that are the same on tone.rip
    and on the dashboard.
 
    Components live next to their behaviour and are imported by path

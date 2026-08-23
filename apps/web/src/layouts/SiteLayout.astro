@@ -98,9 +98,9 @@ const SECTIONS = [
   { id: "cv", en: "cv", pt: "cv", href: "/cv" },
 ];
 
-const GITHUB = "https://github.com/no-tone";
-const EMAIL = "msg@no-tone.com";
-const DASHBOARD = "https://dash.no-tone.com";
+const GITHUB = "https://github.com/riptone";
+const EMAIL = "m@tone.rip";
+const DASHBOARD = "https://dash.tone.rip";
 
 /* The right-click menu. Everything here is either somewhere to go or
    something to put on the clipboard - see ContextMenu.astro for why that
@@ -163,7 +163,7 @@ const MENU: ContextMenuEntry[] = [
   <body data-ramp={ramp}>
     <main class="site shell">
       <div class="shell__reading">
-        <a class="shell__brand" href="/" aria-label="no-tone, home">
+        <a class="shell__brand" href="/" aria-label="tone, home">
           <Logo animate label="" />
         </a>
 
@@ -190,12 +190,12 @@ const MENU: ContextMenuEntry[] = [
 
         <Footer
           github={GITHUB}
-          handle="@no-tone"
+          handle="@riptone"
           email={EMAIL}
           links={[
             {
               label: "cv",
-              reveal: "ssh cv.no-tone.com",
+              reveal: "ssh cv.tone.rip",
               describe: "Copy the command to read the CV over SSH",
             },
           ]}

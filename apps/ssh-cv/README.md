@@ -3,12 +3,12 @@
 The CV, served over SSH.
 
 ```console
-$ ssh cv.no-tone.com
+$ ssh cv.tone.rip
 ```
 
 Anyone can connect. What arrives is the *long* version of the CV the website
 prints: the same content module, plus the company names and the per-role
-detail that [/cv](https://no-tone.com/cv) deliberately leaves out. Typing that
+detail that [/cv](https://tone.rip/cv) deliberately leaves out. Typing that
 command is the only credential it asks for.
 
 ## What it looks like
@@ -17,7 +17,7 @@ An index and a page, inside a small window.
 
 ```
  ╭──────────────────────────────────────────────────────────────╮
- │  ● ● ●                                    no-tone — cv · en  │
+ │  ● ● ●                                    tone — cv · en  │
  │  ──────────────────────────────────────────────────────────  │
  │                                                              │
  │  Experience                                                  │
@@ -76,7 +76,7 @@ are. Neither appears when the page fits, because a scrollbar that is always
 there says nothing.
 
 The chrome is bilingual with the content, so `l` switches the section names and
-the key hints along with the CV. `ssh pt@cv.no-tone.com` opens in Portuguese.
+the key hints along with the CV. `ssh pt@cv.tone.rip` opens in Portuguese.
 
 ## Colour, and the four ways to lose it
 
@@ -187,7 +187,7 @@ the part that changes often.
 ## The other constraint: SSH has no SNI
 
 TLS sends the hostname, so one IP can serve many domains. SSH does not. The
-server never learns whether you typed `cv.no-tone.com` or anything else
+server never learns whether you typed `cv.tone.rip` or anything else
 pointing at the same address; if two names resolve there, both are the same
 connection.
 
@@ -359,7 +359,7 @@ Production wants the opposite: one path, kept forever.
 $ SSH_AUTHORIZE_TOKEN=… ./bin/ssh-cv \
     --addr :22 \
     --host-key /var/lib/ssh-cv/host_ed25519 \
-    --authorize-url https://api.no-tone.com/ssh/authorize
+    --authorize-url https://api.tone.rip/ssh/authorize
 ```
 
 | flag | env | meaning |

@@ -5,7 +5,7 @@ describe("cspReportBodySchema", () => {
   it("accepts a real browser CSP report payload", () => {
     const payload = {
       "csp-report": {
-        "document-uri": "https://no-tone.com/",
+        "document-uri": "https://tone.rip/",
         "violated-directive": "script-src",
         "blocked-uri": "eval",
         "line-number": 12,

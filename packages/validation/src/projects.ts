@@ -1,4 +1,4 @@
-/* Shape of `GET api.no-tone.com/projects`, validated at the point apps/web
+/* Shape of `GET api.tone.rip/projects`, validated at the point apps/web
    reads it.
 
    It is our own API and its response is already shaped by

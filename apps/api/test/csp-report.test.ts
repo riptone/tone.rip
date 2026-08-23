@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 
 describe("POST /csp-report", () => {
   it("accepts a well-formed CSP report and returns 202", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/csp-report", {
+    const res = await SELF.fetch("https://api.tone.rip/csp-report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         "csp-report": {
-          "document-uri": "https://no-tone.com/",
+          "document-uri": "https://tone.rip/",
           "violated-directive": "script-src",
           "blocked-uri": "eval",
         },
@@ -19,7 +19,7 @@ describe("POST /csp-report", () => {
   });
 
   it("rejects a payload missing the csp-report envelope as a validation problem", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/csp-report", {
+    const res = await SELF.fetch("https://api.tone.rip/csp-report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nope: true }),
@@ -31,7 +31,7 @@ describe("POST /csp-report", () => {
   });
 
   it("GET is a cheap liveness check", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/csp-report");
+    const res = await SELF.fetch("https://api.tone.rip/csp-report");
     expect(res.status).toBe(200);
   });
 });

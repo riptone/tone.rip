@@ -122,7 +122,7 @@
    collapsed, the rules go for good - this is the original behaviour, just at
    the width that actually needs it rather than at every phone.
 
-   360px is where the measurement lands: the row is `@no-tone`, `cv`, `en pt`
+   360px is where the measurement lands: the row is `@tone`, `cv`, `en pt`
    and `contact` against a column already narrowed by the field's rail, and
    under that there is no arrangement of hairlines that does not end a line
    with one. */

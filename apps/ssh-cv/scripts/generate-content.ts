@@ -22,9 +22,9 @@ import {
   EDUCATION,
   EXPERIENCE,
   INTERESTS,
-  NO_TONE_INFO,
   SKILLS,
   SPOKEN,
+  TONE_INFO,
 } from "@repo/content";
 
 const LANGS: CvLang[] = ["en", "pt"];
@@ -32,9 +32,9 @@ const LANGS: CvLang[] = ["en", "pt"];
 /* The one fact the content module has no reason to know: the hostname this
    server answers on. SSH has no SNI, so the binary cannot learn it from the
    connection either - see apps/ssh-cv/README.md. */
-const SSH_HOST = "cv.no-tone.com";
+const SSH_HOST = "cv.tone.rip";
 
-/** `https://no-tone.com/` -> `no-tone.com`. A terminal wants the name. */
+/** `https://tone.rip/` -> `tone.rip`. A terminal wants the name. */
 function bare(url: string): string {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 }
@@ -46,11 +46,9 @@ function bare(url: string): string {
  * silently lose a line otherwise.
  */
 function linkStartingWith(prefix: string): string {
-  const found = NO_TONE_INFO.links.find((entry) =>
-    entry.href.startsWith(prefix),
-  );
+  const found = TONE_INFO.links.find((entry) => entry.href.startsWith(prefix));
   if (!found) {
-    throw new Error(`NO_TONE_INFO has no link starting with "${prefix}"`);
+    throw new Error(`TONE_INFO has no link starting with "${prefix}"`);
   }
   return found.href;
 }
@@ -61,7 +59,7 @@ const payload = {
     "Generated from packages/content/src/cv.ts - do not edit. Run `bun run build` in apps/ssh-cv.",
   langs: LANGS,
   contact: {
-    web: bare(NO_TONE_INFO.url),
+    web: bare(TONE_INFO.url),
     email: linkStartingWith("mailto:").slice("mailto:".length),
     github: bare(linkStartingWith("https://github.com/")),
     ssh: `ssh ${SSH_HOST}`,

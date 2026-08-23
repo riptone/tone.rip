@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const GITHUB_REPOS = [
   {
     name: "tonil",
-    html_url: "https://github.com/no-tone/tonil",
+    html_url: "https://github.com/riptone/tonil",
     stargazers_count: 5,
     updated_at: "2026-01-01T00:00:00Z",
   },
@@ -28,7 +28,7 @@ describe("GET /projects", () => {
   });
 
   it("proxies and simplifies the GitHub repo list", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/projects");
+    const res = await SELF.fetch("https://api.tone.rip/projects");
     expect(res.status).toBe(200);
     const body = (await res.json()) as Array<{ name: string }>;
     expect(body).toEqual([
@@ -37,17 +37,17 @@ describe("GET /projects", () => {
   });
 
   it("sets Access-Control-Allow-Origin for a trusted cross-origin caller", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/projects", {
-      headers: { Origin: "https://no-tone.com" },
+    const res = await SELF.fetch("https://api.tone.rip/projects", {
+      headers: { Origin: "https://tone.rip" },
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
-      "https://no-tone.com",
+      "https://tone.rip",
     );
   });
 
   it("omits Access-Control-Allow-Origin for an untrusted origin", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/projects", {
+    const res = await SELF.fetch("https://api.tone.rip/projects", {
       headers: { Origin: "https://evil.example.com" },
     });
     // The global cors() middleware doesn't reject the request outright - it
@@ -58,7 +58,7 @@ describe("GET /projects", () => {
   });
 
   it("sets Cross-Origin-Resource-Policy: cross-origin (this API is deliberately multi-origin)", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/projects");
+    const res = await SELF.fetch("https://api.tone.rip/projects");
     expect(res.headers.get("Cross-Origin-Resource-Policy")).toBe(
       "cross-origin",
     );
@@ -88,7 +88,7 @@ describe("GET /projects/:name/readme", () => {
       return new Response(JSON.stringify(repos), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
-    await SELF.fetch("https://api.no-tone.com/projects", {
+    await SELF.fetch("https://api.tone.rip/projects", {
       headers: { "x-tonil-revalidate": "1" },
     });
     fetchMock.mockClear();
@@ -102,7 +102,7 @@ describe("GET /projects/:name/readme", () => {
   const repo = (name: string) => [
     {
       name,
-      html_url: `https://github.com/no-tone/${name}`,
+      html_url: `https://github.com/riptone/${name}`,
       stargazers_count: 0,
       updated_at: "2026-01-01T00:00:00Z",
     },
@@ -110,19 +110,17 @@ describe("GET /projects/:name/readme", () => {
 
   it("returns the rendered README html for a known repo", async () => {
     await stubGitHubAndPrime(okReadme);
-    const res = await SELF.fetch(
-      "https://api.no-tone.com/projects/tonil/readme",
-    );
+    const res = await SELF.fetch("https://api.tone.rip/projects/tonil/readme");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ html: "<h1>hi</h1>" });
   });
 
   it("proxies to GitHub's readme endpoint for that repo", async () => {
     const fetchMock = await stubGitHubAndPrime(okReadme);
-    await SELF.fetch("https://api.no-tone.com/projects/tonil/readme");
+    await SELF.fetch("https://api.tone.rip/projects/tonil/readme");
 
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-    expect(urls).toContain("https://api.github.com/repos/no-tone/tonil/readme");
+    expect(urls).toContain("https://api.github.com/repos/riptone/tonil/readme");
   });
 
   it("never calls GitHub for a repo that isn't in the projects list", async () => {
@@ -131,7 +129,7 @@ describe("GET /projects/:name/readme", () => {
     const fetchMock = await stubGitHubAndPrime(okReadme);
 
     const res = await SELF.fetch(
-      "https://api.no-tone.com/projects/not-a-real-repo/readme",
+      "https://api.tone.rip/projects/not-a-real-repo/readme",
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ html: null });
@@ -148,7 +146,7 @@ describe("GET /projects/:name/readme", () => {
       repo("bare-repo"),
     );
     const res = await SELF.fetch(
-      "https://api.no-tone.com/projects/bare-repo/readme",
+      "https://api.tone.rip/projects/bare-repo/readme",
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ html: null });
@@ -160,7 +158,7 @@ describe("GET /projects/:name/readme", () => {
       repo("flaky-repo"),
     );
     const res = await SELF.fetch(
-      "https://api.no-tone.com/projects/flaky-repo/readme",
+      "https://api.tone.rip/projects/flaky-repo/readme",
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ html: null });
@@ -169,7 +167,7 @@ describe("GET /projects/:name/readme", () => {
   it("rejects a repo name that isn't a valid GitHub repo name", async () => {
     const fetchMock = await stubGitHubAndPrime(okReadme);
     const res = await SELF.fetch(
-      "https://api.no-tone.com/projects/..%2F..%2Fetc/readme",
+      "https://api.tone.rip/projects/..%2F..%2Fetc/readme",
     );
     expect(res.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -178,7 +176,7 @@ describe("GET /projects/:name/readme", () => {
 
 describe("API basics", () => {
   it("renders a 404 as application/problem+json, like every other error", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/does-not-exist");
+    const res = await SELF.fetch("https://api.tone.rip/does-not-exist");
     expect(res.status).toBe(404);
     expect(res.headers.get("Content-Type")).toBe(
       "application/problem+json; charset=utf-8",
@@ -191,17 +189,17 @@ describe("API basics", () => {
   });
 
   it("describes itself at the root instead of 404ing", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/");
+    const res = await SELF.fetch("https://api.tone.rip/");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { endpoints: Array<{ href: string }> };
     expect(body.endpoints.length).toBeGreaterThan(0);
   });
 
   it("only advertises methods that actually exist on preflight", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/projects", {
+    const res = await SELF.fetch("https://api.tone.rip/projects", {
       method: "OPTIONS",
       headers: {
-        Origin: "https://no-tone.com",
+        Origin: "https://tone.rip",
         "Access-Control-Request-Method": "GET",
       },
     });

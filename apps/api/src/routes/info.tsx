@@ -1,10 +1,10 @@
-import { DASHBOARD_INFO, NO_TONE_INFO, type SiteInfo } from "@repo/content";
+import { DASHBOARD_INFO, type SiteInfo, TONE_INFO } from "@repo/content";
 import { Hono } from "hono";
 import { html } from "hono/html";
 import type { AppEnv } from "../env";
 
 const SITES: Record<string, SiteInfo> = {
-  [NO_TONE_INFO.slug]: NO_TONE_INFO,
+  [TONE_INFO.slug]: TONE_INFO,
   [DASHBOARD_INFO.slug]: DASHBOARD_INFO,
 };
 

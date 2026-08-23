@@ -6,15 +6,15 @@ import { defineConfig } from "astro/config";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://no-tone.com",
+  site: "https://tone.rip",
   security: {
     allowedDomains: [
       {
-        hostname: "no-tone.com",
+        hostname: "tone.rip",
         protocol: "https",
       },
       {
-        hostname: "**.no-tone.com",
+        hostname: "**.tone.rip",
         protocol: "https",
       },
     ],

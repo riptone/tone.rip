@@ -4,11 +4,11 @@
 
 # tonil
 
-**One repo behind [no-tone.com](https://no-tone.com), its self-hosted services dashboard, the API tying them together - and a CV you can `ssh` into.**
+**One repo behind [tone.rip](https://tone.rip), its self-hosted services dashboard, the API tying them together - and a CV you can `ssh` into.**
 
 <br>
 
-[![CI](https://github.com/no-tone/tonil/actions/workflows/ci.yml/badge.svg)](https://github.com/no-tone/tonil/actions/workflows/ci.yml)
+[![CI](https://github.com/riptone/tonil/actions/workflows/ci.yml/badge.svg)](https://github.com/riptone/tonil/actions/workflows/ci.yml)
 ![Bun](https://img.shields.io/badge/Bun-000000?logo=bun&logoColor=white)
 ![Turborepo](https://img.shields.io/badge/Turborepo-EF4444?logo=turborepo&logoColor=white)
 ![Astro](https://img.shields.io/badge/Astro-7-BC52EE?logo=astro&logoColor=white)
@@ -63,10 +63,10 @@ Go binary, for [a reason the protocol forces](#the-ssh-cv).
 
 ```
 apps/
-  web         no-tone.com               Astro, SSR on Workers
-  dashboard   dash.no-tone.com          Astro, behind Cloudflare Access
-  api         api.no-tone.com           Hono on Workers
-  ssh-cv      ssh cv.no-tone.com        Go - Charm Wish + Bubble Tea
+  web         tone.rip               Astro, SSR on Workers
+  dashboard   dash.tone.rip          Astro, behind Cloudflare Access
+  api         api.tone.rip           Hono on Workers
+  ssh-cv      ssh cv.tone.rip        Go - Charm Wish + Bubble Tea
 
 packages/
   ui                 design tokens, BaseHead, the gradient field, the wordmark
@@ -138,7 +138,7 @@ live at `/v2`, which has a frames-per-second readout so idle cost is visible.
 ## The SSH CV
 
 ```console
-$ ssh cv.no-tone.com
+$ ssh cv.tone.rip
 ```
 
 Anyone can connect and read the CV - the long version of it: the same content
@@ -200,7 +200,7 @@ Secrets are Worker secrets, set with `wrangler secret put`, never committed.
 | [`docs/engineering.md`](./docs/engineering.md) | language, validation, API and git conventions |
 | [`docs/architecture.md`](./docs/architecture.md) | how the apps and packages fit, and why |
 | [`docs/deployment.md`](./docs/deployment.md) | the Cloudflare Workers runbook |
-| [`docs/ssh-cv-deployment.md`](./docs/ssh-cv-deployment.md) | putting `ssh cv.no-tone.com` on the internet |
+| [`docs/ssh-cv-deployment.md`](./docs/ssh-cv-deployment.md) | putting `ssh cv.tone.rip` on the internet |
 | [`packages/ui/README.md`](./packages/ui/README.md) | the design system and the gradient field |
 
 ---

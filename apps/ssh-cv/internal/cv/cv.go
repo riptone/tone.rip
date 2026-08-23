@@ -9,7 +9,7 @@
 // This is the long version of the CV. The website describes an organisation
 // by what it does and stops there; here every role also carries its name and
 // a few lines about what the work actually involved. Somebody who typed
-// `ssh cv.no-tone.com` asked for that.
+// `ssh cv.tone.rip` asked for that.
 package cv
 
 import (

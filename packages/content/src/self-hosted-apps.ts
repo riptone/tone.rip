@@ -24,42 +24,42 @@ export const SELF_HOSTED_APPS: SelfHostedApp[] = [
   },
   {
     name: "Nginx",
-    href: "https://proxy.no-tone.com",
+    href: "https://proxy.tone.rip",
     tags: ["Ops", "Network", "Self-Hosted"],
     iconUrl:
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/nginx-proxy-manager.webp",
   },
   {
     name: "Portainer",
-    href: "https://ports.no-tone.com",
+    href: "https://ports.tone.rip",
     tags: ["Ops", "Self-Hosted"],
     iconUrl:
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/portainer-dark.webp",
   },
   {
     name: "Vaultwarden",
-    href: "https://pass.no-tone.com",
+    href: "https://pass.tone.rip",
     tags: ["Security", "Self-Hosted"],
     iconUrl:
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/vaultwarden-light.webp",
   },
   {
     name: "Joplin",
-    href: "https://notes.no-tone.com",
+    href: "https://notes.tone.rip",
     tags: ["Personal", "Self-Hosted"],
     iconUrl:
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/joplin.png",
   },
   {
     name: "Immich",
-    href: "https://photos.no-tone.com",
+    href: "https://photos.tone.rip",
     tags: ["Media", "Self-Hosted"],
     iconUrl:
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/immich.webp",
   },
   {
     name: "OpenCloud",
-    href: "https://drive.no-tone.com",
+    href: "https://drive.tone.rip",
     tags: ["Media", "Self-Hosted"],
     iconUrl:
       "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/open-cloud-dark.webp",
@@ -71,11 +71,11 @@ export const ALL_APP_TAGS: AppTag[] = Array.from(
 ).sort() as AppTag[];
 
 /**
- * Vaultwarden (pass.no-tone.com) serves an empty 200 at "/" behind auth walls
+ * Vaultwarden (pass.tone.rip) serves an empty 200 at "/" behind auth walls
  * in some configs; probe its favicon instead. Shared by apps/api's
  * server-side health probe and apps/dashboard's client-side ping - they used
  * to each hardcode this hostname check separately.
  */
 export function resolveProbePath(url: URL): string {
-  return url.hostname === "pass.no-tone.com" ? "/favicon.ico" : "/";
+  return url.hostname === "pass.tone.rip" ? "/favicon.ico" : "/";
 }

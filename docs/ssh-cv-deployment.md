@@ -1,4 +1,4 @@
-# Deploying `ssh cv.no-tone.com`
+# Deploying `ssh cv.tone.rip`
 
 Everything needed to put `apps/ssh-cv` on the internet, and why it is shaped
 the way it is.
@@ -22,7 +22,7 @@ it is for administering your own container:
 
 The only way in is `wrangler containers ssh <INSTANCE_ID>`, authenticated
 against *your* Cloudflare account. Great for debugging, useless for a stranger
-typing `ssh cv.no-tone.com`.
+typing `ssh cv.tone.rip`.
 
 **Spectrum can proxy raw TCP**, and SSH is available on Pro and Business (one
 app), not Enterprise-only. But Spectrum is a *proxy*, not a host: you still
@@ -40,7 +40,7 @@ So: **a small box with a public IP, and the API stays on Workers.**
 ```
 your machine                  the box                    Cloudflare
 ────────────                  ───────                    ──────────
-ssh cv.no-tone.com  ──:22──►  ssh-cv (Go)  ──https──►    apps/api
+ssh cv.tone.rip  ──:22──►  ssh-cv (Go)  ──https──►    apps/api
   offers your key               │                        POST /ssh/authorize
                                 │  fingerprint only        │
                                 │  ◄───────────────────────  allowed + scopes
@@ -101,7 +101,7 @@ The whole list, end to end:
 - **`apps/api` already deployed**, because the allowlist lives there (step 2)
 - **Two secrets on that Worker**: `SSH_GATEWAY_TOKEN` and
   `SSH_AUTHORIZED_KEYS` (step 2)
-- **A DNS record** for `cv.no-tone.com`, grey-clouded (step 6)
+- **A DNS record** for `cv.tone.rip`, grey-clouded (step 6)
 
 You do not need: Docker, a reverse proxy, a Go toolchain on the box, a TLS
 certificate, or a Unix account for visitors.
@@ -415,7 +415,7 @@ running as root.
 
 ```ini
 [Unit]
-Description=no-tone CV over SSH
+Description=tone CV over SSH
 After=network-online.target
 Wants=network-online.target
 
@@ -430,7 +430,7 @@ Environment=SSH_AUTHORIZE_TOKEN=REPLACE_WITH_THE_TOKEN_FROM_STEP_2
 ExecStart=/usr/local/bin/ssh-cv \
   --addr :22 \
   --host-key /var/lib/ssh-cv/host_ed25519 \
-  --authorize-url https://api.no-tone.com/ssh/authorize
+  --authorize-url https://api.tone.rip/ssh/authorize
 
 # Bind :22 without running as root.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -492,7 +492,7 @@ ssh-keygen -lf /var/lib/ssh-cv/host_ed25519.pub
 
 ## 6. DNS
 
-`cv.no-tone.com` → the box's IPv4 (and AAAA if it has one), **grey cloud**.
+`cv.tone.rip` → the box's IPv4 (and AAAA if it has one), **grey cloud**.
 
 The orange-cloud proxy is HTTP only; proxying an SSH host through it makes the
 name unreachable on 22. Any other name pointing at the same address reaches
@@ -512,9 +512,9 @@ ssh <public-ip>                       # the CV, from the box itself
 Then, once DNS resolves:
 
 ```bash
-ssh cv.no-tone.com                    # the CV; the footer names your key
-ssh -o IdentitiesOnly=yes -i /dev/null cv.no-tone.com   # as a stranger: the same CV, no label
-ssh pt@cv.no-tone.com                 # opens in Portuguese
+ssh cv.tone.rip                    # the CV; the footer names your key
+ssh -o IdentitiesOnly=yes -i /dev/null cv.tone.rip   # as a stranger: the same CV, no label
+ssh pt@cv.tone.rip                 # opens in Portuguese
 ```
 
 The username is not identity - anyone can type anything - but it is honoured

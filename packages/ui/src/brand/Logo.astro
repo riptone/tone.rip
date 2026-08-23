@@ -2,25 +2,25 @@
 // biome-ignore-all lint/correctness/noUnusedVariables: used in the template
 // below the frontmatter fence, which Biome's Astro support doesn't analyze.
 /**
- * The no-tone wordmark.
+ * The tone wordmark.
  *
- * `no-tone` with the `t` replaced by a backslash, so it reads `no\one` - the
- * name and "no one" at once. The glyphs are outlined from the site's own
- * variable font (Hanken Grotesk at wght 600) rather than set as live text, so
- * the mark is stable wherever it appears and needs no font to have loaded.
- * Regenerate with packages/ui/src/brand/generate.py after a type change.
+ * Eight-bit pixels, not outlined type - see generate.py for the bitmaps and
+ * why "t" is a cross and "n" isn't (inside the word; the standalone mark,
+ * `markOnly`, is). Regenerate with packages/ui/src/brand/generate.py after a
+ * bitmap change.
  *
- * The backslash alone is the mark: it survives down to a 16px favicon, where
- * a six-letter wordmark would not.
+ * The mark alone is what survives down to a 16px favicon, where the full
+ * word would not.
  *
- * With `animate`, the letters converge into the backslash and back out on
- * mount - the wordmark assembling itself out of its own mark. Honoured only
- * when the visitor has not asked for reduced motion.
+ * With `animate`, the letters snap in left to right like typed characters,
+ * and the trailing cursor cell starts blinking once they have - the
+ * wordmark arriving the way a terminal line does. Honoured only when the
+ * visitor has not asked for reduced motion.
  */
 interface Props {
-  /** Play the assemble animation on mount. */
+  /** Play the type-in animation on mount. */
   animate?: boolean;
-  /** Render only the backslash. */
+  /** Render only the mark (the headstone n). */
   markOnly?: boolean;
   class?: string;
   /** Accessible name. Set to "" when an adjacent label already names it. */
@@ -31,14 +31,14 @@ const {
   animate = false,
   markOnly = false,
   class: className = "",
-  label = "no-tone",
+  label = "tone",
 } = Astro.props as Props;
 
 import markSvg from "./mark.svg?raw";
 import wordmarkSvg from "./wordmark.svg?raw";
 
 const source = markOnly ? markSvg : wordmarkSvg;
-const classes = ["ntl", animate && "ntl--animate", className]
+const classes = ["tw", animate && "tw--animate", className]
   .filter(Boolean)
   .join(" ");
 const svg = source
@@ -47,7 +47,7 @@ const svg = source
     'role="img"',
     label ? 'role="img"' : 'role="presentation" aria-hidden="true"',
   )
-  .replace('aria-label="no-tone"', label ? `aria-label="${label}"` : "");
+  .replace('aria-label="tone"', label ? `aria-label="${label}"` : "");
 ---
 
 <Fragment set:html={svg} />

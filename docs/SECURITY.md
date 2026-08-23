@@ -1,7 +1,7 @@
 # Security Policy
 
-This is the security policy for [no-tone/tonil](https://github.com/no-tone/tonil) —
-the monorepo behind no-tone.com (3 Workers, 6 shared packages). It is written
+This is the security policy for [riptone/tonil](https://github.com/riptone/tonil) —
+the monorepo behind tone.rip (3 Workers, 6 shared packages). It is written
 to be followed by humans and by the AI agents that help maintain this repo.
 
 ## Supported versions
@@ -56,7 +56,7 @@ against it before it is filed (details in `docs/engineering.md` and
 - **Secrets**: never in the repo. Wrangler secrets and GitHub repo secrets
   only. The `CLOUDFLARE_API_TOKEN` used by CI is a repo secret.
 - **Telemetry**: browsers report CSP violations to `POST /csp-report` on
-  `api.no-tone.com`.
+  `api.tone.rip`.
 
 Known deviation from "perfect": `COEP` is `unsafe-none` (no cross-origin
 isolation — deliberately, no feature needs it yet). `x-xss-protection` and
@@ -72,7 +72,7 @@ Open a **private** report — either is fine:
 
 1. **GitHub Security Advisory** (preferred): repo → Security → Report a
    vulnerability. Private until triaged.
-2. **Email**: `msg@no-tone.com` (the address published in
+2. **Email**: `m@tone.rip` (the address published in
    `/.well-known/security.txt`).
 
 What to include:
@@ -82,8 +82,8 @@ What to include:
 - Browser/console errors verbatim — this site's failures can be
   production-only (edge-injected scripts; `wrangler dev` does not run them,
   see `docs/deployment.md`), so screenshots alone may not be enough
-- Whether it reproduces on `https://no-tone.com` (production), the dashboard
-  (`dash.no-tone.com`), or `api.no-tone.com`
+- Whether it reproduces on `https://tone.rip` (production), the dashboard
+  (`dash.tone.rip`), or `api.tone.rip`
 
 Expectations: this is a single-maintainer project. You will get an
 acknowledgment within a week. If you hear nothing in two, email the address
@@ -106,7 +106,7 @@ When a report arrives, process it in this order:
 3. **Reproduce locally**: `bunx turbo run test --filter=…`, `wrangler dev`.
    Remember the dev/prod CSP difference — dev serves `'unsafe-inline'`, so a
    clean dev run proves nothing about production.
-4. **Check production, not just the code**: `curl -s -D - https://no-tone.com/`
+4. **Check production, not just the code**: `curl -s -D - https://tone.rip/`
    and inspect the served headers; edge injection (Speed Brain, JS Detections)
    can only be seen there.
 5. **Fix at the root, not the symptom**: one guard in the shared

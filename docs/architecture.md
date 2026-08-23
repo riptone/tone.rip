@@ -4,10 +4,10 @@ How the three apps and five packages fit together, and why things live where the
 
 ## The three apps
 
-- **`apps/web`** - the public site, no-tone.com. Astro, server-rendered, its own Cloudflare Worker.
-- **`apps/dashboard`** - the self-hosted-services launcher, dash.no-tone.com. Astro, its own Cloudflare Worker, gated behind a Cloudflare Access policy (not app-level auth code).
-- **`apps/api`** - api.no-tone.com. Hono, Cloudflare Workers, the single source of truth for anything both apps (or an external agent) might need.
-- **`apps/ssh-cv`** - the CV over SSH (`ssh cv.no-tone.com`). Go, not Workers, for the reason below. Serves the same CV content the website renders, at more depth: the company names and the per-role detail `/cv` leaves out.
+- **`apps/web`** - the public site, tone.rip. Astro, server-rendered, its own Cloudflare Worker.
+- **`apps/dashboard`** - the self-hosted-services launcher, dash.tone.rip. Astro, its own Cloudflare Worker, gated behind a Cloudflare Access policy (not app-level auth code).
+- **`apps/api`** - api.tone.rip. Hono, Cloudflare Workers, the single source of truth for anything both apps (or an external agent) might need.
+- **`apps/ssh-cv`** - the CV over SSH (`ssh cv.tone.rip`). Go, not Workers, for the reason below. Serves the same CV content the website renders, at more depth: the company names and the per-role detail `/cv` leaves out.
 
 Both Astro apps are deliberately thin: they render markup and ship the client-side interaction (globe, panels, filters, theme toggle). Neither has its own API routes for data that isn't page-specific - that's what `apps/api` is for.
 
@@ -47,7 +47,7 @@ because the CV is as public as the website. See `apps/ssh-cv/README.md`.
 
 ## Why `apps/dashboard` is gated by Cloudflare Access, not app code
 
-`apps/dashboard` sits entirely behind a Cloudflare Access application (an edge-level login wall tied to the account's identity providers) rather than any homegrown session/login system - there's exactly one internal-facing app that needs gating, so paying for a Hono/Astro auth stack (sessions, a login form, password storage) would be solving a problem Cloudflare's edge already solves for free. `packages/hono-middleware/src/cloudflare-access.ts` exports `requireCloudflareAccess()`, a small Hono middleware that verifies a Cloudflare Access JWT against the team's JWKS - it exists because `apps/api`'s `/status` route is reached cross-hostname via a server-to-server proxy (`apps/dashboard/src/pages/api/status.ts` forwards its own already-Access-verified request's JWT to `api.no-tone.com`), a hop Access's own edge gating doesn't cover since that gating is scoped to `dash.no-tone.com`, not `api.no-tone.com`.
+`apps/dashboard` sits entirely behind a Cloudflare Access application (an edge-level login wall tied to the account's identity providers) rather than any homegrown session/login system - there's exactly one internal-facing app that needs gating, so paying for a Hono/Astro auth stack (sessions, a login form, password storage) would be solving a problem Cloudflare's edge already solves for free. `packages/hono-middleware/src/cloudflare-access.ts` exports `requireCloudflareAccess()`, a small Hono middleware that verifies a Cloudflare Access JWT against the team's JWKS - it exists because `apps/api`'s `/status` route is reached cross-hostname via a server-to-server proxy (`apps/dashboard/src/pages/api/status.ts` forwards its own already-Access-verified request's JWT to `api.tone.rip`), a hop Access's own edge gating doesn't cover since that gating is scoped to `dash.tone.rip`, not `api.tone.rip`.
 
 ## Why the security/CSP logic is a plain function, not just Hono middleware
 
@@ -67,7 +67,7 @@ Organisations are described by what they do rather than named - an editorial
 choice, applied at the source so every surface inherits it. The SSH CV is the
 one exception, and it is deliberate: `Experience.company` and
 `Experience.detail` are authored in the same module and rendered only there.
-Typing `ssh cv.no-tone.com` is a deliberate act by someone who wants the long
+Typing `ssh cv.tone.rip` is a deliberate act by someone who wants the long
 version; a search result is not. Which is also why `packages/content`'s
 `buildPersonSchema` still omits `worksFor` - JSON-LD describes the page it
 sits on, and structured data claiming more than the markup shows is a spam

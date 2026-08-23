@@ -1,6 +1,6 @@
 // Command ssh-cv serves a CV over SSH.
 //
-//	ssh cv.no-tone.com
+//	ssh cv.tone.rip
 //
 // It is the long version of the CV the website prints: the same content
 // module, but with the company names and the per-role detail that /cv leaves
@@ -37,9 +37,9 @@ import (
 	"github.com/muesli/termenv"
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/no-tone/tonil/apps/ssh-cv/internal/authz"
-	"github.com/no-tone/tonil/apps/ssh-cv/internal/cv"
-	"github.com/no-tone/tonil/apps/ssh-cv/internal/tui"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/authz"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/cv"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/tui"
 )
 
 // contextKey is unexported so nothing outside this package can collide with
@@ -161,7 +161,7 @@ func main() {
 
 		// Accept every key, then decide what it is called. Refusing unknown
 		// keys at the handshake would make the CV private, which defeats the
-		// point - the whole appeal is that `ssh cv.no-tone.com` just works.
+		// point - the whole appeal is that `ssh cv.tone.rip` just works.
 		wish.WithPublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
 			fingerprint := authz.Fingerprint(key)
 			ctx.SetValue(fingerprintKey, fingerprint)
@@ -343,7 +343,7 @@ func newSession(s ssh.Session, doc *cv.Document) (tea.Model, []tea.ProgramOption
 	fingerprint, _ := s.Context().Value(fingerprintKey).(string)
 
 	// The SSH username is not an identity here - anyone can type anything -
-	// but `ssh pt@cv.no-tone.com` is a pleasant way to land in Portuguese, so
+	// but `ssh pt@cv.tone.rip` is a pleasant way to land in Portuguese, so
 	// it is honoured as a preference and nothing more. Prefer returns a copy,
 	// so one session's language never reaches another's.
 	model := tui.New(tui.Config{

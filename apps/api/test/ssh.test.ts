@@ -26,7 +26,7 @@ function authorize(fingerprint: unknown, token: string | null = TOKEN) {
     "Content-Type": "application/json",
   };
   if (token !== null) headers.Authorization = `Bearer ${token}`;
-  return SELF.fetch("https://api.no-tone.com/ssh/authorize", {
+  return SELF.fetch("https://api.tone.rip/ssh/authorize", {
     method: "POST",
     headers,
     body: JSON.stringify({ fingerprint }),
@@ -116,7 +116,7 @@ describe("POST /ssh/authorize", () => {
   it("checks the token before it looks at the body", async () => {
     // Otherwise a malformed-body 400 versus an auth 401 tells an
     // unauthenticated caller that the endpoint exists and is configured.
-    const res = await SELF.fetch("https://api.no-tone.com/ssh/authorize", {
+    const res = await SELF.fetch("https://api.tone.rip/ssh/authorize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{not json",
@@ -125,7 +125,7 @@ describe("POST /ssh/authorize", () => {
   });
 
   it("rejects an oversized body", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/ssh/authorize", {
+    const res = await SELF.fetch("https://api.tone.rip/ssh/authorize", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -140,7 +140,7 @@ describe("POST /ssh/authorize", () => {
   });
 
   it("does not answer GET", async () => {
-    const res = await SELF.fetch("https://api.no-tone.com/ssh/authorize");
+    const res = await SELF.fetch("https://api.tone.rip/ssh/authorize");
     expect(res.status).toBe(404);
   });
 });

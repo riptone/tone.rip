@@ -15,7 +15,7 @@ const LAST_UPDATED_HEADER = "x-tonil-last-updated";
 // CORS (Access-Control-Allow-Origin, Vary) and Cross-Origin-Resource-Policy
 // are both handled once for the whole API in src/index.ts - this route used
 // to also reject any cross-origin request outright (origin !== same-origin
-// → 403), which made sense when no-tone.com served this route itself, but
+// → 403), which made sense when tone.rip served this route itself, but
 // now that apps/web and apps/api are deliberately different origins, that
 // check was rejecting the site's own legitimate requests. Trust the
 // app-level CORS allowlist instead of duplicating a second, stricter one

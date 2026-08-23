@@ -5,7 +5,7 @@ import { defineConfig } from "astro/config";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://dash.no-tone.com",
+  site: "https://dash.tone.rip",
   output: "server",
   integrations: [],
   // No `image` config and no imageService override: nothing in this app uses

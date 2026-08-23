@@ -11,7 +11,7 @@ export async function GET(context) {
     site: context.site,
     items: [
       {
-        title: "no-tone",
+        title: "tone",
         description: "Software engineer. Work, CV and contact.",
         link: "/",
         pubDate: new Date("2026-07-12T00:00:00Z"),

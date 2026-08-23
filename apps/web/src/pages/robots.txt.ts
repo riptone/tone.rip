@@ -1,10 +1,10 @@
 import type { APIContext } from "astro";
 
-const DEV_HOSTNAME = "dev.no-tone.com";
+const DEV_HOSTNAME = "dev.tone.rip";
 // @astrojs/sitemap emits an index plus the sheets it points at; the static
 // public/sitemap.xml that used to sit here listed exactly one URL and
 // shadowed it, so the three real routes were never advertised.
-const PROD_SITEMAP = "https://no-tone.com/sitemap-index.xml";
+const PROD_SITEMAP = "https://tone.rip/sitemap-index.xml";
 
 const buildHeaders = (cacheControl: string, robotsTag?: string) => {
   const headers: Record<string, string> = {

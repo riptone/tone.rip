@@ -28,27 +28,27 @@ import { subscribeScrollProgress } from "../motion/scroll-progress.js";
 let handle: NoiseGradientHandle | null = null;
 
 /**
- * Paint the wordmark's backslash from the frame's colour bands.
+ * Paint the wordmark's trailing cursor cell from the frame's colour bands.
  *
- * The mark is the one stroke in the logo that goes against the grain, so it
- * is also the one that carries the field's colour - the same relationship the
+ * The cursor is the one cell in the logo that isn't a letter, so it is also
+ * the one that carries the field's colour - the same relationship the
  * accent text has, expressed in SVG. CSS `background-clip` cannot do this on
- * a path, so the wordmark ships a <linearGradient> whose stops are written
+ * a shape, so the wordmark ships a <linearGradient> whose stops are written
  * here.
  *
  * The stop list is cached: it is the same 25 nodes every frame, and querying
  * for them 30 times a second would be the most expensive thing on the page.
  */
-let markStops: SVGStopElement[] | null = null;
+let cursorStops: SVGStopElement[] | null = null;
 
-function paintMark(profile: Int16Array): void {
-  if (!markStops) {
-    markStops = Array.from(
-      document.querySelectorAll<SVGStopElement>("#ntl-ramp stop"),
+function paintCursor(profile: Int16Array): void {
+  if (!cursorStops) {
+    cursorStops = Array.from(
+      document.querySelectorAll<SVGStopElement>("#tw-ramp stop"),
     );
-    if (markStops.length === 0) return;
+    if (cursorStops.length === 0) return;
   }
-  for (const [i, stop] of markStops.entries()) {
+  for (const [i, stop] of cursorStops.entries()) {
     const r = profile[i * 3] ?? 255;
     const g = profile[i * 3 + 1] ?? 255;
     const b = profile[i * 3 + 2] ?? 255;
@@ -91,7 +91,7 @@ export function syncField(): void {
           "--field-ramp",
           rowsToCss(profile),
         );
-        paintMark(profile);
+        paintCursor(profile);
       },
     });
     // Never unsubscribed on purpose: the field lives as long as the document
@@ -104,6 +104,6 @@ export function syncField(): void {
   // Already running, so this is a re-call within one document. Any wordmark
   // this cache was pointing at may have been replaced since; drop it and let
   // the next frame re-resolve.
-  markStops = null;
+  cursorStops = null;
   handle.update({ ramp: currentRamp() });
 }
