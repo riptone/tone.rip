@@ -39,7 +39,7 @@ jobs:
       # apps/ssh-cv is a Go binary, and turbo's check-types/test/build tasks
       # now cover it. The deploy job below deliberately does not install Go:
       # it only pushes Workers, and an SSH server cannot run on one.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
           cache-dependency-path: apps/ssh-cv/go.sum
