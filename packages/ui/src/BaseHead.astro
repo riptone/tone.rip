@@ -18,7 +18,7 @@ interface Props {
    * wrong: `style-src 'self' 'nonce-…'` allows a same-origin <link> just
    * fine, so the nonce is not what forces inlining. What inlining buys is
    * one fewer render-blocking request on a cold visit. What it costs is
-   * caching — the CSS travels with every document, and with view
+   * caching - the CSS travels with every document, and with view
    * transitions each navigation fetches a document, so a visitor reading
    * three pages downloads it three times. At roughly 7KB gzipped that is a
    * fair trade for a site this size and a bad one as it grows.
