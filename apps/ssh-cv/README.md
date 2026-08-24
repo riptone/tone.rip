@@ -364,6 +364,7 @@ $ SSH_AUTHORIZE_TOKEN=… ./bin/ssh-cv \
 
 | flag | env | meaning |
 | --- | --- | --- |
+| `--version` | - | print the version and exit; one bare token, because the updater compares it |
 | `--preview` | - | render the CV on this terminal and exit; no server, no keys |
 | `--addr` | `SSH_ADDR` | listen address (default `:22`) |
 | `--host-key` | `SSH_HOST_KEY` | host key path; generated on first run |
@@ -376,6 +377,46 @@ $ SSH_AUTHORIZE_TOKEN=… ./bin/ssh-cv \
 The host key is what gives the server its identity. Generate it once and keep
 it: replacing it makes every previous visitor's client warn loudly about a
 changed key.
+
+## Versions, and how the box gets them
+
+The other three apps deploy themselves when `main` moves. This one runs on a
+box in Oracle Cloud, and nothing in Cloudflare can push a binary to it - so it
+is *released*, and the box pulls.
+
+```console
+$ bun run release patch --push    # tag it; the workflow builds and publishes
+```
+
+The version lives in one place, the git tag, and nowhere else - no `VERSION`
+file, nothing to bump in `package.json`. Tags are namespaced `ssh-cv/vX.Y.Z`,
+which is what makes "the newest ssh-cv release" a different question from "the
+newest release" in a repo that will eventually release something else, and
+what [`scripts/install.sh`](./scripts/install.sh) filters the GitHub API on.
+
+A tag builds `linux/amd64` and `linux/arm64` (the free tier hands out both, and
+a release covering only the box you own today is a trap for the box you move to
+tomorrow), stamps the tag into each binary with `-ldflags -X`, and publishes
+them with a `SHA256SUMS`.
+
+`internal/version` holds the stamp, and the split in it is load-bearing:
+`Short()` is one bare token because the updater's whole check is a string
+comparison against a release tag, while `String()` is the human form and adds
+the commit for unstamped builds (`dev (a1b2c3d, modified)`). An unstamped build
+stays `dev` on purpose - the updater treats anything that is not a release tag
+as "not a release", so it can never read a working copy as a version and
+decide it is newer than what is published.
+
+The box runs [`scripts/install.sh`](./scripts/install.sh) on a daily timer. In
+order: resolve the newest release, stop if the installed binary already reports
+it, download, verify against `SHA256SUMS`, ask the *downloaded* binary its own
+version before touching the live one, swap by rename, restart, and roll back to
+the previous binary if the service does not stay up. Full setup and the honest
+limits of `curl | sudo bash` are in
+[docs/ssh-cv-deployment.md](../../docs/ssh-cv-deployment.md#8-keeping-it-current).
+
+The version is the last thing on the CV's Contact page, so confirming an update
+landed is just reading the CV.
 
 ## Checks
 
@@ -390,3 +431,12 @@ exactly at eight sizes from 200x60 down to 20x8 (one row too many and the title
 scrolls away, leaving a second footer behind), every index row is asserted to
 open onto a page that renders its own title, and `internal/cv` fails if the two
 languages stop being symmetric or if a role loses its stack.
+
+`internal/version` is tested for the two properties the updater depends on:
+that a stamped build reports a bare comparable token, and that an unstamped one
+is never mistaken for a release - including when the `-X` value is present but
+empty, which is a plausible build-script slip and would otherwise make the box
+reinstall the same binary on every run forever.
+
+The installer is linted by `shellcheck` in CI rather than here, since it is the
+one file in this repo whose bugs arrive on a timer without anyone running them.

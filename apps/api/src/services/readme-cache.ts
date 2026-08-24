@@ -1,7 +1,7 @@
 import { fetchWithTimeout } from "@repo/content";
 import { fetchProjects } from "./projects-cache";
 
-const GITHUB_USER = "riptone";
+const GITHUB_USER = "no-tone";
 const GITHUB_API_ORIGIN = "https://api.github.com";
 const CACHE_KEY_PREFIX = "https://readme-api.tonil.internal/v1/";
 const EDGE_TTL_SECONDS = 3600;

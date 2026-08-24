@@ -9,7 +9,8 @@
     "check-types": "test -z \"$(gofmt -l .)\" || { gofmt -l .; echo \"^ run gofmt -w .\"; exit 1; }; go vet ./...",
     "test": "go test ./...",
     "dev": "bun run generate && bun run scripts/dev.ts",
-    "preview": "bun run generate && go run . --preview"
+    "preview": "bun run generate && go run . --preview",
+    "release": "bun run scripts/release.ts"
   },
   "devDependencies": {
     "@repo/content": "*"

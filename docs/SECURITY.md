@@ -1,6 +1,6 @@
 # Security Policy
 
-This is the security policy for [riptone/tonil](https://github.com/riptone/tonil) —
+This is the security policy for [no-tone/tonil](https://github.com/no-tone/tonil) —
 the monorepo behind tone.rip (3 Workers, 6 shared packages). It is written
 to be followed by humans and by the AI agents that help maintain this repo.
 

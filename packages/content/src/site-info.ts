@@ -19,7 +19,7 @@ export const TONE_INFO: SiteInfo = {
   links: [
     { label: "Work", href: "https://tone.rip/work" },
     { label: "CV", href: "https://tone.rip/cv" },
-    { label: "GitHub", href: "https://github.com/riptone" },
+    { label: "GitHub", href: "https://github.com/no-tone" },
     { label: "Contact", href: "mailto:m@tone.rip" },
   ],
   markdown: [
@@ -34,7 +34,7 @@ export const TONE_INFO: SiteInfo = {
     "- **/cv** - experience, education, skills",
     "",
     "## Elsewhere",
-    "- GitHub: https://github.com/riptone",
+    "- GitHub: https://github.com/no-tone",
     "- Contact: m@tone.rip",
     "- CV over SSH: `ssh cv.tone.rip`",
     "",

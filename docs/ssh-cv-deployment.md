@@ -94,8 +94,11 @@ Which makes **Oracle Cloud Free Tier** the obvious host - see step 0.
 The whole list, end to end:
 
 - **An Oracle Cloud account** with a shape launched and a public IPv4 (step 0)
-- **`git` and `iptables-persistent` on the box** - and nothing else; the
-  service itself has no runtime dependencies at all (step 0)
+- **`curl` and `iptables-persistent` on the box** - `curl` is what fetches
+  releases (step 3), and nothing else is needed; the service itself has no
+  runtime dependencies at all (step 0)
+- **One published `ssh-cv/v*` release** to install from, or a locally built
+  binary to copy up instead (step 3, and step 8 for how releases are cut)
 - **Two firewall holes**, in the VCN security list *and* in the box's own
   `iptables` (step 0 - this is the step that wastes the most time)
 - **`apps/api` already deployed**, because the allowlist lives there (step 2)
@@ -104,7 +107,8 @@ The whole list, end to end:
 - **A DNS record** for `cv.tone.rip`, grey-clouded (step 6)
 
 You do not need: Docker, a reverse proxy, a Go toolchain on the box, a TLS
-certificate, or a Unix account for visitors.
+certificate, or a Unix account for visitors. Once step 8's timer is in place
+you do not need to touch the box to ship a change either.
 
 Budget an hour, most of it waiting on Oracle's console.
 
@@ -385,7 +389,43 @@ fingerprints are privileged. A half-configured deploy fails closed.
 
 ---
 
-## 3. Build and install
+## 3. Install
+
+On the box:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/no-tone/tonil/main/apps/ssh-cv/scripts/install.sh | sudo bash
+sudo useradd --system --home /var/lib/ssh-cv --shell /usr/sbin/nologin ssh-cv
+sudo mkdir -p /var/lib/ssh-cv
+sudo chown ssh-cv:ssh-cv /var/lib/ssh-cv
+```
+
+The script picks the newest `ssh-cv/v*` release, downloads the binary for this
+machine's architecture, checks it against the release's `SHA256SUMS`, and puts
+it at `/usr/local/bin/ssh-cv`. It detects Arm and x86 itself, so the A1 and the
+E2.1.Micro take the same command. Section 8 is how the box keeps itself
+current afterwards.
+
+> **On the account name.** The tree says `tone` and `tone.rip`, but the GitHub
+> account is still `no-tone`, so every GitHub URL here does too - including the
+> installer's default. That is the safe direction rather than the tidy one:
+> GitHub redirects an old owner name to a new one after a rename and never the
+> reverse, so these keep working *through* the rename. Afterwards, update
+> `DEFAULT_REPO` in `scripts/install.sh` so the box stops leaning on a
+> redirect; nothing breaks if you forget. To pull from somewhere else in the
+> meantime: `curl … | sudo bash -s -- --repo owner/name`.
+
+The service account has `nologin` and owns only its own directory - which holds
+one file, the host key. The CV itself is embedded in the binary. It needs no
+privileges either: binding port 22 is granted by systemd below rather than by
+running as root.
+
+<details>
+<summary>Building and copying it up by hand instead</summary>
+
+Still the right move for testing an unreleased change. The binary is static
+and has no libc or cgo dependency, so the only thing to get right is the
+architecture:
 
 ```bash
 cd apps/ssh-cv
@@ -393,19 +433,18 @@ GOOS=linux GOARCH=arm64 bun run build      # Ampere A1; use amd64 on E2.1.Micro
 scp bin/ssh-cv box:/tmp/ssh-cv
 ```
 
-On the box:
-
 ```bash
 sudo install -m 755 /tmp/ssh-cv /usr/local/bin/ssh-cv
-sudo useradd --system --home /var/lib/ssh-cv --shell /usr/sbin/nologin ssh-cv
-sudo mkdir -p /var/lib/ssh-cv
-sudo chown ssh-cv:ssh-cv /var/lib/ssh-cv
+sudo systemctl restart ssh-cv
 ```
 
-The service account has `nologin` and owns only its own directory - which holds
-one file, the host key. The CV itself is embedded in the binary. It needs no
-privileges either: binding port 22 is granted by systemd below rather than by
-running as root.
+A hand-built binary reports its version as `dev`, which is deliberate: the
+updater only ever compares against release tags, so it will replace a `dev`
+binary with the current release on its next run rather than treating your
+working copy as a version of its own. Don't leave one on the box and expect
+it to survive.
+
+</details>
 
 ---
 
@@ -533,6 +572,119 @@ In the order these actually happen:
 | Works, no label for *any* key, journal says `key labels from: none - the CV is public` | `--authorize-url` unset, so no allowlist is consulted at all |
 | Refuses to start: `SSH_AUTHORIZE_TOKEN is required when --authorize-url is set` | The token in the unit file is missing or empty. Deliberate - see step 2 |
 | `Requires an active PTY` | Expected. `activeterm` rejects sessions with no terminal - see *This does not use OpenSSH* |
+
+---
+
+## 8. Keeping it current
+
+Everything above gets the CV onto the box once. This is the part that means a
+change to `packages/content` reaches it without anybody remembering to
+cross-compile.
+
+Three Workers deploy themselves from `main`; this one cannot, because nothing
+in Cloudflare can push a binary to Oracle Cloud. So the box pulls instead.
+
+### Cut a release
+
+The version lives in exactly one place - a git tag - and the tag is what the
+box reads. There is no `VERSION` file and nothing to bump in `package.json`.
+
+```bash
+cd apps/ssh-cv
+bun run release v0.1.0          # the first one, named explicitly
+bun run release patch           # v0.1.0 -> v0.1.1, after that
+bun run release minor --push    # bump and push in one go
+```
+
+It refuses a dirty tree and refuses to run off `main`, because a release is
+built from the tagged commit and neither of those ships what you think it
+does. Without `--push` it writes the tag locally and prints the push command:
+**pushing the tag is what publishes**, so it does not happen by accident.
+
+`.github/workflows/release-ssh-cv.yml` then builds `linux/amd64` *and*
+`linux/arm64`, stamps the version into each binary, checks that the binary
+agrees about its own version, publishes both with a `SHA256SUMS`, and fails
+the release if `cv.json` has drifted from `packages/content` - a stale CV is
+not something updating the box can fix.
+
+Tags are namespaced `ssh-cv/vX.Y.Z`. The prefix is what makes "newest ssh-cv
+release" answerable in a monorepo, and it is what the updater filters on.
+
+### Update the box
+
+Same command as the install, any time:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/no-tone/tonil/main/apps/ssh-cv/scripts/install.sh | sudo bash
+```
+
+It exits without doing anything if the box already has the newest release, so
+running it when there is nothing to do is free.
+
+### Or let it update itself
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/no-tone/tonil/main/apps/ssh-cv/scripts/install.sh \
+  | sudo bash -s -- --install-timer
+```
+
+That adds a daily `ssh-cv-update.timer` (randomised by up to 4h so every box
+does not hit the API at midnight, `Persistent=yes` so one that was switched
+off catches up rather than skipping the window), a copy of the updater at
+`/usr/local/bin/ssh-cv-update`, and `/etc/default/ssh-cv-update` for the two
+knobs:
+
+```ini
+SSH_CV_UPDATE_MODE=apply                      # or: check
+#SSH_CV_NOTIFY_URL=https://ntfy.sh/some-topic-nobody-can-guess
+```
+
+`check` reports a new version and installs nothing. `SSH_CV_NOTIFY_URL` is any
+URL that takes a plain-text POST - [ntfy.sh](https://ntfy.sh) needs only a
+topic name you have not told anyone, and gives you a phone notification. A
+notification that fails to send never fails the update.
+
+```bash
+systemctl list-timers ssh-cv-update       # when it next runs
+sudo ssh-cv-update --check                # ask now, change nothing
+sudo ssh-cv-update                        # update now
+journalctl -u ssh-cv-update               # what it has been doing
+```
+
+### What protects you
+
+Both halves of the update are checked before anything moves:
+
+- the binary is verified against the release's `SHA256SUMS`, and a mismatch
+  refuses to install;
+- the **downloaded** binary is asked its own version before the live one is
+  touched, so a truncated download or the wrong architecture is caught while
+  it is still a temp file rather than at `ExecStart`;
+- the swap is a rename, which is atomic - the path is never half-written, and
+  the running process keeps the old binary until it restarts (this is also why
+  it is a rename and not a copy: writing over a running executable gives
+  `ETXTBSY`);
+- the outgoing binary is kept at `/usr/local/bin/ssh-cv.previous`, and if the
+  service does not come back up the updater puts it back, restarts, and tells
+  you it did.
+
+Two honest limits. The checksums come from the same release as the binary, so
+they protect against a corrupted download, **not** against a compromised
+repository. And this is `curl | sudo bash`. What bounds that is where the
+unattended copy comes from: `/usr/local/bin/ssh-cv-update` is pinned to the
+release it was installed with, and is only ever replaced by a human running
+the installer again. Nothing on the box follows `main` on a timer.
+
+### Confirming it landed
+
+The version is on the contact page of the CV itself, so the check is the
+product:
+
+```bash
+ssh cv.tone.rip                       # last line of Contact
+ssh-cv --version                      # on the box
+journalctl -u ssh-cv | grep version   # first line after each restart
+```
 
 ---
 

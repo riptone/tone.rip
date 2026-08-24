@@ -81,6 +81,25 @@ jobs:
       - name: Check for import cycles (madge)
         run: bun run check-cycles
 
+      # apps/ssh-cv/scripts/install.sh runs as root on the box that serves the
+      # CV, and updates it unattended on a timer - so it is the one file here
+      # whose bugs arrive by themselves. Biome does not read shell, and
+      # shellcheck is already on the runner image, so this costs nothing.
+      #
+      # --enable=all rather than the default set, because the two checks that
+      # actually caught things here (quoting, and [ vs [[ in bash) are both
+      # optional ones. The two exclusions are by design, not unfixed:
+      #
+      #   SC2310  a function in an `if`/`||` condition disables `set -e` inside
+      #           it. True, and wanted: `die` exits by itself, and
+      #           `service_exists` is a predicate - putting predicates in `if`
+      #           is the point of writing one.
+      #   SC2312  a command substitution inside a string masks its exit status.
+      #           Also true, also wanted: a failed `uname -n` should leave a
+      #           notification title short, not abort an update that worked.
+      - name: Lint the installer (shellcheck)
+        run: shellcheck --enable=all --exclude=SC2310,SC2312 apps/ssh-cv/scripts/install.sh
+
       # apps/ssh-cv embeds a CV generated from packages/content. `bun run
       # build` regenerates it, so a diff here means the committed copy drifted
       # from the source module and the SSH CV would serve stale text.

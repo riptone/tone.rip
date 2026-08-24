@@ -9,6 +9,7 @@ import (
 
 	"github.com/riptone/tonil/apps/ssh-cv/internal/authz"
 	"github.com/riptone/tonil/apps/ssh-cv/internal/cv"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/version"
 )
 
 func testDoc(t *testing.T) *cv.Document {
@@ -501,6 +502,40 @@ func TestAnEmptyDocumentStillRenders(t *testing.T) {
 		t.Error("an empty CV rendered nothing at all")
 	}
 	press(t, updated.(Model), "enter", "tab", "down", "l", "esc")
+}
+
+// The version on the Contact page is how an update is confirmed from the
+// outside: `ssh cv.tone.rip`, read the last line, done. Nothing else on the
+// box has to be reachable for that to work, which is the point - so if this
+// stops rendering, the check that scripts/install.sh landed goes with it.
+func TestTheContactPageNamesTheVersion(t *testing.T) {
+	m := newTestModel(t, 100, 40, authz.Grant{})
+
+	contact := -1
+	for i, it := range m.items {
+		if it.kind == secContact {
+			contact = i
+		}
+	}
+	if contact < 0 {
+		t.Fatal("the index has no Contact row")
+	}
+
+	// Walked with the same keys a reader has, rather than by assigning to
+	// m.open: opening a page is what fills the viewport, and a hand-set field
+	// would assert against a page that was never laid out.
+	m = press(t, m, "enter")
+	for m.open != contact {
+		m = press(t, m, "right")
+	}
+	// The colophon is the last thing on the page, so on a short body it is
+	// below the fold until something scrolls there.
+	m = press(t, m, "bottom")
+
+	view := stripANSI(m.View())
+	if !strings.Contains(view, version.Short()) {
+		t.Errorf("the Contact page does not name the version %q", version.Short())
+	}
 }
 
 // firstWords is enough of a sentence to look for in a wrapped paragraph

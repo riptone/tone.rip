@@ -1,0 +1,135 @@
+name: Release ssh-cv
+
+# apps/ssh-cv is the one app here that is not a Worker, so it is the one app
+# `main` cannot deploy for itself: it runs on a box in Oracle Cloud, and
+# nothing in Cloudflare can push a binary to it. This workflow is the other
+# half of that - it turns a tag into a release the box can pull from, and
+# apps/ssh-cv/scripts/install.sh is what pulls it.
+#
+# Tags are namespaced (`ssh-cv/v1.4.0`) because this is a monorepo and the
+# next app to need releases must not have to argue about who owns `v1.4.0`.
+# The prefix is also what the updater filters on, so it is not decoration.
+on:
+  push:
+    tags: ["ssh-cv/v*"]
+
+# Creating a release and uploading its assets is a write to this repository's
+# contents. Nothing else here needs a permission, and the default is not a
+# fixed thing - see the note in ci.yml.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-ssh-cv-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache-dependency-path: apps/ssh-cv/go.sum
+
+      # "ssh-cv/v1.4.0" -> "v1.4.0". The binary is stamped with the second
+      # form: the prefix answers "which app", which a binary that only ever
+      # is one app does not need to carry around.
+      - name: Read the version out of the tag
+        run: echo "VERSION=${GITHUB_REF_NAME#ssh-cv/}" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # A tag can point at any commit, including one that never passed CI.
+      # These are the checks that would catch a broken release, so they run
+      # here too rather than being assumed from main.
+      - name: Test
+        working-directory: apps/ssh-cv
+        run: go test ./...
+
+      # The CV is embedded at build time, so a stale cv.json ships a stale CV
+      # and no amount of updating the box fixes it. Same check as ci.yml.
+      - name: Check the embedded CV is up to date
+        run: |
+          bun run --cwd apps/ssh-cv generate
+          git diff --exit-code -- apps/ssh-cv/internal/cv/cv.json
+
+      # Both architectures every time, because the free tier gives out both
+      # (Ampere A1 is arm64, E2.1.Micro is amd64) and a release that only
+      # covers the box you happen to own now is a trap for the box you move
+      # to later. Cross-compiling costs seconds.
+      #
+      # CGO_ENABLED=0 is explicit rather than implied by GOOS: the service
+      # unit sets RestrictAddressFamilies=AF_INET AF_INET6, which blocks the
+      # cgo resolver's Unix socket, so a cgo build resolves nothing. See
+      # docs/ssh-cv-deployment.md.
+      #
+      # -trimpath keeps the runner's absolute paths out of the binary, so the
+      # same tag built twice produces the same bytes.
+      - name: Build
+        working-directory: apps/ssh-cv
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
+              -trimpath \
+              -ldflags "-s -w -X github.com/riptone/tonil/apps/ssh-cv/internal/version.Version=${VERSION}" \
+              -o "dist/ssh-cv_linux_${arch}" .
+          done
+          cd dist && sha256sum ssh-cv_linux_* > SHA256SUMS
+          cat SHA256SUMS
+
+      # The binary has to report the version that was stamped into it. Wrong
+      # here means the updater installs this release, asks the new binary what
+      # it is, disagrees, and rolls straight back - so catch it now rather
+      # than on the box.
+      - name: Check the stamp took
+        working-directory: apps/ssh-cv/dist
+        run: |
+          got="$(./ssh-cv_linux_amd64 --version)"
+          echo "reports: $got"
+          [ "$got" = "$VERSION" ] || {
+            echo "::error::binary reports '$got', tag says '$VERSION'"
+            exit 1
+          }
+
+      # Written rather than auto-generated: `--generate-notes` in a monorepo
+      # lists every commit since the last tag, most of which belong to the
+      # Workers and none of which tell you how to install this.
+      - name: Write the release notes
+        working-directory: apps/ssh-cv/dist
+        run: |
+          {
+            echo "## Install or update"
+            echo
+            echo '```bash'
+            echo "curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/apps/ssh-cv/scripts/install.sh | sudo bash"
+            echo '```'
+            echo
+            echo "A box with the update timer installed picks this up on its own within a day."
+            echo
+            echo "## Checksums"
+            echo
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } > NOTES.md
+          cat NOTES.md
+
+      - name: Publish
+        working-directory: apps/ssh-cv/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            ssh-cv_linux_amd64 ssh-cv_linux_arm64 SHA256SUMS \
+            --title "ssh-cv $VERSION" \
+            --notes-file NOTES.md

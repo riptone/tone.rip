@@ -8,7 +8,7 @@
 
 <br>
 
-[![CI](https://github.com/riptone/tonil/actions/workflows/ci.yml/badge.svg)](https://github.com/riptone/tonil/actions/workflows/ci.yml)
+[![CI](https://github.com/no-tone/tonil/actions/workflows/ci.yml/badge.svg)](https://github.com/no-tone/tonil/actions/workflows/ci.yml)
 ![Bun](https://img.shields.io/badge/Bun-000000?logo=bun&logoColor=white)
 ![Turborepo](https://img.shields.io/badge/Turborepo-EF4444?logo=turborepo&logoColor=white)
 ![Astro](https://img.shields.io/badge/Astro-7-BC52EE?logo=astro&logoColor=white)
@@ -183,8 +183,20 @@ Run from the repo root; Turborepo fans them out.
 ## Deploy
 
 `main` deploys itself. Merging runs the full gate, then `wrangler deploy` for
-each Worker. `apps/ssh-cv` is deployed by hand to its own host - see its
-runbook.
+each Worker.
+
+`apps/ssh-cv` cannot work that way - it is a binary on a box in Oracle Cloud,
+and nothing in Cloudflare can push to it - so it is released rather than
+deployed, and the box pulls:
+
+```bash
+cd apps/ssh-cv && bun run release patch --push   # tags it; CI builds and publishes
+```
+
+A tag builds `linux/amd64` and `linux/arm64`, stamps the version in, and
+publishes both with checksums. The box takes it from there on a daily timer,
+verifying the checksum and rolling back if the service does not come up. See
+its [runbook](./docs/ssh-cv-deployment.md).
 
 Secrets are Worker secrets, set with `wrangler secret put`, never committed.
 `.dev.vars` is gitignored.

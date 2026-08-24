@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/riptone/tonil/apps/ssh-cv/internal/cv"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/version"
 )
 
 // One page per index row.
@@ -107,7 +108,11 @@ func (m Model) renderSection(it item, width int) string {
 			}
 			d.row(row[0], row[1], keyWidth)
 		}
-		d.note(l.colophon)
+		// The version rides on the colophon rather than getting a line of its
+		// own: it is the same sentence's worth of "what you are talking to",
+		// and it means `ssh cv.tone.rip` confirms an update landed without
+		// anyone opening a shell on the box.
+		d.note(l.colophon + " " + version.Short())
 	}
 
 	return d.String()

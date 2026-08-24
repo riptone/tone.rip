@@ -40,6 +40,7 @@ import (
 	"github.com/riptone/tonil/apps/ssh-cv/internal/authz"
 	"github.com/riptone/tonil/apps/ssh-cv/internal/cv"
 	"github.com/riptone/tonil/apps/ssh-cv/internal/tui"
+	"github.com/riptone/tonil/apps/ssh-cv/internal/version"
 )
 
 // contextKey is unexported so nothing outside this package can collide with
@@ -50,6 +51,7 @@ const grantKey contextKey = "tonil.grant"
 const fingerprintKey contextKey = "tonil.fingerprint"
 
 type config struct {
+	showVersion    bool
 	preview        bool
 	addr           string
 	hostKeyPath    string
@@ -69,6 +71,11 @@ func envOr(name, fallback string) string {
 
 func parseFlags() config {
 	var cfg config
+	// Deliberately prints one bare token and exits: scripts/install.sh reads
+	// this to decide whether the box is already up to date, and compares it
+	// against a release tag with a plain string test.
+	flag.BoolVar(&cfg.showVersion, "version", false,
+		"print the version and exit")
 	flag.BoolVar(&cfg.preview, "preview", false,
 		"render the CV in this terminal instead of serving it over SSH")
 	flag.StringVar(&cfg.addr, "addr", envOr("SSH_ADDR", ":22"),
@@ -131,6 +138,14 @@ func buildAuthorizer(cfg config) (authz.Authorizer, string, error) {
 
 func main() {
 	cfg := parseFlags()
+
+	// Answered before anything can fail. The updater calls this on a binary
+	// it has just downloaded and not yet trusted, so it must not depend on a
+	// loadable CV, a writable host key, or a free port.
+	if cfg.showVersion {
+		fmt.Println(version.Short())
+		return
+	}
 
 	doc, err := cv.Load()
 	if err != nil {
@@ -205,6 +220,9 @@ func main() {
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
+	// First line in the journal after a restart, so `journalctl -u ssh-cv`
+	// answers "did the update actually land" without running anything.
+	log.Printf("ssh-cv: version %s", version.String())
 	log.Printf("ssh-cv: listening on %s", cfg.addr)
 	log.Printf("ssh-cv: key labels from: %s", source)
 
