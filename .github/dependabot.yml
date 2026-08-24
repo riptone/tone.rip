@@ -15,3 +15,23 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+  # apps/ssh-cv is a separate Go module, and it was the one thing here with no
+  # dependency updates at all - `bun` above does not see go.mod.
+  #
+  # This matters more for this module than for the JS ones. It is the only
+  # dependency tree in the repo that ends in a public network listener, and it
+  # already has one advisory worth knowing about: the wish SCP path traversal
+  # (GHSA-xjvp-7243-rg9h) that security_test.go exists to keep unreachable.
+  # That advisory is in GitHub's database but *not* in the Go vulnerability
+  # database, so `govulncheck` in ci.yml does not see it - this is the half
+  # that would.
+  - package-ecosystem: "gomod"
+    directory: "/apps/ssh-cv"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

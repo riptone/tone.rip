@@ -100,6 +100,24 @@ jobs:
       - name: Lint the installer (shellcheck)
         run: shellcheck --enable=all --exclude=SC2310,SC2312 apps/ssh-cv/scripts/install.sh
 
+      # Go dependency vulnerabilities, filtered by whether this code can
+      # actually reach them. That reachability analysis is the reason to run it
+      # instead of a generic scanner: `golang.org/x/crypto/openpgp` is flagged
+      # as unsafe by design and is in our module graph, but nothing here calls
+      # it - a scanner without call-graph analysis fails the build on that and
+      # teaches everyone to ignore the build.
+      #
+      # Not a complete answer on its own: it reads the Go vulnerability
+      # database, which does not carry every GitHub advisory (the wish SCP
+      # traversal in security_test.go is absent from it). Dependabot's `gomod`
+      # entry covers that side.
+      #
+      # Pinned rather than @latest - this runs arbitrary code in CI, so it
+      # should change when we say it changes.
+      - name: Check Go dependencies for known vulnerabilities
+        working-directory: apps/ssh-cv
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
       # apps/ssh-cv embeds a CV generated from packages/content. `bun run
       # build` regenerates it, so a diff here means the committed copy drifted
       # from the source module and the SSH CV would serve stale text.
