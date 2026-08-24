@@ -30,6 +30,11 @@ updates:
     directory: "/apps/ssh-cv"
     schedule:
       interval: "weekly"
+    ignore:
+      # charmbracelet/ssh moved to the charm.land/ssh vanity path. Dependabot's
+      # gomod updater currently errors on the old module path when it checks for
+      # new versions, so skip it until upstream dependencies migrate paths.
+      - dependency-name: "github.com/charmbracelet/ssh"
     groups:
       minor-and-patch:
         update-types:
