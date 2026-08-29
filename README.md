@@ -48,8 +48,10 @@ packages/
   content            CV, site info, app registry - one source of truth per fact
   validation         Zod schemas and an RFC 7807 failure hook
   hono-middleware    security headers, CSP nonces, api-catalog, Access JWTs
-  playwright-config  shared end-to-end test setup
-  typescript-config  shared tsconfig presets
+  config/            shared tooling configs (typescript, playwright, webview pilot)
+    typescript-config  shared tsconfig presets
+    playwright-config  shared end-to-end test setup
+    webview-config     Bun WebView pilot mirroring Playwright — until cutover
 ```
 
 One rule explains most of the layout: **if the same logic would otherwise be

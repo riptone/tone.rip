@@ -8,7 +8,9 @@
     "apps/web": {},
     "packages/content": {},
     "packages/hono-middleware": {},
-    "packages/typescript-config": {},
+    "packages/config/typescript-config": {},
+    "packages/config/playwright-config": {},
+    "packages/config/webview-config": {},
     "packages/ui": {},
     "packages/validation": {}
   },

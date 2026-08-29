@@ -34,6 +34,7 @@ export function createWorkerAppConfig(
   const baseURL = `http://localhost:${options.port}`;
   return defineConfig({
     testDir: "./e2e",
+    testIgnore: "**/*.webview.*",
     fullyParallel: true,
     forbidOnly: Boolean(process.env.CI),
     retries: process.env.CI ? 1 : 0,

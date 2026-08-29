@@ -12,7 +12,9 @@
     "check-types": "astro check && tsc --noEmit",
     "test": "vitest run",
     "e2e:server": "astro build && wrangler dev --port 8787 --inspector-port 9230",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:webview": "bun test e2e/smoke.webview.test.ts",
+    "e2e:webview:ci": "bun run build && (bun run e2e:server & pid=$!; trap 'kill $pid' EXIT; bun test e2e/smoke.webview.test.ts --timeout 30000; kill $pid)"
   },
   "dependencies": {
     "@astrojs/cloudflare": "catalog:",
@@ -28,9 +30,11 @@
     "@astrojs/check": "^0.9.4",
     "@playwright/test": "catalog:",
     "@repo/playwright-config": "*",
+    "@repo/webview-config": "*",
     "@repo/typescript-config": "*",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "catalog:",
+    "bun-types": "catalog:",
     "jsdom": "^30.0.1",
     "typescript": "catalog:",
     "vitest": "catalog:",

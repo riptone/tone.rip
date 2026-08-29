@@ -86,8 +86,9 @@ signal.
 | `packages/validation` | Zod schemas, an RFC 7807 validation-failure hook for `@hono/zod-validator` | `apps/api` |
 | `packages/ui` → `gradient/`, `motion/` | Noise gradient field (canvas + worker) and smoothed scroll progress - see `packages/ui/README.md` | `apps/web` |
 | `packages/hono-middleware` | Composable Hono middleware + the framework-agnostic core both Astro apps call directly, including `requireCloudflareAccess()` | `apps/api`, `apps/web`, `apps/dashboard` |
-| `packages/typescript-config` | Shared tsconfig presets (`base`, `astro`, `hono-jsx`) | every app/package |
-| `packages/playwright-config` | The e2e webServer/CSP-console-collector wiring both Astro apps' `playwright.config.ts` need identically | `apps/web`, `apps/dashboard` |
+| `packages/config/typescript-config` | Shared tsconfig presets (`base`, `astro`, `hono-jsx`) | every app/package |
+| `packages/config/playwright-config` | The e2e webServer/CSP-console-collector wiring both Astro apps' `playwright.config.ts` need identically | `apps/web`, `apps/dashboard` |
+| `packages/config/webview-config` | The Bun WebView webServer/CSP-console-collector wiring mirroring the Playwright one — pilot alongside it until cutover | `apps/web` |
 
 ## Rule of thumb for "does this go in a package?"
 

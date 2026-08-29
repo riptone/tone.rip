@@ -69,6 +69,18 @@ jobs:
       - name: E2E (Playwright)
         run: bun run e2e
 
+      # Pilot alongside Playwright — mirrors its coverage via Bun.WebView.
+      # On Linux WebView uses the chrome backend; it auto-discovers the browser
+      # in this order: $BUN_CHROME_PATH → $PATH (google-chrome-stable etc) →
+      # Playwright's cache (chrome-headless-shell). The chromium install above
+      # provides both the binary and the system deps, and ubuntu-latest also
+      # ships google-chrome-stable in $PATH — no extra install needed.
+      # keep continue-on-error until cutover from Playwright.
+      - name: E2E (WebView pilot — chrome backend)
+        working-directory: apps/web
+        continue-on-error: true
+        run: bun run e2e:webview:ci
+
       - name: Build
         run: bun run build
 
