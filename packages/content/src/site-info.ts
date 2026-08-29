@@ -1,3 +1,5 @@
+import { CONTACT } from "./contact";
+
 export interface SiteInfo {
   slug: string;
   name: string;
@@ -19,8 +21,8 @@ export const TONE_INFO: SiteInfo = {
   links: [
     { label: "Work", href: "https://tone.rip/work" },
     { label: "CV", href: "https://tone.rip/cv" },
-    { label: "GitHub", href: "https://github.com/riptone" },
-    { label: "Contact", href: "mailto:m@tone.rip" },
+    { label: "GitHub", href: CONTACT.github },
+    { label: "Contact", href: `mailto:${CONTACT.email}` },
   ],
   markdown: [
     "# tone",
@@ -34,8 +36,8 @@ export const TONE_INFO: SiteInfo = {
     "- **/cv** - experience, education, skills",
     "",
     "## Elsewhere",
-    "- GitHub: https://github.com/riptone",
-    "- Contact: m@tone.rip",
+    `- GitHub: ${CONTACT.github}`,
+    `- Contact: ${CONTACT.email}`,
     "- CV over SSH: `ssh cv.tone.rip`",
     "",
     "## API",
@@ -50,14 +52,14 @@ export const TONE_INFO: SiteInfo = {
 
 export const DASHBOARD_INFO: SiteInfo = {
   slug: "dashboard",
-  name: "main-menu",
+  name: "dash",
   tagline: "Self-hosted services launcher",
   description:
     "A minimal launcher and live health/status board for tone's self-hosted services.",
   url: "https://dash.tone.rip",
   links: [{ label: "Status API", href: "https://api.tone.rip/status" }],
   markdown: [
-    "# main-menu",
+    "# dash",
     "",
     "A minimal launcher for tone's self-hosted services, with live up/down status.",
     "",

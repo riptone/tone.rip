@@ -1,8 +1,5 @@
-import {
-  fetchWithTimeout,
-  latestUpdateTimestamp,
-  simplifyRepos,
-} from "@repo/content";
+import { latestUpdateTimestamp, simplifyRepos } from "@repo/content";
+import { fetchWithTimeout } from "@repo/net";
 import { getEdgeCache } from "./edge-cache";
 
 const GITHUB_API_URL =

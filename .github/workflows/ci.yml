@@ -11,7 +11,7 @@ concurrency:
 
 # Applies to every job below, none of which has its own `permissions` key.
 #
-# Both jobs do exactly one privileged thing - clone this repository - so read
+# Every job does exactly one privileged thing - clone this repository - so read
 # access to its contents is the whole requirement. Deploying does not need
 # more: it authenticates to Cloudflare with CLOUDFLARE_API_TOKEN, which has
 # nothing to do with the GITHUB_TOKEN this scopes.
@@ -25,9 +25,24 @@ concurrency:
 permissions:
   contents: read
 
+# This used to be one job running thirteen steps in a line, which meant the
+# Go toolchain was installed so that two steps at the bottom could use it,
+# and a two-minute Playwright run sat behind a type-check it did not depend
+# on. It is now three jobs split by what each one actually needs installed:
+#
+#   checks  bun only          the TypeScript half - lint, types, unit tests
+#   e2e     bun + a browser   the built Workers, their size, and Playwright
+#   go      bun + Go          apps/ssh-cv, its installer, its dependencies
+#
+# They run at once and the slowest one sets the wall clock. `deploy` waits
+# for all three.
+#
+# Every job restores turbo's cache, so a job only re-runs the tasks whose
+# inputs changed - and `e2e` hands its build output to `deploy` as an
+# artifact rather than having it built a second time from scratch.
 jobs:
-  ci:
-    name: Build, lint, type-check, test
+  checks:
+    name: Lint, type-check, test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -36,38 +51,78 @@ jobs:
         with:
           bun-version: "1.4.0"
 
-      # apps/ssh-cv is a Go binary, and turbo's check-types/test/build tasks
-      # now cover it. The deploy job below deliberately does not install Go:
-      # it only pushes Workers, and an SSH server cannot run on one.
-      - uses: actions/setup-go@v7
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # turbo hashes each task's declared inputs and skips the ones that have
+      # not moved. Without a restored cache every run started cold, which for
+      # a repo this size is most of the runtime. Keyed by commit so each run
+      # writes its own entry, with a prefix fallback so a new commit starts
+      # from the previous one rather than from nothing.
+      - name: Restore turbo cache
+        uses: actions/cache@v4
         with:
-          go-version: "1.26"
-          cache-dependency-path: apps/ssh-cv/go.sum
+          path: .turbo
+          key: turbo-checks-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-checks-${{ runner.os }}-
+
+      # apps/ssh-cv's check-types and test are Go, and live in the `go` job
+      # below with the rest of the Go toolchain. Everything else is here.
+      - name: Lint, type-check, unit tests, knip, cycles
+        run: >
+          bunx turbo run //#lint //#knip //#check-cycles
+          check-types test --filter='!@repo/ssh-cv'
+
+  e2e:
+    name: Build, bundle size, end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Lint (Biome)
-        run: bun run lint
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-e2e-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-e2e-${{ runner.os }}-
 
-      - name: Type-check
-        run: bun run check-types
+      # Browsers install to a global, user-level directory rather than
+      # per-project, so one install covers both apps/web's and
+      # apps/dashboard's suites - and caching that directory means it is a
+      # download on the first run after a version bump and a restore on every
+      # run after. Keyed on the lockfile because that is what pins the
+      # Playwright version; `install --with-deps` still runs to put the system
+      # libraries in place, which are outside the cached directory.
+      - name: Cache Playwright's browser
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
-      - name: Test
-        run: bun run test
-
-      # Browsers cache to a global, user-level directory (not per-project),
-      # so installing once here covers both apps/web's and apps/dashboard's
-      # e2e suites.
       - name: Install Playwright's browser
         working-directory: apps/web
         run: bun run playwright install --with-deps chromium
+
+      # apps/ssh-cv is filtered out for the same reason as above: its build
+      # is `go build`, and this job has no Go. The `go` job builds it.
+      - name: Build the Workers and check their bundle sizes
+        run: >
+          bunx turbo run build //#check-bundle-size
+          --filter='!@repo/ssh-cv'
 
       # Each app's e2e:server script builds and boots its own `wrangler dev`
       # - see docs/engineering.md's "Per-request nonces and soft navigation"
       # note for why this has to be the real Worker, not `astro dev`.
       - name: E2E (Playwright)
-        run: bun run e2e
+        run: bunx turbo run e2e
 
       # Pilot alongside Playwright — mirrors its coverage via Bun.WebView.
       # On Linux WebView uses the chrome backend; it auto-discovers the browser
@@ -81,17 +136,58 @@ jobs:
         continue-on-error: true
         run: bun run e2e:webview:ci
 
-      - name: Build
-        run: bun run build
+      # Handed to `deploy` so it does not build the same tree again. It is
+      # also the stronger guarantee: what ships is the artifact these tests
+      # ran against, not a rebuild that happens to come from the same commit.
+      # apps/api is absent on purpose - its Worker entry is `src/index.ts`,
+      # so `wrangler deploy` bundles it from source and there is no dist.
+      - name: Upload the built sites
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-dist
+          path: |
+            apps/web/dist
+            apps/dashboard/dist
+          retention-days: 1
+          if-no-files-found: error
 
-      - name: Check Worker bundle sizes
-        run: bun run check-bundle-size
+  go:
+    name: Go build, vet, installer, vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
 
-      - name: Check for unused files/exports/dependencies (knip)
-        run: bun run knip
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
 
-      - name: Check for import cycles (madge)
-        run: bun run check-cycles
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache-dependency-path: apps/ssh-cv/go.sum
+
+      # apps/ssh-cv's build regenerates its embedded CV from packages/content,
+      # so the workspace has to be installed even though the binary is Go.
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-go-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-go-${{ runner.os }}-
+
+      # gofmt + go vet, go test, go build - the three tasks apps/ssh-cv
+      # declares, which are the reason this job installs Go at all.
+      - name: Build, vet and test apps/ssh-cv
+        run: bunx turbo run check-types test build --filter=@repo/ssh-cv
+
+      # apps/ssh-cv embeds a CV generated from packages/content. The build
+      # above regenerates it, so a diff here means the committed copy drifted
+      # from the source module and the SSH CV would serve stale text.
+      - name: Check the generated CV is up to date
+        run: git diff --exit-code -- apps/ssh-cv/internal/cv/cv.json
 
       # apps/ssh-cv/scripts/install.sh runs as root on the box that serves the
       # CV, and updates it unattended on a timer - so it is the one file here
@@ -130,15 +226,9 @@ jobs:
         working-directory: apps/ssh-cv
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
-      # apps/ssh-cv embeds a CV generated from packages/content. `bun run
-      # build` regenerates it, so a diff here means the committed copy drifted
-      # from the source module and the SSH CV would serve stale text.
-      - name: Check the generated CV is up to date
-        run: git diff --exit-code -- apps/ssh-cv/internal/cv/cv.json
-
   deploy:
     name: Deploy to Cloudflare Workers
-    needs: ci
+    needs: [checks, e2e, go]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
@@ -154,22 +244,38 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build
-        run: bun run build
+      # Rather than `bun run build`, which used to run here and rebuild
+      # everything the `e2e` job had just built and tested.
+      - name: Download the built sites
+        uses: actions/download-artifact@v4
+        with:
+          name: worker-dist
+          path: apps
 
-      # `wrangler` is a project dependency (installed via bun above), so we
-      # call it directly instead of going through cloudflare/wrangler-action -
-      # that action installs wrangler via a plain `npm i`, and wrangler's own
-      # package.json declares `devEngines.packageManager: "bun"`, which npm
-      # 10.9+ refuses to satisfy (EBADDEVENGINES), failing every run.
+      # Each app's own `deploy` script, not a `wrangler deploy` written out
+      # again here. It was written out again here, and it had already drifted:
+      # apps/api's script passes --minify and this job did not, so the one
+      # thing the script existed to say was the one thing production never
+      # got. The script is the source of truth; this runs it.
+      #
+      # `wrangler` is a project dependency (installed via bun above), which is
+      # why those scripts call it directly rather than going through
+      # cloudflare/wrangler-action - that action installs wrangler with a
+      # plain `npm i`, and wrangler's own package.json declares
+      # `devEngines.packageManager: "bun"`, which npm 10.9+ refuses to
+      # satisfy (EBADDEVENGINES), failing every run.
+      #
+      # apps/api first, and not only out of habit: apps/dashboard now reaches
+      # it through a service binding, so on a deploy that changes both, the
+      # dashboard should land against an API that already has the new shape.
       - name: Deploy api
         working-directory: apps/api
-        run: bunx wrangler deploy
+        run: bun run deploy
 
       - name: Deploy web
         working-directory: apps/web
-        run: bunx wrangler deploy
+        run: bun run deploy
 
       - name: Deploy dashboard
         working-directory: apps/dashboard
-        run: bunx wrangler deploy
+        run: bun run deploy

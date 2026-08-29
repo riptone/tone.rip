@@ -12,10 +12,12 @@ interface ResolveTileStatusInput {
 
 /**
  * Combines apps/api's server-side probe, the (optional) Tailscale device
- * status, and the visitor's own browser ping into a single tile status. Pure
- * logic extracted from main-menu's inline checkStatuses() so it can be unit
- * tested directly against the resolution table documented in the original
- * README:
+ * status, and the visitor's own browser ping into a single tile status.
+ *
+ * A pure function rather than a branch inside the status sweep, so the table
+ * below can be tested directly - six rules with three inputs each is the kind
+ * of thing that is only ever wrong in the case nobody clicked through. This
+ * comment is the table; there is no other copy of it.
  *
  * - Worker says `up` -> tile is `up`.
  * - Self-hosted + OAuth device offline -> tile is `down`.

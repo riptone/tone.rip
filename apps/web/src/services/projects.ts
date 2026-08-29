@@ -15,7 +15,7 @@
    A failure is not an error page. The rest of /work is still worth
    reading, so an outage degrades to a note and a link to GitHub. */
 
-import { fetchWithTimeout } from "@repo/content";
+import { fetchWithTimeout } from "@repo/net";
 import { type Project, projectsResponseSchema } from "@repo/validation";
 
 const PROJECTS_URL = "https://api.tone.rip/projects";

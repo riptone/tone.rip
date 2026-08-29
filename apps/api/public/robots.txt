@@ -1,2 +1,27 @@
+# api.tone.rip
+#
+# This used to be a bare `Disallow: /`, which contradicted the API it guards:
+# /info/:slug negotiates `Accept: text/markdown` specifically so an agent can
+# read it, and /.well-known/api-catalog is an RFC 9727 discovery document
+# whose entire purpose is being found. Both were then hidden from every
+# crawler well-behaved enough to ask.
+#
+# So the two surfaces built to be read are allowed, and nothing else is.
+# /status and /apps would answer 401 anyway - they are behind Cloudflare
+# Access - and /ssh/authorize is deliberately absent from the catalog too.
+#
+# Content-Signal (contentsignals.org) states the usage policy separately from
+# the access policy, which is the point of it: `Disallow` only binds a crawler
+# that asks, and says nothing about what may be done with content obtained any
+# other way.
+#
+#   search=no    JSON and a duplicate of tone.rip's own copy; nothing for a
+#                results page, and indexing it would compete with the site.
+#   ai-input=yes reading it to answer a question is what it is for.
+#   ai-train=no  same answer tone.rip gives.
+
 User-agent: *
+Content-Signal: search=no, ai-input=yes, ai-train=no
+Allow: /.well-known/
+Allow: /info/
 Disallow: /

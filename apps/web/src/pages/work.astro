@@ -2,6 +2,8 @@
 // biome-ignore-all lint/correctness/noUnusedImports: used in the template
 // below the frontmatter fence, which Biome's Astro support doesn't analyze.
 // biome-ignore-all lint/correctness/noUnusedVariables: ditto.
+
+import { CONTACT } from "@repo/content";
 import T from "@repo/ui/site/T.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
 import { loadProjects } from "../services/projects";
@@ -58,8 +60,8 @@ const languages = [...new Set(repos.map((r) => r.language))].sort();
             pt="A lista de projetos está indisponível neste momento."
           />
         )}{" "}
-        <a href="https://github.com/riptone" rel="noopener">
-          github.com/riptone
+        <a href={CONTACT.github} rel="noopener">
+          {CONTACT.githubLabel}
         </a>
       </p>
     )

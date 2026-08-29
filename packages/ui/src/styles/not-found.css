@@ -46,13 +46,18 @@
   margin-bottom: 0;
 }
 
+/* An <h1> - see NotFound.astro. The margin and weight are restated because
+   reset.css does not normalise headings, so without them the UA stylesheet
+   would make this bold and push it off its own `top`/`right`. */
 .notfound__note {
   position: absolute;
   top: clamp(24px, 4vw, 56px);
   right: clamp(24px, 4vw, 56px);
   z-index: 2;
+  margin: 0;
   color: var(--text);
   font-size: var(--text-sm);
+  font-weight: var(--fw-regular);
 }
 
 /* The glyphs overlap and rotate independently - the point is a shape you

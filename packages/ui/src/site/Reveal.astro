@@ -33,22 +33,22 @@ interface Props {
 const { label, value, describe } = Astro.props as Props;
 ---
 
-<!--
+{/*
   A button, not a link: nothing navigates, and the control does something on
   this page. That is what a button is for.
--->
+*/}
 <button
   class="reveal"
   type="button"
   data-copy={value}
   aria-label={describe}
 >
-  <!--
+  {/*
     Only one of these is ever in flow, so the control is exactly as wide as
     what it is showing. It widens as the value types in, and the flexible
     rule beside it gives up the space - the line retracting is the value
     arriving.
-  -->
+  */}
   <span class="reveal__label" aria-hidden="true">{label}</span>
   <span class="reveal__value" aria-hidden="true"
     ><span data-typed></span><span class="reveal__caret"></span></span

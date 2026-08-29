@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "@repo/content";
+import { fetchWithTimeout } from "@repo/net";
 import {
   accessApplicationsResponseSchema,
   type SelfHostedApp,

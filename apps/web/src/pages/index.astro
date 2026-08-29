@@ -2,7 +2,8 @@
 // biome-ignore-all lint/correctness/noUnusedImports: used in the template
 // below the frontmatter fence, which Biome's Astro support doesn't analyze.
 // biome-ignore-all lint/correctness/noUnusedVariables: ditto.
-import { buildPersonSchema } from "@repo/content";
+
+import { buildPersonSchema, CONTACT } from "@repo/content";
 import T from "@repo/ui/site/T.astro";
 import { SITE_NAME, SITE_URL } from "../consts";
 import { INTRO } from "../copy/intro";
@@ -14,7 +15,7 @@ import SiteLayout from "../layouts/SiteLayout.astro";
 const person = buildPersonSchema({
   name: SITE_NAME,
   url: SITE_URL,
-  sameAs: ["https://github.com/riptone"],
+  sameAs: [CONTACT.github],
 });
 ---
 
@@ -32,12 +33,12 @@ const person = buildPersonSchema({
   <div class="site__body">
     {INTRO.map((p) => <T as="p" en={p.en} pt={p.pt} />)}
 
-    <!--
+    {/*
       Split rather than one <T>: the swap replaces textContent, so anything
       with markup inside it has to be assembled from separate pieces. The
       {" "} are load-bearing - JSX drops whitespace that spans a newline,
       and without them the words run together.
-    -->
+    */}
     <p>
       <T
         en="If you want to talk about any of that, the address is at the bottom of this page."

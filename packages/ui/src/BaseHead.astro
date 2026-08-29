@@ -2,6 +2,7 @@
 // biome-ignore-all lint/correctness/noUnusedVariables: these are used in the
 // template below the frontmatter fence, which Biome's Astro support doesn't analyze.
 // biome-ignore-all lint/correctness/noUnusedImports: ditto.
+
 import { FONT_HREF as fontHref } from "./fonts.js";
 
 interface Props {
@@ -20,8 +21,19 @@ interface Props {
    * one fewer render-blocking request on a cold visit. What it costs is
    * caching - the CSS travels with every document, and with view
    * transitions each navigation fetches a document, so a visitor reading
-   * three pages downloads it three times. At roughly 7KB gzipped that is a
-   * fair trade for a site this size and a bad one as it grows.
+   * three pages downloads it three times.
+   *
+   * Measured on the built Worker rather than estimated, because the estimate
+   * that used to sit here ("roughly 7KB gzipped") was high: apps/web inlines
+   * 16,020 bytes of minified CSS, which is 4,289 gzipped. The whole document
+   * is 9,582 gzipped with it and 5,378 without. So a three-page visit pays
+   * about 8.4KB more than an external stylesheet would, and buys one fewer
+   * render-blocking round trip on every cold visit - which for a site people
+   * arrive at from a link, read, and leave is the commoner case.
+   *
+   * Inline stays. Revisit it if that 4.3KB doubles: the arithmetic flips
+   * somewhere around the point where the stylesheet outweighs the rest of
+   * the document, and right now it is well under half of it.
    */
   css?: string;
   /**
@@ -100,11 +112,11 @@ const defaultSchema = [
 const resolvedSchema = [...defaultSchema, ...schemaItems];
 ---
 
-<!-- Global Metadata -->
+{/* Global Metadata */}
 <meta charset="utf-8" />
 <meta name="viewport" content={viewport} />
 
-<!--
+{/*
   Before the stylesheet, because it is the stylesheet that will ask for this
   and by then it is too late.
 
@@ -126,7 +138,7 @@ const resolvedSchema = [...defaultSchema, ...schemaItems];
   fetched in CORS mode, and a preload without it is a *different* request
   from the one the font engine makes, so the file downloads twice and the
   preload is discarded unused.
--->
+*/}
 <link
   rel="preload"
   href={fontHref}
@@ -135,18 +147,51 @@ const resolvedSchema = [...defaultSchema, ...schemaItems];
   crossorigin
 />
 
+{/*
+  Four icons, and every one of them has a consumer - which was not true until
+  now: the two PNGs below were generated, shipped, and referenced by nothing,
+  because the only thing that normally points at an `android-chrome-*` file is
+  a web app manifest and this site has none. Android Chrome reads
+  `<link rel="icon" sizes>` when there is no manifest, so declaring them here
+  is the whole fix; a manifest would have been machinery bought to justify two
+  files that already existed.
+*/}
 <link rel="icon" href="/favicon.ico" sizes="32x32" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link
+  rel="icon"
+  type="image/png"
+  sizes="192x192"
+  href="/icons/android-chrome-192x192.png"
+/>
+<link
+  rel="icon"
+  type="image/png"
+  sizes="512x512"
+  href="/icons/android-chrome-512x512.png"
+/>
 <meta name="generator" content={Astro.generator} />
 <meta name="robots" content={robots} />
 <style nonce={cspNonce} set:html={styleCss}></style>
 
-<script
-  is:inline
-  nonce={cspNonce}
-  set:html={`document.documentElement.dataset.theme=${JSON.stringify(theme)}`}
-/>
+{/*
+  What the `theme` prop is for.
+
+  It used to drive an inline script that set `documentElement.dataset.theme`
+  to the value the page had already server-rendered onto its own <html> tag -
+  every page in both apps writes `<html data-theme="dark">` - so the script's
+  entire effect was to assign an attribute the value it already had. Removing
+  it also removes the failure mode it quietly introduced: with JavaScript off
+  the attribute would never have been set at all, and apps/dashboard's status
+  colours key their dark values off exactly that selector.
+
+  A meta is the earlier signal anyway. `color-scheme` is also declared in
+  tokens.css, but a stylesheet is only consulted once it has been parsed;
+  this is in the <head> above it, so the browser knows which scrollbar and
+  which form controls to paint before it has read a single rule.
+*/}
+<meta name="color-scheme" content={theme} />
 
 <link rel="canonical" href={canonicalHref} />
 <link rel="alternate" hreflang="en" href={canonicalHref} />

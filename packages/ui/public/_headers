@@ -1,0 +1,22 @@
+# Response headers for statically-served files.
+#
+# Middleware cannot do this: Workers Assets answers a request for a file in
+# public/ before any Astro route or middleware runs, so a Cache-Control set
+# there is never reached. This file is the only place these get set.
+#
+# Icons are content-stable and re-resolved on every navigation. Without a
+# lifetime, each one is a revalidation round trip - a 304 per hop, and the
+# previous icon showing while the next is fetched.
+/favicon.ico
+  Cache-Control: public, max-age=86400, s-maxage=604800
+
+/favicon.svg
+  Cache-Control: public, max-age=86400, s-maxage=604800
+
+/icons/*
+  Cache-Control: public, max-age=86400, s-maxage=604800
+
+# Self-hosted fonts are the one thing here that genuinely never changes: the
+# filename carries the family and the axis, so a new cut is a new file.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable

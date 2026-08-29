@@ -29,12 +29,16 @@ old mark had to its backslash.
 
 No font dependency - pure geometry, so this runs with a bare Python.
 
-Regenerate:  python3 packages/ui/src/brand/generate.py
+Regenerate:  cd packages/ui && bun run brand
 """
 
 import pathlib
 
-OUT = pathlib.Path(__file__).parent
+# The SVGs this writes are library assets - Logo.astro imports mark.svg and
+# wordmark.svg - so they stay in src/. The script that draws them does not:
+# src/ is what `exports` publishes and what tsc type-checks, and a build tool
+# is neither.
+OUT = pathlib.Path(__file__).parent.parent / "src" / "brand"
 
 # ---------------------------------------------------------------- metrics --
 
@@ -193,9 +197,11 @@ print(f"mark {mark_w}x{mark_h}")
 # ground disappears into whichever tab colour the browser picks. It flips
 # with the browser's colour scheme so the mark reads either way.
 #
-# Written to both apps' public/ directories - Astro serves favicons from
-# there, and there is no import path from a package into public/, so the
-# copies are outputs of this script rather than duplicates to maintain.
+# Written once, to this package's own public/. Each app's public/ holds a
+# symlink to it (see ../../public/README.md), so Astro still serves it from
+# where it expects to. This used to write two copies, one per app, which was
+# the right answer when the apps each owned their assets and is now two writes
+# through two symlinks to the same inode.
 FAVICON_BOX = 32
 FAVICON_GLYPH_H = 22.0  # of 32; the rest is the plate's margin
 
@@ -216,15 +222,16 @@ favicon_svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {FAVICON_
   </style>
 </svg>
 """
-for app in ("web", "dashboard"):
-    dest = OUT.parents[3] / "apps" / app / "public" / "favicon.svg"
-    if dest.parent.exists():
-        dest.write_text(favicon_svg)
-        print(f"favicon -> {dest}")
-    else:
-        print(f"favicon SKIPPED, no {dest.parent}")
+favicon_dest = OUT.parents[1] / "public" / "favicon.svg"
+favicon_dest.write_text(favicon_svg)
+print(f"favicon -> {favicon_dest}")
 
-# The raster fallbacks (favicon.ico, icons/*.png) are not generated here:
-# rasterising SVG needs a renderer this script deliberately does not depend
-# on. Regenerate them from the SVG above when the mark changes - any of
-# `rsvg-convert`, ImageMagick, or a headless browser canvas will do.
+# The raster fallbacks (favicon.ico, icons/*.png) are rasterised from the SVG
+# above by rasterize.ts, which needs a renderer this script deliberately does
+# not depend on. Both run together:
+#
+#     cd packages/ui && bun run brand
+#
+# They used to be a note telling the next person to regenerate them by hand.
+# That is how the mark changed in August and every raster icon on both
+# properties stayed the old backslash for a month.

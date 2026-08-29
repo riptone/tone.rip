@@ -1,4 +1,27 @@
-export interface Bindings extends CloudflareBindings {
+/* What this Worker reads from its environment.
+ *
+ * Deliberately not `extends CloudflareBindings` (wrangler's generated
+ * interface), for two reasons that turned out to be the same reason.
+ *
+ * Nothing here reads `env.ASSETS`, which was the only real binding that
+ * interface contributed - the assets are served by the runtime, not by this
+ * code - so the inheritance bought nothing.
+ *
+ * And what it cost was reproducibility. `wrangler types` infers bindings
+ * from `.dev.vars` as well as from wrangler.jsonc, and `.dev.vars` is
+ * gitignored: on a machine that has one, the six secrets below are generated
+ * as required `string`s; on CI, or a fresh clone, they are absent entirely.
+ * Extending that made this file typecheck differently depending on whether
+ * the person running it happened to have local credentials - and it failed
+ * outright once the generated file caught up, because these are optional
+ * here on purpose. They are Worker secrets: the code branches on their
+ * absence (see /apps answering "unconfigured"), and a type saying they are
+ * always present would delete those branches from the type system while
+ * leaving them in the code.
+ *
+ * So this interface states what the code expects, and the generated file is
+ * left to describe the runtime. */
+export interface Bindings {
   GITHUB_TOKEN?: string;
   TAILSCALE_OAUTH_CLIENT_ID?: string;
   TAILSCALE_OAUTH_CLIENT_SECRET?: string;

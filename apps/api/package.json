@@ -1,18 +1,21 @@
 {
   "name": "api",
+  "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run --outdir dist",
     "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "check-types": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "types": "wrangler types"
   },
   "dependencies": {
     "@hono/zod-validator": "catalog:",
     "@repo/content": "*",
     "@repo/hono-middleware": "*",
+    "@repo/net": "*",
     "@repo/validation": "*",
     "hono": "catalog:",
     "zod": "catalog:"
@@ -20,7 +23,8 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@repo/typescript-config": "*",
-    "@types/node": "^26.1.1",
+    "@repo/vitest-config": "*",
+    "@types/node": "catalog:",
     "@vitest/coverage-istanbul": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

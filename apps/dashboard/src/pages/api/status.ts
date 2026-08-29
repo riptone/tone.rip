@@ -1,5 +1,5 @@
-import { fetchWithTimeout } from "@repo/content";
 import type { APIRoute } from "astro";
+import { ACCESS_JWT_HEADER, callApi } from "../../lib/api";
 
 // Same-origin proxy for apps/api's /status: this dashboard is gated behind
 // a Cloudflare Access policy, so every request reaching this Worker already
@@ -8,8 +8,11 @@ import type { APIRoute } from "astro";
 // it too - a client-side browser fetch straight to api.tone.rip wouldn't
 // carry it (different hostname, and a plain fetch() can't complete Access's
 // interactive login redirect the way a full page navigation can).
-const STATUS_URL = "https://api.tone.rip/status";
-const ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
+//
+// The hop itself now goes through the `API` service binding rather than out
+// to api.tone.rip - see src/lib/api.ts. The JWT is still forwarded and still
+// verified upstream; only the transport changed.
+
 // The middle of a three-link chain, and the numbers only make sense as a
 // set: the browser waits 5000ms (dashboard.ts), this waits 4000ms, and
 // apps/api's route is bounded at roughly 3000ms by its own probe and
@@ -46,11 +49,11 @@ export const GET: APIRoute = async ({ request }) => {
     });
   }
 
-  const headers = new Headers({ [ACCESS_JWT_HEADER]: jwt });
   let upstream: Response;
   try {
-    upstream = await fetchWithTimeout(STATUS_URL, UPSTREAM_TIMEOUT_MS, {
-      headers,
+    upstream = await callApi("/status", {
+      jwt,
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
     });
   } catch {
     // A timeout or a network failure is not the dashboard being broken; it

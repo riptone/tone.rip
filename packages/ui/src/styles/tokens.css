@@ -1,6 +1,13 @@
 /* ============================================================
    Design tokens: fonts, colours, type scale, spacing, effects.
-   Token prefix (--vire-*) kept as shipped by Claude Design.
+
+   Two layers, and the split is the point. `--tone-*` are raw values - the
+   actual hexes and channels, named for what they are. Everything below is
+   semantic (`--bg`, `--text`, `--accent`) and refers to them, so a theme
+   swaps meanings without touching a colour.
+
+   The prefix was `--vire-*`, carried over from the generator that first
+   emitted this file. It named nothing in this project.
 
    One face is loaded. The display serif that used to live here went with
    the heading that used it; a second @font-face that nothing sets means a
@@ -21,22 +28,29 @@
   src: url("/fonts/hanken-grotesk-var.woff2") format("woff2");
 }
 :root {
-  --vire-black: #000000;
-  --vire-ink-850: #0a0b0e;
+  --tone-black: #000000;
+  --tone-ink-850: #0a0b0e;
 
-  --vire-paper: #f7f7f5;
+  --tone-paper: #f7f7f5;
 
-  --vire-slate-rgb: 96, 115, 159;
-  --vire-slate-dark-rgb: 34, 41, 57;
-  --vire-slate: rgb(var(--vire-slate-rgb));
-  --vire-slate-dark: rgb(var(--vire-slate-dark-rgb));
+  --tone-slate-rgb: 96, 115, 159;
+  --tone-slate-dark-rgb: 34, 41, 57;
+  --tone-slate: rgb(var(--tone-slate-rgb));
+  --tone-slate-dark: rgb(var(--tone-slate-dark-rgb));
 
-  --vire-paper-fg: #ece9e1;
-  --vire-paper-hi: #ffffff;
+  --tone-paper-fg: #ece9e1;
+  --tone-paper-hi: #ffffff;
 
   /* semantic - dark (default) */
-  --bg: var(--vire-black);
-  --surface: var(--vire-ink-850);
+  /* Tells the browser what its own chrome should look like: form controls,
+     scrollbars, and the canvas it paints behind the page. Without it a
+     dark-only site still gets light-mode <select> and <input type="search">
+     widgets and a light scrollbar - apps/dashboard has two of each. It is a
+     theme fact, so it lives with the theme rather than in one app. */
+  color-scheme: dark;
+
+  --bg: var(--tone-black);
+  --surface: var(--tone-ink-850);
 
   --text: #ffffff;
   --text-strong: #ffffff;
@@ -58,8 +72,8 @@
   --border: rgba(255, 255, 255, 0.16);
   --border-strong: rgba(255, 255, 255, 0.3);
 
-  --accent: var(--vire-paper-fg);
-  --accent-hover: var(--vire-paper-hi);
+  --accent: var(--tone-paper-fg);
+  --accent-hover: var(--tone-paper-hi);
 
   --selection-bg: color-mix(in srgb, var(--accent) 34%, transparent);
   --focus-ring: var(--accent);
@@ -122,11 +136,13 @@
 
 /* semantic - light (opt-in via [data-theme="light"]) */
 html[data-theme="light"] {
-  --bg: var(--vire-paper);
+  color-scheme: light;
+
+  --bg: var(--tone-paper);
   --surface: #ffffff;
 
-  --text: var(--vire-slate);
-  --text-strong: var(--vire-slate-dark);
+  --text: var(--tone-slate);
+  --text-strong: var(--tone-slate-dark);
   /* Both raised for the same reason as the dark set, and by more, because
      dark ink fading into light paper loses contrast faster than light text
      fading into black. On #f7f7f5 the old values measured 4.70:1 for muted
@@ -138,7 +154,7 @@ html[data-theme="light"] {
      known to fail is a trap for whoever turns it on, and it is two numbers. */
   --text-muted: rgba(34, 41, 57, 0.78);
   --text-faint: rgba(34, 41, 57, 0.66);
-  --accent: var(--vire-slate-dark);
+  --accent: var(--tone-slate-dark);
   --accent-hover: #000000;
 
   --border: rgba(34, 41, 57, 0.2);

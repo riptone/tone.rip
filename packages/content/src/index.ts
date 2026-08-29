@@ -1,3 +1,4 @@
+export { CONTACT } from "./contact";
 export {
   type CspReportSummary,
   summarizeCspReport,
@@ -25,7 +26,6 @@ export {
   type SimplifiedRepo,
   simplifyRepos,
 } from "./github-repos";
-export { fetchWithTimeout } from "./http";
 export {
   buildPersonSchema,
   buildProfilePageSchema,

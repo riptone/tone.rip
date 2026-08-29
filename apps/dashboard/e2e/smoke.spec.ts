@@ -70,3 +70,14 @@ test("the filter narrows the visible tiles", async ({ page, baseURL }) => {
   expect(problems.errors, problems.errors.join("\n")).toEqual([]);
   expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);
 });
+
+/* This app's 404 used to be a `<meta http-equiv="refresh">` bounce to `/`,
+   which behind Cloudflare Access made a typo and an authorisation problem
+   look identical. It is now the same shared component apps/web renders, so
+   the thing worth asserting here is that this app's own props reach it. */
+test("an unknown URL answers 404 with this app's palette", async ({ page }) => {
+  const response = await page.goto("/this-page-does-not-exist");
+  expect(response?.status()).toBe(404);
+  await expect(page.locator("body")).toHaveAttribute("data-ramp", "glacier");
+  await expect(page.locator(".notfound__digit")).toHaveCount(3);
+});

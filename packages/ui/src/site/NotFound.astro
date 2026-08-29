@@ -1,0 +1,145 @@
+---
+// biome-ignore-all lint/correctness/noUnusedImports: used in the template
+// below the frontmatter fence, which Biome's Astro support doesn't analyze.
+// biome-ignore-all lint/correctness/noUnusedVariables: ditto.
+
+import BaseHead from "../BaseHead.astro";
+import Logo from "../brand/Logo.astro";
+import brandCss from "../styles/brand.css?inline";
+import gradientCss from "../styles/gradient.css?inline";
+import notFoundCss from "../styles/not-found.css?inline";
+import resetCss from "../styles/reset.css?inline";
+import shellCss from "../styles/shell.css?inline";
+import tokensCss from "../styles/tokens.css?inline";
+
+/* The not-found page, for both properties.
+
+   `styles/not-found.css` has always lived in this package, which was the tell:
+   the look was shared and the markup was not, so two files described the same
+   page and drifted anyway - one said `aria-label="tone, home"`, the other
+   `"Home"`, and only one of them carried the note explaining why the frame and
+   the field cannot be the same element.
+
+   This has to be re-exported from a file at `src/pages/404.astro` in each app
+   and nowhere else: that exact path is what Astro wires to the adapter's
+   not-found handler. A 404 template in a subdirectory is just a page you can
+   visit at that URL; it never serves a miss.
+
+   A dead end gets the one thing the rest of the site has that costs nothing to
+   look at: the field, full bleed, with the number sitting on it as a
+   composition rather than a message. The apology stays small and out of the
+   way - nobody needs it explained twice. */
+interface Props {
+  siteName: string;
+  siteUrl: string;
+  title: string;
+  description: string;
+  /**
+   * `noindex` either way; the second half is the app's call. The public site
+   * still wants crawlers to follow the wordmark home, a private one does not.
+   */
+  robots: string;
+  /**
+   * Declared on `<body>` like every other route's palette, and read from there
+   * by the script below - see `site/field.ts` for why the field never takes a
+   * per-page knob in JavaScript.
+   */
+  ramp: string;
+}
+
+const { siteName, siteUrl, title, description, robots, ramp } =
+  Astro.props as Props;
+
+const css = [
+  tokensCss,
+  resetCss,
+  shellCss,
+  gradientCss,
+  brandCss,
+  notFoundCss,
+].join("\n");
+
+/* Set here rather than in each app's 404.astro, because a not-found page that
+   answers 200 is the failure this component exists to prevent, and one of the
+   two apps forgetting is exactly how that happens. */
+Astro.response.status = 404;
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <BaseHead
+      siteName={siteName}
+      siteUrl={siteUrl}
+      title={title}
+      description={description}
+      css={css}
+      theme="dark"
+      robots={robots}
+    />
+  </head>
+  <body data-ramp={ramp}>
+    <main class="notfound">
+      {/*
+        The frame clips; the field paints. They cannot be the same element:
+        mountNoiseGradient empties its host and takes it over, so anything
+        put inside [data-gradient-panel] is deleted on mount.
+      */}
+      <div class="notfound__frame">
+        <div class="notfound__field" data-gradient-panel></div>
+
+        {/* aria-hidden: the number is decoration. The sentence in the
+             corner is the actual message, and reading "four zero four" adds
+             nothing. Running off the panel's edge is the composition;
+             running off onto the page would be a bug, hence the frame. */}
+        <div class="notfound__digits" aria-hidden="true">
+          <span class="notfound__digit">4</span>
+          <span class="notfound__digit">0</span>
+          <span class="notfound__digit">4</span>
+        </div>
+      </div>
+
+      {/*
+        The wordmark is the way home. It is already a link to / on every
+        other page, so a second "Go home" underneath the sentence was a
+        control explaining a control the reader had just used elsewhere.
+      */}
+      <a class="notfound__brand shell__brand" href="/" aria-label="tone, home">
+        <Logo label="" />
+      </a>
+
+      {/*
+        An <h1>, not a <p>. The component's own note above says the sentence
+        is the actual message and the digits are decoration - and the digits
+        are `aria-hidden`, so this line was the page's entire accessible
+        content while being marked up as if it were an aside. That left the
+        one page a lost visitor lands on with no heading at all.
+
+        It looks identical: not-found.css restates the weight and zeroes the
+        margin that a bare h1 would otherwise inherit from the UA stylesheet,
+        which this repo's reset deliberately does not normalise.
+      */}
+      <h1 class="notfound__note">This page doesn't exist.</h1>
+    </main>
+
+    <script>
+      import { mountNoiseGradient, RAMPS, type RampId } from "@repo/ui/gradient";
+      import { subscribeScrollProgress } from "@repo/ui/motion/scroll-progress";
+
+      const host = document.querySelector<HTMLElement>("[data-gradient-panel]");
+      if (host) {
+        // The ramp comes off <body data-ramp>, the same place every other
+        // route declares it. A dead end is the one place a louder palette is
+        // welcome, which is why neither app passes its usual one.
+        const declared = document.body.dataset.ramp;
+        const ramp: RampId =
+          declared && declared in RAMPS ? (declared as RampId) : "moss";
+        // 145deg is the one thing about this field that is not the site's:
+        // the panel is full-bleed here rather than a rail, and the default
+        // angle reads as a horizon across it.
+        const field = mountNoiseGradient(host, { ramp, angle: 145 });
+        subscribeScrollProgress(({ progress }) => field.update({ progress }));
+      }
+    </script>
+  </body>
+</html>

@@ -1,8 +1,8 @@
 import { createAstroSecurityMiddleware } from "@repo/hono-middleware/astro-security";
 
 // Access control is delegated to Cloudflare Zero Trust in front of this
-// Worker (an Access policy on dash.tone.rip), not app code - matches what
-// main-menu originally did. This middleware only adds the baseline nonce'd
+// Worker (an Access policy on dash.tone.rip), not app code. This middleware
+// only adds the baseline nonce'd
 // CSP + security-header set every app in this monorepo shares, which is also
 // a hard requirement for BaseHead.astro - it reads Astro.locals.cspNonce to
 // nonce its inline theme script.

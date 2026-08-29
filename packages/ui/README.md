@@ -4,58 +4,122 @@ Shared design system for `apps/web` and `apps/dashboard`: design tokens, theming
 
 ## Importing from this package
 
-`package.json`'s `exports` map has a wildcard fallback (`"./*": "./src/*"`) that covers any import specifier which already includes its own file extension - `@repo/ui/BaseHead.astro`, `@repo/ui/styles/tokens.css?inline`. Extension-less `.ts` modules (`@repo/ui/dom`, not `@repo/ui/dom.ts`) need their own explicit entry instead, because TypeScript's `node16`/`nodenext` module resolution (which this package's `tsconfig.json` uses) requires relative imports inside the package to carry an explicit `.js` extension, and the wildcard can't infer one for a bare specifier - see the `"./dom"`/`"./components"`/`"./storage"`/`"./theme-bootstrap"` entries for the pattern. Examples of what exists today:
+`package.json`'s `exports` map lists every public entry point by name. It used
+to be a single wildcard (`"./*": "./src/*"`), which is why this section could
+go years describing modules that had been deleted: a wildcard resolves
+anything under `src/`, so nothing - not a build, not `knip` - could tell the
+difference between a module two apps depend on and one nobody had imported
+since it was written. Naming them made the boundary checkable, and knip
+immediately found four exports with no callers.
+
+So: a new shared module is not importable until it is added to that map, and
+that is the point. Files without an entry are internal to the package
+(`fonts.ts`, `storage.ts`, `trusted-types.ts`, `site/Reveal.astro`, and the
+gradient's worker), reachable only by a relative import from a sibling.
 
 ```ts
 import BaseHead from "@repo/ui/BaseHead.astro";
-import { btnLink, chips, codeBlock, panelHead, tag } from "@repo/ui/components";
-import { h, clear } from "@repo/ui/dom";
-import { readStored, writeStored } from "@repo/ui/storage";
-import type { ToneThemeHelpers, Theme } from "@repo/ui/theme-bootstrap";
+import Logo from "@repo/ui/brand/Logo.astro";
+import Footer from "@repo/ui/site/Footer.astro";
+import ContextMenu from "@repo/ui/site/ContextMenu.astro";
+import { mountContact, mountContextMenu, mountFilter, mountLang, syncField } from "@repo/ui/site";
+import { mountNoiseGradient, rowsToCss } from "@repo/ui/gradient";
+import { subscribeScrollProgress } from "@repo/ui/motion/scroll-progress";
 
-import resetCss from "@repo/ui/styles/reset.css?inline";   // inlined under a CSP nonce (apps/web's pattern)
-import tokensCss from "@repo/ui/styles/tokens.css?inline";
-import componentsCss from "@repo/ui/styles/components.css?inline";
+import tokensCss from "@repo/ui/styles/tokens.css?inline";  // inlined under a CSP nonce (apps/web's pattern)
 import "@repo/ui/styles/tokens.css";                        // or linked as a real stylesheet (apps/dashboard's pattern)
 ```
+
+Both forms resolve against the same entry - Vite strips the `?inline` query
+before consulting `exports` - so a stylesheet needs one entry, not two.
+
+Relative imports *inside* this package need an explicit `.js` extension
+(`import { readStored } from "../storage.js"`). That is `node16`/`nodenext`
+module resolution, not a typo.
 
 ## What's here
 
 ### `BaseHead.astro`
 
-The shared `<head>`: favicon/meta tags, canonical/hreflang, OG/Twitter tags, JSON-LD (merges a default `WebSite` schema with a per-page `schema` prop), and two inline nonce'd scripts - a pre-paint theme bootstrap (reads `localStorage.theme`, sets `documentElement.dataset.theme` before first paint to avoid a flash) and the `window.tone` theme helpers described below. See the `Props` interface at the top of the file for the full prop list.
+The shared `<head>`: favicon/meta tags, canonical, OG/Twitter tags, JSON-LD
+(merges a default `WebSite` schema with a per-page `schema` prop), the font
+preload, and the page's stylesheet inlined under a CSP nonce. Every page in
+both apps is dark-only, so `theme` is a required prop stating which one the
+page is rather than a preference read at runtime - see the `Props` interface
+at the top of the file, which carries the reasoning for that and for the
+inline-CSS trade-off (measured, not assumed).
 
-Every consumer needs `Astro.locals.cspNonce` typed in its own `env.d.ts` - see the comment in `src/env.d.ts` for why that can't be inherited across a package boundary.
+Every consumer needs `Astro.locals.cspNonce` typed in its own `env.d.ts` - see
+the comment in `src/env.d.ts` for why that cannot be inherited across a
+package boundary.
 
-### Theming (`styles/tokens.css`, `styles/reset.css`, `theme-bootstrap.ts`)
+### `site/` - the chrome both properties share
 
-- `tokens.css` - `@font-face` declarations + every design token as a CSS custom property (`--bg`, `--text*`, `--accent*`, `--font-*`, spacing/radius/motion scales, …), with a `html[data-theme="light"]` block overriding the semantic tokens for light mode. Dark is the implicit default.
-- `reset.css` - box-sizing, focus rings, `.sr-only`, and other app-agnostic base styles. Deliberately does **not** set `body { overflow: hidden }` - that's a layout choice specific to apps/web's locked-viewport "desktop" page, so it stays in `apps/web/src/styles/desktop/base.css`.
-- `theme-bootstrap.ts` - just the `Theme`/`ToneThemeHelpers` types for the `window.tone` object `BaseHead.astro`'s inline script installs at runtime (`getStoredTheme`, `applyTheme`, `readTheme`, `syncTheme`, `setStoredTheme`, plus a `tone:themechange` event for cross-widget sync). Each app's own theme-toggle script (`apps/web/src/scripts/desktop/theme.ts`, `apps/dashboard/src/scripts/theme.ts`) types against this instead of hand-declaring its own copy.
+`Footer.astro`, `ContextMenu.astro`, `T.astro` and `Reveal.astro` on the Astro
+side; `site/index.ts` exports the controllers that mount to them
+(`mountContact`, `mountContextMenu`, `mountFilter`, `mountLang`, `syncField`).
+The split is deliberate: the markup is server-rendered so it exists for
+crawlers and for a visitor with no JavaScript, and the controller only adds
+behaviour to what is already on the page.
 
-### Design-system primitives (`components.ts` + `styles/components.css`)
+### `styles/` - the frame
 
-Vanilla-DOM component builders - no framework, no virtual DOM, just `HTMLElement` factories built on top of `dom.ts`'s tiny `h()` hyperscript helper. Class names (`vire-btn`, `vire-tag`, `vire-code*`) are paired 1:1 with the CSS in `styles/components.css`.
+`tokens.css` (the `@font-face` declarations and every design token as a custom
+property), `reset.css`, `shell.css` (the reading column and the field beside
+it), the 404, and the look of anything appearing in both apps: the menu
+surface (`context-menu.css`, `filter.css`, sharing `--menu-*` tokens) and the
+cross-document view-transition at-rule.
 
-| Export | Renders |
-|---|---|
-| `tag(text, tone?)` | `<span class="vire-tag">` (or `vire-tag--accent`) |
-| `btnLink(text, href, primary?)` | `<a class="vire-btn">` styled as a button, opens in a new tab |
-| `chips(items, tone?)` | a `<div class="vp__chips">` of `tag()`s |
-| `codeBlock(filename, code)` | a `<div class="vire-code">` with a line-numbered gutter, mirroring a small code-editor chrome |
-| `panelHead(eyebrow, title, src?)` | a `<header class="vp__head">` with an eyebrow line, a title, and an optional trailing element |
-| `openExternal(href)` | safely `window.open`s an `http(s)` URL in a new tab, no-ops otherwise |
+### `site/NotFound.astro`
 
-`dom.ts` (`h(tag, attrs, ...children)`, `clear(node)`) and `storage.ts` (`readStored`/`writeStored`, a try/catch-guarded `localStorage` wrapper) are the two small utilities these primitives - and any future ones - are built on.
+The whole 404 page - `<head>`, markup, stylesheet and field - as one
+component, because `styles/not-found.css` already lived here and the markup
+did not. Each app re-exports it from `src/pages/404.astro`, which is the only
+path Astro wires to the adapter's not-found handler, and passes the four things
+that differ: title, description, `robots`, and the ramp. It sets
+`Astro.response.status = 404` itself, so neither app can render a not-found
+page that answers 200.
+
+### `contrast.ts`
+
+WCAG 2.1 relative contrast, plus `flatten()` for compositing an `rgba()` ink
+onto a background and `parseHex()`. Exported rather than kept beside its test
+because two stylesheets now need the guard: this package's text tokens, and
+`apps/dashboard`'s four status colours, which live in hex outside the token
+layer. Two copies of the sRGB luminance formula is two chances to get it
+subtly wrong in one of them - and the wrong one would be the one that passes.
+
+### `brand/` and `scripts/`
+
+`src/brand/` holds `Logo.astro` and the `mark.svg`/`wordmark.svg` it imports.
+The tools that draw them live in `scripts/`, outside the library surface:
+
+```bash
+cd packages/ui && bun run brand
+```
+
+`scripts/generate-brand.py` draws the wordmark, the mark and `favicon.svg` from
+pure geometry - no font dependency, no renderer. `scripts/rasterize-icons.ts`
+then rasterises that SVG into `public/icons/*.png` and packs `favicon.ico`,
+using the Chromium this repo already installs for its end-to-end tests.
+
+The second half used to be a comment saying to regenerate the rasters by hand
+"when the mark changes". That is how the mark became a headstone in August and
+every raster icon on both properties stayed the old backslash for a month.
 
 ## Adding a new shared component
 
-1. Ask: does this genuinely need to render the same way in more than one app? If it's specific to one app's content or layout, it belongs in that app instead (see `docs/architecture.md`'s "does this go in a package?" rule of thumb).
-2. Drop the function in `src/<name>.ts` (or a new file), export it, and add its CSS (if any) to `styles/<name>.css` - or a new stylesheet if it's a big enough addition to warrant one. Any relative import between two `src/*.ts` modules needs an explicit `.js` extension (e.g. `import { h } from "./dom.js"`) - that's `node16`/`nodenext` module resolution, not a typo.
-3. Add a `"./<name>": "./src/<name>.ts"` entry to `package.json`'s `exports` map (the wildcard alone won't resolve an extension-less specifier - see above) and document it in the table above.
-4. Add a Vitest unit test in `test/<name>.test.ts` (see `test/dom.test.ts`/`test/components.test.ts` for the pattern - this package runs its tests under `jsdom`, see `vitest.config.ts`).
-5. Update whichever app(s) should adopt it to import from `@repo/ui/<name>` instead of a local copy - don't let the same component exist in two places.
-
+1. Ask whether it genuinely needs to render the same way in more than one app.
+   If it is specific to one app's content or layout it belongs in that app -
+   see `docs/architecture.md`'s "does this go in a package?" rule of thumb.
+2. Put it in `src/site/` (chrome) or `src/<area>/`, and its CSS in
+   `src/styles/`.
+3. Add an `exports` entry for it in `package.json`. Without one it is
+   internal, which is the right answer for a helper only its siblings use.
+4. Add a Vitest unit test in `test/` - this package runs under `jsdom`, see
+   `vitest.config.ts` and the shared preset it calls.
+5. Update the app(s) that should adopt it, and delete the local copy. The
+   same component existing in two places is the thing this package is for.
 
 ## `@repo/ui/gradient` - the noise gradient field
 
@@ -140,9 +204,10 @@ to close, then lets itself die; the passive scroll listener restarts it. A
 permanent rAF would keep the compositor - and the gradient worker downstream
 of it - awake on a page nobody is touching.
 
-`apps/web/src/pages/v2/` is the sandbox for tuning all of it, with a live
-frames-per-second readout so idle cost is visible. It is noindex'd and
-excluded from the sitemap.
+There is no longer a tuning sandbox route - `apps/web/src/pages/v2/` became
+the site itself. Tune against a real page and watch the worker in DevTools'
+performance panel; the cost that matters is what an idle page spends, which
+should be nothing.
 
 ### CSP
 

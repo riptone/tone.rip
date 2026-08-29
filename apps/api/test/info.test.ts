@@ -17,7 +17,7 @@ describe("GET /info/:slug", () => {
     expect(res.headers.get("Content-Type")).toBe(
       "text/markdown; charset=utf-8",
     );
-    expect(await res.text()).toContain("# main-menu");
+    expect(await res.text()).toContain("# dash");
   });
 
   it("404s for an unknown slug", async () => {

@@ -39,7 +39,21 @@ export default defineConfig({
       }),
     }),
   ],
+  // Nothing here uses Astro sessions, and this is the off switch. Without it
+  // the adapter provisions a Cloudflare KV namespace on every deploy, which
+  // is why this app and apps/dashboard both used to pin an unused `SESSION`
+  // binding in wrangler.jsonc with a comment saying the adapter did it
+  // "regardless". It does not - it does it unless told the app has none.
+  //
+  // The two namespaces those bindings pointed at have since been deleted from
+  // the account, so there is nothing orphaned to go looking for. Turning
+  // sessions on again means provisioning a fresh one, not finding the old.
+  session: false,
   adapter: cloudflare({
+    // Build-time optimisation, so there is no runtime Images binding either.
+    // The default is `cloudflare-binding`, which binds Cloudflare Images on
+    // every deploy; apps/dashboard reaches the same place via `passthrough`,
+    // having no images at all.
     imageService: "compile",
   }),
   vite: {

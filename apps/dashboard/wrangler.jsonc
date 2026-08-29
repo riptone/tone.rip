@@ -17,15 +17,22 @@
   "observability": {
     "enabled": true
   },
-  "upload_source_maps": true,
-  // Astro's Cloudflare adapter session support (unused by this app today,
-  // but the adapter provisions it regardless). Auto-created by `wrangler
-  // deploy` on first deploy; pinned here so future deploys reuse it instead
-  // of relying on re-provisioning.
-  "kv_namespaces": [
-    {
-      "binding": "SESSION",
-      "id": "ea94356d2dac4612bf9acc460b3bef8c"
-    }
-  ]
+  // apps/api on the same account. Both of the calls this app makes to it -
+  // the SSR tile fetch in pages/index.astro and the /status proxy - used to
+  // go out to https://api.tone.rip and come back in: DNS, TLS, a second trip
+  // through Cloudflare's edge, and a billed subrequest, to reach a Worker
+  // sitting beside this one. A service binding dispatches to it in-process
+  // instead.
+  //
+  // It does not weaken anything. Access gates api.tone.rip at the edge, and
+  // this binding skips that edge - but that gate was never what protected
+  // those routes from this app, because a server-to-server call from here
+  // carries no interactive session anyway. What protects them is
+  // requireCloudflareAccess() inside apps/api, which verifies the JWT this
+  // app forwards. That check is unchanged and still runs.
+  "services": [{ "binding": "API", "service": "api" }],
+  // The render blocks on that binding, which blocks on Cloudflare's own API.
+  // Smart placement moves this Worker next to the thing it waits for instead
+  // of running it wherever the visitor happens to be.
+  "placement": { "mode": "smart" }
 }

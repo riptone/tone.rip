@@ -1,33 +1,35 @@
 {
   "name": "dashboard",
+  "version": "0.0.0",
   "description": "A minimal launcher for self-hosted apps.",
   "private": true,
   "type": "module",
   "scripts": {
     "astro": "astro",
     "build": "astro build",
-    "cf-typegen": "wrangler types",
-    "check": "astro build && astro check && wrangler deploy --dry-run",
     "check-types": "astro check",
     "deploy": "wrangler deploy",
     "dev": "astro dev",
     "preview": "astro build && wrangler dev",
     "test": "vitest run",
     "e2e:server": "astro build && wrangler dev --port 8788 --inspector-port 9231",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "types": "wrangler types"
   },
   "dependencies": {
     "@astrojs/cloudflare": "catalog:",
     "@repo/content": "*",
     "@repo/hono-middleware": "*",
+    "@repo/net": "*",
     "@repo/ui": "*",
     "astro": "catalog:"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
+    "@astrojs/check": "catalog:",
     "@playwright/test": "catalog:",
     "@repo/playwright-config": "*",
     "@repo/typescript-config": "*",
+    "@repo/vitest-config": "*",
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",

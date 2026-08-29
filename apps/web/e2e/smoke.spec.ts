@@ -75,3 +75,34 @@ test("the work page's filter narrows the visible projects", async ({
   expect(problems.errors, problems.errors.join("\n")).toEqual([]);
   expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);
 });
+
+/* The 404 answers 404.
+
+   `src/pages/404.astro` now re-exports a shared component
+   (`@repo/ui/site/NotFound.astro`), and both apps' copies were previously
+   free to drift - one of them had already been a `<meta http-equiv="refresh">`
+   bounce to `/`, which answered every mistyped URL with a redirect and a 200.
+   A not-found page that does not say "not found" is invisible to everything
+   except a crawler and a confused reader, so the status code is asserted
+   rather than the markup. */
+test("an unknown URL answers 404, with the field mounted", async ({ page }) => {
+  const problems = collectConsoleProblems(page);
+
+  const response = await page.goto("/this-page-does-not-exist");
+  expect(response?.status()).toBe(404);
+
+  // The ramp is declared on <body> and read by the shared component's script;
+  // if that contract breaks the field silently falls back to the default.
+  await expect(page.locator("body")).toHaveAttribute("data-ramp", "dusk");
+  await expect(page.locator(".notfound__digit")).toHaveCount(3);
+  await expect(page.locator("[data-gradient-panel] canvas")).toBeAttached();
+
+  /* Only the CSP assertion here, not `problems.errors`. Chromium logs
+     "Failed to load resource: the server responded with a status of 404" for
+     the navigation itself, so a 404 page can never have an empty error list -
+     asserting it would mean either deleting the status code this test exists
+     to check, or filtering by message text and calling it a pass. The CSP
+     check is the one that can actually catch something: this page runs its
+     own inline field script under the same strict nonce'd policy. */
+  expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);
+});

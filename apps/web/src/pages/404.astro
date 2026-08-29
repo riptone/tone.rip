@@ -1,101 +1,16 @@
 ---
 // biome-ignore-all lint/correctness/noUnusedImports: used in the template
 // below the frontmatter fence, which Biome's Astro support doesn't analyze.
-// biome-ignore-all lint/correctness/noUnusedVariables: ditto.
-import BaseHead from "@repo/ui/BaseHead.astro";
-import Logo from "@repo/ui/brand/Logo.astro";
-import brandCss from "@repo/ui/styles/brand.css?inline";
-import gradientCss from "@repo/ui/styles/gradient.css?inline";
-import notFoundCss from "@repo/ui/styles/not-found.css?inline";
-import resetCss from "@repo/ui/styles/reset.css?inline";
-import shellCss from "@repo/ui/styles/shell.css?inline";
-import tokensCss from "@repo/ui/styles/tokens.css?inline";
+
+import NotFound from "@repo/ui/site/NotFound.astro";
 import { SITE_NAME, SITE_URL } from "../consts";
-
-/* The not-found page.
-
-   This has to live at src/pages/404.astro and nowhere else - that path is
-   what Astro wires to the adapter's not-found handler. A 404 template inside
-   a subdirectory is just a page you can visit at that URL; it never serves a
-   miss - a 404 template inside a subdirectory is just a page you can visit
-   at that URL.
-
-   A dead end gets the one thing the rest of the site has that costs nothing
-   to look at: the field, full bleed, with the number sitting on it as a
-   composition rather than a message. The apology stays small and out of the
-   way - nobody needs it explained twice. */
-const css = [
-  tokensCss,
-  resetCss,
-  shellCss,
-  gradientCss,
-  brandCss,
-  notFoundCss,
-].join("\n");
-Astro.response.status = 404;
 ---
 
-<!doctype html>
-<html lang="en" data-theme="dark">
-  <head>
-    <BaseHead
-      siteName={SITE_NAME}
-      siteUrl={SITE_URL}
-      title="404 · tone"
-      description="This page doesn't exist on tone.rip."
-      css={css}
-      theme="dark"
-      robots="noindex, follow"
-    />
-  </head>
-  <body>
-    <main class="notfound">
-      <!--
-        The frame clips; the field paints. They cannot be the same element:
-        mountNoiseGradient empties its host and takes it over, so anything
-        put inside [data-gradient-panel] is deleted on mount.
-      -->
-      <div class="notfound__frame">
-        <div class="notfound__field" data-gradient-panel></div>
-
-        <!-- aria-hidden: the number is decoration. The sentence in the
-             corner is the actual message, and reading "four zero four" adds
-             nothing. Running off the panel's edge is the composition;
-             running off onto the page would be a bug, hence the frame. -->
-        <div class="notfound__digits" aria-hidden="true">
-          <span class="notfound__digit">4</span>
-          <span class="notfound__digit">0</span>
-          <span class="notfound__digit">4</span>
-        </div>
-      </div>
-
-      <!--
-        The wordmark is the way home. It is already a link to / on every
-        other page, so a second "Go home" underneath the sentence was a
-        control explaining a control the reader had just used elsewhere.
-      -->
-      <a
-        class="notfound__brand shell__brand"
-        href="/"
-        aria-label="tone, home"
-      >
-        <Logo label="" />
-      </a>
-
-      <p class="notfound__note">This page doesn't exist.</p>
-    </main>
-
-    <script>
-      import { mountNoiseGradient } from "@repo/ui/gradient";
-      import { subscribeScrollProgress } from "@repo/ui/motion/scroll-progress";
-
-      const host = document.querySelector<HTMLElement>("[data-gradient-panel]");
-      if (host) {
-        // `dusk` rather than the site default: a dead end is the one place a
-        // louder palette is welcome, and it makes the page unmistakable.
-        const field = mountNoiseGradient(host, { ramp: "dusk", angle: 145 });
-        subscribeScrollProgress(({ progress }) => field.update({ progress }));
-      }
-    </script>
-  </body>
-</html>
+<NotFound
+  siteName={SITE_NAME}
+  siteUrl={SITE_URL}
+  title="404 · tone"
+  description="This page doesn't exist on tone.rip."
+  robots="noindex, follow"
+  ramp="dusk"
+/>

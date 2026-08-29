@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./base.json",
+  "//": "Every source-only package in this repo had these three options written out by hand, byte-identical, in four to six copies. `include` cannot move here with them: paths in an extended config resolve against the file they are written in, so an `include` here would look for `packages/config/typescript-config/src`. `exclude` is gone rather than moved - node_modules is excluded by default and dist is the outDir, which TypeScript excludes on its own.",
+  "compilerOptions": {
+    "outDir": "dist",
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
+  }
+}

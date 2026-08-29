@@ -41,8 +41,12 @@ interface TrustedTypesFactory {
   readonly defaultPolicy: unknown;
 }
 
-/** The policy name the CSP's `trusted-types` directive has to allow. */
-export const DEFAULT_POLICY_NAME = "default";
+/* The policy name the CSP's `trusted-types` directive has to allow.
+   Not exported: the directive is written in @repo/hono-middleware's core.ts,
+   which must not import this package - the dependency runs the other way,
+   and both Astro apps call that core directly. The two are kept in step by
+   the comment there naming this file. */
+const DEFAULT_POLICY_NAME = "default";
 
 let installed = false;
 

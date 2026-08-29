@@ -1,7 +1,8 @@
 # Security Policy
 
 This is the security policy for [riptone/tone.rip](https://github.com/riptone/tone.rip) -
-the monorepo behind tone.rip (3 Workers, 6 shared packages). It is written
+the monorepo behind tone.rip (three Cloudflare Workers, an SSH server, and
+the packages they share). It is written
 to be followed by humans and by the AI agents that help maintain this repo.
 
 ## Supported versions

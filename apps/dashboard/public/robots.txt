@@ -1,2 +1,15 @@
+# dash.tone.rip
+#
+# A private launcher, behind a Cloudflare Access policy - a crawler reaching
+# for this file gets the login redirect instead, so in practice these lines
+# are never read. They are here for the case where that is not true: an Access
+# bypass, a preview URL, a misconfiguration. A policy that only exists while
+# the gate in front of it is correct is not a policy.
+#
+# Content-Signal (contentsignals.org) is the half `Disallow` cannot express.
+# `Disallow` asks a crawler not to fetch; it says nothing about what may be
+# done with content obtained another way. Everything here is no.
+
 User-agent: *
+Content-Signal: search=no, ai-input=no, ai-train=no
 Disallow: /

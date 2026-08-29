@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { needsPing, resolveTileStatus } from "../src/scripts/status-resolution";
 
-// These mirror the resolution table documented in main-menu's README:
+// The resolution table from src/scripts/status-resolution.ts, one test per
+// row. Kept in the same order as the comment there so a new rule added in one
+// place is visibly missing from the other:
 // - Worker says `up` -> tile is `up`.
 // - Self-hosted + OAuth device offline -> tile is `down`.
 // - Browser ping succeeds -> tile is `up`.

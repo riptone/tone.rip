@@ -1,76 +1,21 @@
 ---
 // biome-ignore-all lint/correctness/noUnusedImports: used in the template
 // below the frontmatter fence, which Biome's Astro support doesn't analyze.
-// biome-ignore-all lint/correctness/noUnusedVariables: ditto.
-import BaseHead from "@repo/ui/BaseHead.astro";
-import Logo from "@repo/ui/brand/Logo.astro";
-import brandCss from "@repo/ui/styles/brand.css?inline";
-import gradientCss from "@repo/ui/styles/gradient.css?inline";
-import notFoundCss from "@repo/ui/styles/not-found.css?inline";
-import resetCss from "@repo/ui/styles/reset.css?inline";
-import shellCss from "@repo/ui/styles/shell.css?inline";
-import tokensCss from "@repo/ui/styles/tokens.css?inline";
+
+import NotFound from "@repo/ui/site/NotFound.astro";
 import { SITE_NAME, SITE_URL } from "../consts";
 
-/* The not-found page, which is the site's - same markup, same stylesheet,
-   same field. Only the ramp differs, and only because the two properties
-   already differ in palette everywhere else.
-
-   It used to be a `<meta http-equiv="refresh">` bounce to `/`, which is not
-   a 404: it answered every mistyped URL with a redirect, so nothing ever
-   said the page was missing. Behind Cloudflare Access that is actively
-   confusing - a typo and an authorisation problem looked identical. */
-const css = [
-  tokensCss,
-  resetCss,
-  shellCss,
-  gradientCss,
-  brandCss,
-  notFoundCss,
-].join("\n");
-Astro.response.status = 404;
+/* It used to be a `<meta http-equiv="refresh">` bounce to `/`, which is not a
+   404: it answered every mistyped URL with a redirect, so nothing ever said
+   the page was missing. Behind Cloudflare Access that is actively confusing -
+   a typo and an authorisation problem looked identical. */
 ---
 
-<!doctype html>
-<html lang="en" data-theme="dark">
-  <head>
-    <BaseHead
-      siteName={SITE_NAME}
-      siteUrl={SITE_URL}
-      title="404 · tone"
-      description="This page doesn't exist."
-      css={css}
-      theme="dark"
-      robots="noindex, nofollow"
-    />
-  </head>
-  <body>
-    <main class="notfound">
-      <div class="notfound__frame">
-        <div class="notfound__field" data-gradient-panel></div>
-        <div class="notfound__digits" aria-hidden="true">
-          <span class="notfound__digit">4</span>
-          <span class="notfound__digit">0</span>
-          <span class="notfound__digit">4</span>
-        </div>
-      </div>
-
-      <a class="notfound__brand shell__brand" href="/" aria-label="Home">
-        <Logo label="" />
-      </a>
-
-      <p class="notfound__note">This page doesn't exist.</p>
-    </main>
-
-    <script>
-      import { mountNoiseGradient } from "@repo/ui/gradient";
-      import { subscribeScrollProgress } from "@repo/ui/motion/scroll-progress";
-
-      const host = document.querySelector<HTMLElement>("[data-gradient-panel]");
-      if (host) {
-        const field = mountNoiseGradient(host, { ramp: "glacier", angle: 145 });
-        subscribeScrollProgress(({ progress }) => field.update({ progress }));
-      }
-    </script>
-  </body>
-</html>
+<NotFound
+  siteName={SITE_NAME}
+  siteUrl={SITE_URL}
+  title="404 · tone"
+  description="This page doesn't exist."
+  robots="noindex, nofollow"
+  ramp="glacier"
+/>

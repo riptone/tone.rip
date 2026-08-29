@@ -13,13 +13,23 @@ laptop and on a runner — there is no shorter subset that CI will accept:
 bun run ci
 ```
 
-Which is, in order: Biome format, Biome lint, type-check (`astro check`,
-`tsc`, `gofmt` + `go vet`), tests (Vitest everywhere, `go test` for
-`apps/ssh-cv`), build, Worker bundle sizes, Playwright end-to-end, `knip` for
-unused files/exports/dependencies, `madge` for import cycles, `shellcheck` on
-the SSH CV's installer, `govulncheck` on the Go module, and finally a check
-that the CV embedded in the Go binary has not drifted from
-`packages/content`.
+Which is: one Biome pass that formats and lints (`biome check --write`), then
+everything turbo can schedule — type-check (`astro check`, `tsc`, `gofmt` +
+`go vet`), tests (Vitest everywhere, `go test` for `apps/ssh-cv`), build,
+`knip` for unused files/exports/dependencies, `madge` for import cycles,
+Worker bundle sizes, Playwright end-to-end — and finally a check that the CV
+embedded in the Go binary has not drifted from `packages/content`.
+
+Not in order, which is the point: turbo runs what is independent in parallel
+and skips what has not changed. The four repo-wide checks are declared in
+`turbo.json` as root tasks (`//#lint`, `//#knip`, `//#check-cycles`,
+`//#check-bundle-size`) with the inputs each actually reads, so editing a
+stylesheet does not re-run `knip` and editing a `.md` re-runs nothing at all.
+
+`shellcheck` and `govulncheck` are CI-only: both are on the runner image, and
+neither is worth making a prerequisite of a laptop checkout. See
+`.github/workflows/ci.yml`, which splits the gate across three parallel jobs
+by which toolchain each one needs.
 
 Two of those fail in ways worth recognising:
 
@@ -30,6 +40,30 @@ Two of those fail in ways worth recognising:
   Bun.
 - **Playwright** needs its browser once per machine:
   `cd apps/web && bun run playwright install --with-deps chromium`.
+
+---
+
+# Comments in Astro templates
+
+Use `{/* … */}` below the frontmatter fence, never `<!-- … -->`.
+
+Both read the same in source and only one of them stays there. Astro strips a
+JSX-expression comment at build time and emits an HTML comment verbatim, so
+every `<!-- -->` in a template is shipped to every visitor on every request -
+and with cross-document navigation, on every navigation.
+
+This was not theoretical. Thirteen explanatory blocks across `BaseHead.astro`,
+`SiteLayout.astro`, `NotFound.astro`, `Reveal.astro` and one page had been
+going out with the markup: 4,560 bytes on the home page, 2,468 on the
+dashboard. Converting them to `{/* */}` took the home page from 10,000 to
+8,035 bytes gzipped (-19.6%) and the dashboard from 4,136 to 2,922 (-29.4%).
+
+For scale, the whole inlined stylesheet on that page is 4,289 bytes gzipped -
+a cost this repo argued itself into paying deliberately (see BaseHead.astro).
+The comments were half that again, bought nothing, and nobody had counted them.
+
+Above the fence, in the frontmatter, ordinary `//` and `/* */` comments never
+reach the output and need no thought.
 
 ---
 

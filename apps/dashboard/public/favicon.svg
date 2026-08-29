@@ -1,12 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges" role="img" aria-label="tone">
-  <rect class="tf__plate" width="32" height="32" rx="7" fill="#000000"/>
-  <g transform="translate(9.1250,5.0000) scale(0.027500)" fill="#ffffff" class="tf__mark">
-    <rect x="0" y="0" width="100" height="100"/><rect x="100" y="100" width="100" height="100"/><rect x="200" y="100" width="100" height="100"/><rect x="300" y="100" width="100" height="100"/><rect x="0" y="200" width="100" height="100"/><rect x="400" y="200" width="100" height="100"/><rect x="0" y="300" width="100" height="100"/><rect x="400" y="300" width="100" height="100"/><rect x="0" y="400" width="100" height="100"/><rect x="200" y="400" width="100" height="100"/><rect x="400" y="400" width="100" height="100"/><rect x="0" y="500" width="100" height="100"/><rect x="400" y="500" width="100" height="100"/><rect x="0" y="600" width="100" height="100"/><rect x="200" y="600" width="100" height="100"/><rect x="400" y="600" width="100" height="100"/><rect x="0" y="700" width="100" height="100"/><rect x="400" y="700" width="100" height="100"/>
-  </g>
-  <style>
-    @media (prefers-color-scheme: light) {
-      .tf__plate { fill: #ffffff; }
-      .tf__mark { fill: #000000; }
-    }
-  </style>
-</svg>
+../../../packages/ui/public/favicon.svg

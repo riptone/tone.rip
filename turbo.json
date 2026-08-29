@@ -1,25 +1,69 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalDependencies": ["bun.lock", "biome.json", "knip.json"],
   "tasks": {
+    "types": {
+      "inputs": ["wrangler.jsonc"],
+      "outputs": ["worker-configuration.d.ts"]
+    },
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "types"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["^check-types", "types"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "types"]
     },
     "e2e": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "types", "//#check-bundle-size"],
       "cache": false
+    },
+    "@repo/ssh-cv#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["bin/**", "internal/cv/cv.json"]
     },
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "//#lint": {
+      "inputs": [
+        "biome.json",
+        "**/*.{ts,tsx,js,jsx,mjs,cjs,astro,json,jsonc,css}",
+        "!**/node_modules/**",
+        "!**/dist/**",
+        "!**/.astro/**",
+        "!**/worker-configuration.d.ts"
+      ]
+    },
+    "//#knip": {
+      "inputs": [
+        "knip.json",
+        "**/package.json",
+        "**/*.{ts,tsx,astro,mjs}",
+        "!**/node_modules/**",
+        "!**/dist/**"
+      ]
+    },
+    "//#check-cycles": {
+      "inputs": [
+        "apps/**/*.{ts,tsx,astro}",
+        "packages/**/*.{ts,tsx,astro}",
+        "!**/node_modules/**",
+        "!**/dist/**"
+      ]
+    },
+    "//#check-bundle-size": {
+      "dependsOn": ["web#build", "dashboard#build", "api#build"],
+      "inputs": [
+        "scripts/check-bundle-size.ts",
+        "apps/*/wrangler.jsonc",
+        "apps/*/dist/**"
+      ]
     }
   }
 }

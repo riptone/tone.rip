@@ -1,18 +1,5 @@
-import { defineConfig } from "vitest/config";
+import { defineTestConfig } from "@repo/vitest-config";
 
-export default defineConfig({
-  test: {
-    include: ["test/**/*.test.ts"],
-    coverage: {
-      enabled: true,
-      provider: "v8",
-      reporter: ["text-summary"],
-      thresholds: {
-        statements: 55,
-        branches: 75,
-        functions: 40,
-        lines: 50,
-      },
-    },
-  },
+export default defineTestConfig({
+  thresholds: { statements: 55, branches: 75, functions: 40, lines: 50 },
 });

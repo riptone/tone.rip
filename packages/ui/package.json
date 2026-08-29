@@ -4,22 +4,40 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./storage": "./src/storage.ts",
+    "./BaseHead.astro": "./src/BaseHead.astro",
+    "./brand/Logo.astro": "./src/brand/Logo.astro",
+    "./contrast": "./src/contrast.ts",
     "./gradient": "./src/gradient/index.ts",
     "./motion/scroll-progress": "./src/motion/scroll-progress.ts",
     "./site": "./src/site/index.ts",
-    "./*": "./src/*"
+    "./site/ContextMenu.astro": "./src/site/ContextMenu.astro",
+    "./site/Footer.astro": "./src/site/Footer.astro",
+    "./site/NotFound.astro": "./src/site/NotFound.astro",
+    "./site/T.astro": "./src/site/T.astro",
+    "./styles/brand.css": "./src/styles/brand.css",
+    "./styles/context-menu.css": "./src/styles/context-menu.css",
+    "./styles/filter.css": "./src/styles/filter.css",
+    "./styles/gradient.css": "./src/styles/gradient.css",
+    "./styles/not-found.css": "./src/styles/not-found.css",
+    "./styles/reset.css": "./src/styles/reset.css",
+    "./styles/shell.css": "./src/styles/shell.css",
+    "./styles/site-footer.css": "./src/styles/site-footer.css",
+    "./styles/tokens.css": "./src/styles/tokens.css",
+    "./styles/view-transition.css": "./src/styles/view-transition.css"
   },
   "scripts": {
+    "brand": "python3 scripts/generate-brand.py && bun run scripts/rasterize-icons.ts",
     "check-types": "astro check && tsc --noEmit",
     "test": "vitest run"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.4",
+    "@astrojs/check": "catalog:",
+    "@playwright/test": "catalog:",
     "@repo/typescript-config": "*",
+    "@repo/vitest-config": "*",
     "@vitest/coverage-v8": "catalog:",
     "astro": "catalog:",
-    "jsdom": "^30.0.1",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

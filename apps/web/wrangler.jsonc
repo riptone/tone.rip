@@ -31,16 +31,5 @@
       }
     }
   },
-  "upload_source_maps": true,
-  "send_metrics": false,
-  // Astro's Cloudflare adapter session support (unused by this app today,
-  // but the adapter provisions it regardless). Auto-created by `wrangler
-  // deploy` on first deploy; pinned here so future deploys reuse it instead
-  // of relying on re-provisioning.
-  "kv_namespaces": [
-    {
-      "binding": "SESSION",
-      "id": "cace94dc952a471b84efdafd6e2cb024"
-    }
-  ]
+  "send_metrics": false
 }

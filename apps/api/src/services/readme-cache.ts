@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "@repo/content";
+import { fetchWithTimeout } from "@repo/net";
 import { getEdgeCache } from "./edge-cache";
 import { fetchProjects } from "./projects-cache";
 

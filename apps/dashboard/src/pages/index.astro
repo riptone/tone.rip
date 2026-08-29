@@ -2,6 +2,7 @@
 // biome-ignore-all lint/correctness/noUnusedVariables: these are used in the
 // template below the frontmatter fence, which Biome's Astro support doesn't analyze.
 // biome-ignore-all lint/correctness/noUnusedImports: same reason.
+
 import BaseHead from "@repo/ui/BaseHead.astro";
 import Logo from "@repo/ui/brand/Logo.astro";
 import ContextMenu, {
@@ -19,8 +20,10 @@ import "@repo/ui/styles/site-footer.css";
 import "@repo/ui/styles/context-menu.css";
 import "@repo/ui/styles/filter.css";
 import "../styles/dashboard.css";
+import { CONTACT } from "@repo/content";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "../consts";
 import { DEV_APPS } from "../dev-apps";
+import { ACCESS_JWT_HEADER, callApi } from "../lib/api";
 
 /* The launcher, rebuilt on the same frame as tone.rip.
 
@@ -70,11 +73,17 @@ if (DEV_HOSTNAMES.has(Astro.url.hostname)) {
   apps = DEV_APPS;
 } else {
   try {
-    const jwt = Astro.request.headers.get("Cf-Access-Jwt-Assertion");
-    const headers: Record<string, string> = { accept: "application/json" };
-    if (jwt) headers["Cf-Access-Jwt-Assertion"] = jwt;
-    const response = await fetch("https://api.tone.rip/apps", {
-      headers,
+    /* Through the `API` service binding rather than out to
+       https://api.tone.rip and back - this render blocks on the answer, so
+       the round trip was sitting in TTFB. See src/lib/api.ts.
+
+       The deadline is this app's only one on this path: unlike /status,
+       nothing downstream is waiting on a shorter clock, so it just has to be
+       short enough that an unreachable API degrades to an empty board
+       instead of hanging the page. */
+    const response = await callApi("/apps", {
+      jwt: Astro.request.headers.get(ACCESS_JWT_HEADER),
+      timeoutMs: 4000,
     });
     if (response.ok) {
       apps = ((await response.json()) as { apps?: Tile[] }).apps ?? [];
@@ -105,15 +114,12 @@ const allTags = Array.from(
   new Set(apps.flatMap((app) => visibleTags(app.tags))),
 ).sort();
 
-const GITHUB = "https://github.com/riptone";
-const EMAIL = "m@tone.rip";
-
 /* The counterpart to the site's "log in": this app is gated by Cloudflare
    Access, and /cdn-cgi/access/logout is the endpoint that actually drops the
    session - there is no app-level auth to sign out of. */
 const MENU: ContextMenuEntry[] = [
   { label: "copy link", kind: "copy", value: SITE_URL },
-  { label: "copy email", kind: "copy", value: EMAIL, hint: "mail" },
+  { label: "copy email", kind: "copy", value: CONTACT.email, hint: "mail" },
   "separator",
   {
     label: "tone.rip",
@@ -125,7 +131,7 @@ const MENU: ContextMenuEntry[] = [
   {
     label: "source",
     kind: "link",
-    value: GITHUB,
+    value: CONTACT.github,
     hint: "github",
     external: true,
   },
@@ -310,7 +316,7 @@ const MENU: ContextMenuEntry[] = [
           class="dashfoot"
           github="https://tone.rip"
           handle="tone.rip"
-          email={EMAIL}
+          email={CONTACT.email}
           links={[{ label: "status", href: "/api/status" }]}
         />
       </div>

@@ -2,11 +2,13 @@
 // biome-ignore-all lint/correctness/noUnusedImports: used in the template
 // below the frontmatter fence, which Biome's Astro support doesn't analyze.
 // biome-ignore-all lint/correctness/noUnusedVariables: ditto.
+
 import {
   BEST_AT,
   buildPersonSchema,
   buildProfilePageSchema,
   CERTIFICATIONS,
+  CONTACT,
   CV_LABELS,
   EDUCATION,
   EXPERIENCE,
@@ -25,7 +27,7 @@ const profile = buildProfilePageSchema(
   buildPersonSchema({
     name: SITE_NAME,
     url: SITE_URL,
-    sameAs: ["https://github.com/riptone"],
+    sameAs: [CONTACT.github],
   }),
 );
 

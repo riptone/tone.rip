@@ -14,6 +14,22 @@
   "observability": {
     "enabled": true
   },
+  /**
+   * Uploaded to Cloudflare, never served to a browser: `assets.directory` is
+   * ./public here and ../client on the Astro apps, and no .map is emitted into
+   * either, so there is nothing at a public URL to find. They exist to
+   * symbolicate stack traces in the observability panel above.
+   *
+   * Which is the whole reason this one is still true while apps/web's and
+   * apps/dashboard's are gone. Those two hand wrangler an Astro build that
+   * carries no maps, so the flag produced zero of them - a setting that reads
+   * as a decision and does nothing. This Worker is bundled by wrangler from
+   * TypeScript and deploys with --minify, so without a map every trace in the
+   * log is a column offset into one minified line.
+   *
+   * It costs about 1.6MB per deploy, uploaded alongside the script and not
+   * counted against its size limit.
+   */
   "upload_source_maps": true,
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,

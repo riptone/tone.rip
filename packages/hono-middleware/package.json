@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./*": "./src/*.ts"
+    "./astro-security": "./src/astro-security.ts",
+    "./core": "./src/core.ts",
+    "./problem-json": "./src/problem-json.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",
@@ -16,6 +18,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
+    "@repo/vitest-config": "*",
     "@vitest/coverage-v8": "catalog:",
     "astro": "catalog:",
     "typescript": "catalog:",

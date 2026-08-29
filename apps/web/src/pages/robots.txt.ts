@@ -19,7 +19,17 @@ const buildHeaders = (cacheControl: string, robotsTag?: string) => {
 
 export function GET({ url }: APIContext): Response {
   if (url.hostname === DEV_HOSTNAME) {
-    return new Response("User-agent: *\nDisallow: /\n", {
+    // The Content-Signal is here as well as on the production branch below,
+    // and it is not redundant: `Disallow` binds a crawler that asks, while
+    // the signal states what may be done with content obtained any other
+    // way. A staging host is the likelier of the two to leak.
+    const devBody = [
+      "User-agent: *",
+      "Content-Signal: search=no, ai-input=no, ai-train=no",
+      "Disallow: /",
+      "",
+    ].join("\n");
+    return new Response(devBody, {
       status: 200,
       headers: buildHeaders(
         "no-store",

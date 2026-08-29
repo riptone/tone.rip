@@ -149,6 +149,10 @@ describe("mountContact", () => {
     const [cv, contact] = Array.from(
       document.querySelectorAll<HTMLButtonElement>("[data-copy]"),
     );
+    // A missing control would otherwise surface as "cannot read properties of
+    // undefined (reading 'click')" several lines below, which reads as a bug
+    // in mountContact rather than in this fixture.
+    if (!cv || !contact) throw new Error("expected two [data-copy] controls");
     mountContact();
 
     cv.click();

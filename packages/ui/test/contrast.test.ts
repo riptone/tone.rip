@@ -1,44 +1,24 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  AA_NORMAL,
+  contrastRatio,
+  flatten,
+  type Rgb,
+} from "../src/contrast.js";
 
 /* The text tokens have to stay legible, and "legible" is a number.
  *
- * `--text-faint` shipped at rgba(255,255,255,0.4) for a long time, which is
- * 3.66:1 on black - under WCAG AA's 4.5:1, and every use of it is normal-size
- * text. Nothing caught it, because a colour that is slightly too dim looks
- * like a design decision right up until someone runs an audit.
- *
- * So the ratios are computed here from the stylesheet itself. Lowering a token
- * past the threshold now fails the build rather than the next audit. */
+ * The arithmetic is in src/contrast.ts, shared with apps/dashboard's own
+ * status-colour test; the reasoning for measuring at all is there too. What
+ * is here is the part specific to tokens.css: pulling `rgba()` inks out of
+ * the right theme block and compositing them onto that theme's background. */
 
 const tokensCss = readFileSync(
   resolve(process.cwd(), "src/styles/tokens.css"),
   "utf8",
 );
-
-type Rgb = [number, number, number];
-
-function channel(value: number): number {
-  const c = value / 255;
-  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-}
-
-function luminance([r, g, b]: Rgb): number {
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-}
-
-function contrast(a: Rgb, b: Rgb): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-}
-
-/** What an `rgba()` ink actually looks like once composited onto a background. */
-function flatten(ink: Rgb, alpha: number, background: Rgb): Rgb {
-  return ink.map((c, i) =>
-    Math.round(c * alpha + background[i] * (1 - alpha)),
-  ) as Rgb;
-}
 
 /**
  * Read `--name: rgba(r, g, b, a)` out of a block of the stylesheet.
@@ -49,9 +29,21 @@ function flatten(ink: Rgb, alpha: number, background: Rgb): Rgb {
  */
 function readToken(block: string, name: string): { ink: Rgb; alpha: number } {
   const match = block.match(new RegExp(`${name}:\\s*rgba\\(([^)]+)\\)`, "i"));
-  if (!match) throw new Error(`${name} not found, or no longer an rgba()`);
-  const parts = match[1].split(",").map((p) => Number(p.trim()));
-  return { ink: [parts[0], parts[1], parts[2]], alpha: parts[3] };
+  const raw = match?.[1];
+  if (!raw) throw new Error(`${name} not found, or no longer an rgba()`);
+  const [r, g, b, alpha] = raw.split(",").map((p) => Number(p.trim()));
+  // Not pedantry: a three-part rgb() here would have made `alpha` undefined,
+  // `flatten` return NaNs, and every ratio compare false against the
+  // threshold - a green suite that had stopped measuring anything.
+  if (
+    r === undefined ||
+    g === undefined ||
+    b === undefined ||
+    alpha === undefined
+  ) {
+    throw new Error(`${name} is not a four-part rgba(): ${raw}`);
+  }
+  return { ink: [r, g, b], alpha };
 }
 
 function blockFor(selector: string): string {
@@ -61,9 +53,6 @@ function blockFor(selector: string): string {
   const close = tokensCss.indexOf("}", open);
   return tokensCss.slice(open, close);
 }
-
-/** WCAG 2.1 AA, normal-size text. Every use of these tokens is normal-size. */
-const AA_NORMAL = 4.5;
 
 const THEMES: { name: string; block: string; background: Rgb }[] = [
   { name: "dark", block: ":root", background: [0, 0, 0] },
@@ -79,7 +68,7 @@ describe("text tokens meet WCAG AA", () => {
     for (const token of ["--text-muted", "--text-faint"]) {
       it(`${token} is readable in the ${theme.name} theme`, () => {
         const { ink, alpha } = readToken(blockFor(theme.block), token);
-        const ratio = contrast(
+        const ratio = contrastRatio(
           flatten(ink, alpha, theme.background),
           theme.background,
         );

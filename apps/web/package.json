@@ -1,5 +1,6 @@
 {
   "name": "web",
+  "version": "0.0.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -8,13 +9,13 @@
     "build": "astro build",
     "preview": "astro build && wrangler dev",
     "deploy": "wrangler deploy",
-    "cf-typegen": "wrangler types",
     "check-types": "astro check && tsc --noEmit",
     "test": "vitest run",
     "e2e:server": "astro build && wrangler dev --port 8787 --inspector-port 9230",
     "e2e": "playwright test",
     "e2e:webview": "bun test e2e/smoke.webview.test.ts",
-    "e2e:webview:ci": "bun run build && (bun run e2e:server & pid=$!; trap 'kill $pid' EXIT; bun test e2e/smoke.webview.test.ts --timeout 30000; kill $pid)"
+    "e2e:webview:ci": "bun run build && (bun run e2e:server & pid=$!; trap 'kill $pid' EXIT; bun test e2e/smoke.webview.test.ts --timeout 30000; kill $pid)",
+    "types": "wrangler types"
   },
   "dependencies": {
     "@astrojs/cloudflare": "catalog:",
@@ -22,20 +23,22 @@
     "@astrojs/sitemap": "^3.7.3",
     "@repo/content": "*",
     "@repo/hono-middleware": "*",
+    "@repo/net": "*",
     "@repo/ui": "*",
     "@repo/validation": "*",
     "astro": "catalog:"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.4",
+    "@astrojs/check": "catalog:",
     "@playwright/test": "catalog:",
     "@repo/playwright-config": "*",
-    "@repo/webview-config": "*",
     "@repo/typescript-config": "*",
-    "@types/node": "^26.1.1",
+    "@repo/vitest-config": "*",
+    "@repo/webview-config": "*",
+    "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "bun-types": "catalog:",
-    "jsdom": "^30.0.1",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "@repo/content";
+import { fetchWithTimeout } from "@repo/net";
 import type { SelfHostedApp } from "@repo/validation";
 import type { Bindings } from "../env";
 

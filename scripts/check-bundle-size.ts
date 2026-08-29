@@ -20,18 +20,34 @@ import { join } from "node:path";
 interface WorkerApp {
   dir: string;
   budgetKiB: number;
+  /**
+   * Whether this app's `deploy` script passes `--minify`, so the number here
+   * is the one that actually ships.
+   *
+   * Only apps/api does, and the asymmetry is real rather than an oversight:
+   * wrangler bundles that Worker straight from TypeScript, so minifying it
+   * takes 153 KiB gzip to 115. apps/web and apps/dashboard hand wrangler a
+   * build Astro has already minified - measured at 231.68 KiB with the flag
+   * and 231.68 without, to the byte.
+   *
+   * This mattered because the flag was in apps/api's `deploy` script and the
+   * CI workflow ran a hand-copied `wrangler deploy` without it, so the 25%
+   * was written down and never shipped. CI runs the scripts now.
+   */
+  minify?: boolean;
 }
 
 const APPS: WorkerApp[] = [
   { dir: "apps/web", budgetKiB: 2048 },
   { dir: "apps/dashboard", budgetKiB: 2048 },
-  { dir: "apps/api", budgetKiB: 2048 },
+  { dir: "apps/api", budgetKiB: 2048, minify: true },
 ];
 
 const TOTAL_UPLOAD_LINE =
   /Total Upload: [\d.]+ \wiB \/ gzip: ([\d.]+) (Ki|Mi)B/;
 
-async function measureGzipKiB(appDir: string): Promise<number> {
+async function measureGzipKiB(app: WorkerApp): Promise<number> {
+  const appDir = app.dir;
   const outdir = join(
     tmpdir(),
     `bundle-size-check-${appDir.replaceAll("/", "-")}`,
@@ -44,6 +60,7 @@ async function measureGzipKiB(appDir: string): Promise<number> {
         "--dry-run",
         "--outdir",
         outdir,
+        ...(app.minify ? ["--minify"] : []),
       ],
       { cwd: appDir, stdout: "pipe", stderr: "pipe" },
     );
@@ -73,7 +90,7 @@ async function measureGzipKiB(appDir: string): Promise<number> {
 
 let failed = false;
 for (const app of APPS) {
-  const gzipKiB = await measureGzipKiB(app.dir);
+  const gzipKiB = await measureGzipKiB(app);
   const ok = gzipKiB <= app.budgetKiB;
   if (!ok) failed = true;
   console.log(

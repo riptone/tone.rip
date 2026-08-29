@@ -32,9 +32,9 @@
 
 ## What's in here
 
-Four applications and six shared packages, in one repository. Three of the
-applications are Cloudflare Workers. One is a Go binary, because the protocol
-it speaks [leaves no choice](#the-ssh-cv).
+Four applications, five shared packages and four tooling configs, in one
+repository. Three of the applications are Cloudflare Workers. One is a Go
+binary, because the protocol it speaks [leaves no choice](#the-ssh-cv).
 
 ```
 apps/
@@ -44,12 +44,15 @@ apps/
   ssh-cv      ssh cv.tone.rip        Go - Charm Wish + Bubble Tea
 
 packages/
-  ui                 design tokens, the gradient field, the wordmark
-  content            CV, site info, app registry - one source of truth per fact
+  ui                 design tokens, the frame, the gradient field, the wordmark,
+                     and the static assets they reference (public/)
+  content            CV and site info - one source of truth per fact
   validation         Zod schemas and an RFC 7807 failure hook
+  net                fetch with a deadline, for every reachability check
   hono-middleware    security headers, CSP nonces, api-catalog, Access JWTs
-  config/            shared tooling configs (typescript, playwright, webview pilot)
+  config/            shared tooling configs
     typescript-config  shared tsconfig presets
+    vitest-config      shared coverage/include preset for every suite
     playwright-config  shared end-to-end test setup
     webview-config     Bun WebView pilot mirroring Playwright — until cutover
 ```

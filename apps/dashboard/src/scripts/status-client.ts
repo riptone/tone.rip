@@ -10,7 +10,7 @@
  * accepted limitation - there's no dev proxy for this yet.
  */
 
-import { fetchWithTimeout } from "@repo/content";
+import { fetchWithTimeout } from "@repo/net";
 import type { ServerAppStatus } from "./status-resolution";
 
 interface ServerStatus {

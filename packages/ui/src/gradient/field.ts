@@ -275,12 +275,12 @@ export interface FieldState {
   reducedMotion: boolean;
 }
 
-export interface StateMessage {
+interface StateMessage {
   type: "state";
   state: FieldState;
 }
 
-export interface FrameMessage {
+interface FrameMessage {
   type: "frame";
   bitmap: ImageBitmap;
   /** Echoed back so the host can drop a frame that raced a resize. */
@@ -292,10 +292,13 @@ export interface FrameMessage {
   profile: Int16Array;
 }
 
-export interface ErrorMessage {
+interface ErrorMessage {
   type: "error";
   message: string;
 }
 
+/* The two the rest of the module graph names. The three shapes above are
+   only ever reached through these, so they stay private to this file - see
+   noise-gradient.ts and field-worker.ts, which import nothing else. */
 export type HostToWorker = StateMessage;
 export type WorkerToHost = FrameMessage | ErrorMessage;

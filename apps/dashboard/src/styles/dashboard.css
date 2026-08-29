@@ -257,66 +257,59 @@ select {
   background: transparent;
 }
 
-/* Light-theme values: dark enough to read on white. The dark-theme block
-   below lightens them for the same reason in reverse. No shared semantic
-   status tokens exist yet - when a second surface needs these, they should
-   move to tokens.css rather than be copied. */
+/* One custom property per status, resolved by theme, and the rules that paint
+   from it. It used to be twenty-four declarations - a colour written three
+   times per status per theme, into `color`, `background` and `border-color` -
+   which is three chances to change two of them.
+
+   Dark is the base and light is the opt-in, matching tokens.css. That was the
+   other way round here, and the inversion mattered beyond tidiness: every page
+   in both apps renders dark, so a status added without its dark override, or a
+   document that somehow lost `data-theme`, fell back to a colour picked for
+   white paper and rendered it on black. Now the fallback is the theme that
+   actually ships.
+
+   These are still hex rather than tokens because nothing else in the repo has
+   a semantic status colour - see the note in tokens.css about moving them when
+   a second surface needs them. What they do have is a guard:
+   test/status-contrast.test.ts reads them straight out of this file and fails
+   the build if any drops under WCAG AA on its own theme's background. */
 .status[data-status="up"] {
-  color: #0b7a2a;
-}
-.status[data-status="up"] .dot {
-  background: #0b7a2a;
-  border-color: #0b7a2a;
+  --status: #86efac;
 }
 .status[data-status="down"] {
-  color: #b42318;
-}
-.status[data-status="down"] .dot {
-  background: #b42318;
-  border-color: #b42318;
+  --status: #fca5a5;
 }
 .status[data-status="checking"] {
-  color: #946200;
-}
-.status[data-status="checking"] .dot {
-  background: #946200;
-  border-color: #946200;
+  --status: #fbbf24;
 }
 .status[data-status="vpn"] {
-  color: #1d4ed8;
-}
-.status[data-status="vpn"] .dot {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  --status: #93c5fd;
 }
 
-html[data-theme="dark"] .status[data-status="up"] {
-  color: #86efac;
+/* Dark enough to read on #f7f7f5, where the dark set would wash out. */
+html[data-theme="light"] .status[data-status="up"] {
+  --status: #0b7a2a;
 }
-html[data-theme="dark"] .status[data-status="up"] .dot {
-  background: #86efac;
-  border-color: #86efac;
+html[data-theme="light"] .status[data-status="down"] {
+  --status: #b42318;
 }
-html[data-theme="dark"] .status[data-status="down"] {
-  color: #fca5a5;
+html[data-theme="light"] .status[data-status="checking"] {
+  --status: #946200;
 }
-html[data-theme="dark"] .status[data-status="down"] .dot {
-  background: #fca5a5;
-  border-color: #fca5a5;
+html[data-theme="light"] .status[data-status="vpn"] {
+  --status: #1d4ed8;
 }
-html[data-theme="dark"] .status[data-status="checking"] {
-  color: #fbbf24;
+
+/* `[data-status]` rather than `.status`, so a tile whose status has not
+   resolved yet keeps the neutral dot from the block above instead of
+   inheriting a half-set colour. */
+.status[data-status] {
+  color: var(--status, inherit);
 }
-html[data-theme="dark"] .status[data-status="checking"] .dot {
-  background: #fbbf24;
-  border-color: #fbbf24;
-}
-html[data-theme="dark"] .status[data-status="vpn"] {
-  color: #93c5fd;
-}
-html[data-theme="dark"] .status[data-status="vpn"] .dot {
-  background: #93c5fd;
-  border-color: #93c5fd;
+.status[data-status] .dot {
+  background: var(--status, transparent);
+  border-color: var(--status, var(--border-strong));
 }
 
 /* ---- footer ---- */

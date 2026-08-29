@@ -1,8 +1,7 @@
 /**
  * Detects whether the visitor's browser is on the Tailscale network, by
  * looking for a Tailscale-range IP among the local ICE candidates gathered
- * for a throwaway WebRTC connection. Extracted from main-menu's inline
- * index.astro script.
+ * for a throwaway WebRTC connection.
  */
 
 /** Pure IP-range check: Tailscale's CGNAT range (100.64.0.0/10) or its IPv6 ULA prefix (fd7a:115c:a1e0::/48). */
