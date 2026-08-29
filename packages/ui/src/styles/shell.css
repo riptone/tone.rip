@@ -100,6 +100,12 @@
 .shell__field {
   flex: 1;
   border-radius: 14px;
+  /* Isolate the gradient's paint so canvas sizing / worker frames never
+     invalidate layout of the reading column. Fixed wrapper is out of flow
+     already, but contain keeps the field itself from being counted. */
+  contain: layout paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 720px 800px;
 }
 
 /* Small and high: a logo's job on a page like this is to identify, not to

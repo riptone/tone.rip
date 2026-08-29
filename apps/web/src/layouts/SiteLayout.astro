@@ -76,6 +76,8 @@ const {
   schema,
 } = Astro.props as Props;
 
+const cspNonce = Astro.locals.cspNonce as string | undefined;
+
 const css = [
   tokensCss,
   resetCss,
@@ -215,6 +217,18 @@ const MENU: ContextMenuEntry[] = [
     </main>
 
     <ContextMenu entries={MENU} />
+
+    <!--
+      Language before first paint. The document ships in English; the stored
+      preference is in localStorage, so without this the page paints English
+      then swaps to Portuguese — different string lengths, layout shift, 83%
+      CLS on /. This runs as a blocking inline script at the end of body,
+      after all [data-en] nodes are parsed but before the browser commits its
+      first frame (and before rel=expect releases). The module script below
+      stays for toggles and idempotency, but the first paint is already right.
+    -->
+    <script is:inline nonce={cspNonce}
+      >try{var l=localStorage.getItem("lang");if(l!=="pt"&&l!=="en")l="en";document.documentElement.lang=l==="pt"?"pt-PT":"en";var ns=document.querySelectorAll("[data-en]");for(var i=0;i<ns.length;i++){var e=ns[i],v=e.dataset[l];if(v!==void 0)e.textContent=v}var bs=document.querySelectorAll("[data-lang-set]");for(var j=0;j<bs.length;j++)bs[j].setAttribute("aria-pressed",String(bs[j].dataset.langSet===l))}catch(e){}</script>
 
     <script>
       import {

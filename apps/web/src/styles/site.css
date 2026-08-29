@@ -236,10 +236,20 @@ body {
    padding. What stays here is only where they sit. */
 
 .workfilter__count {
+  display: inline-block;
+  min-width: 6ch;
+  min-height: 1lh;
+  text-align: right;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--text-faint);
   white-space: nowrap;
+  /* Reserve the line even before mountFilter() writes “N / M”, so the
+     empty span doesn't collapse then expand and push the list. The server
+     now renders the count, but the min keeps JS updates (e.g. “1 / 12”
+     vs “12 / 12”) from reflowing. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 1lh;
 }
 
 /* After the base rules, not before: these override them at equal

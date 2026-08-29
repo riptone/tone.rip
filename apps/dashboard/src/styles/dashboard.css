@@ -132,10 +132,16 @@ select {
    the controls sit and how much room each one gets. */
 
 .dash__count {
+  display: inline-block;
+  min-width: 6ch;
+  min-height: 1lh;
+  text-align: right;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--text-faint);
   white-space: nowrap;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 1lh;
 }
 
 /* ---- app rows ---- */

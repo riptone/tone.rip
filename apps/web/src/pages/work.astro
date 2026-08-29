@@ -95,7 +95,7 @@ const languages = [...new Set(repos.map((r) => r.language))].sort();
           </select>
         </label>
 
-        <span class="workfilter__count" aria-live="polite" data-filter-count />
+        <span class="workfilter__count" aria-live="polite" data-filter-count>{repos.length} / {repos.length}</span>
       </section>
     )
   }
