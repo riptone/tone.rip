@@ -10,7 +10,7 @@
     "build": {
       "dependsOn": ["^build", "types"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", ".wrangler/deploy/config.json"]
     },
     "check-types": {
       "dependsOn": ["^check-types", "types"]

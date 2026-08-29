@@ -116,6 +116,32 @@ export async function waitForText(
   );
 }
 
+/**
+ * Scroll an element into view, then click it.
+ *
+ * Playwright's `.click()` scrolls first. Bun.WebView's does not: its
+ * actionability check requires the element to already *be* in the viewport,
+ * and an element that never gets there is waited out for the full 30s
+ * default. A footer button below the fold therefore fails as a bare
+ * "timed out after 30000ms" with no selector and no clue - which is exactly
+ * how the language switch failed in CI.
+ *
+ * `block: "nearest"` mirrors Playwright's minimal scroll: a no-op when the
+ * element is already visible, so this stays a safe default for every click.
+ *
+ * The shorter timeout is the other half of it. A real regression should say
+ * which selector never became clickable, within seconds, rather than eating
+ * the whole test budget on the way to saying nothing.
+ */
+export async function clickInView(
+  view: Bun.WebView,
+  selector: string,
+  timeoutMs = 5000,
+): Promise<void> {
+  await view.scrollTo(selector, { block: "nearest", timeout: timeoutMs });
+  await view.click(selector, { timeout: timeoutMs });
+}
+
 /** Count visible `[data-filter-item]` (element not hidden, has bounding box). */
 export async function countVisibleItems(view: Bun.WebView): Promise<number> {
   return (await view.evaluate(
@@ -128,7 +154,7 @@ export async function fillSearch(
   view: Bun.WebView,
   text: string,
 ): Promise<void> {
-  await view.click("[data-filter-search]");
+  await clickInView(view, "[data-filter-search]");
   // Clear existing via evaluate (select-all + delete is flaky across backends)
   await view.evaluate(
     `(() => { const el = document.querySelector("[data-filter-search]"); if (el) { el.focus(); el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); } })()`,
