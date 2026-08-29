@@ -46,6 +46,7 @@ statusRoute.get("/", async (c) => {
   const { apps: registry } = await fetchAccessApps({
     accountId: c.env.CF_ACCOUNT_ID,
     token: c.env.CF_ACCESS_TOKEN,
+    probePaths: c.env.PROBE_PATHS,
   });
 
   const [apps, tailnetDevice] = await Promise.all([

@@ -3,6 +3,7 @@ import {
   latestUpdateTimestamp,
   simplifyRepos,
 } from "@repo/content";
+import { getEdgeCache } from "./edge-cache";
 
 const GITHUB_API_URL =
   "https://api.github.com/users/riptone/repos?per_page=100&sort=updated";
@@ -66,10 +67,6 @@ function toCacheEntry(snapshot: ProjectsSnapshot): Response {
   };
   if (snapshot.etag) headers.ETag = snapshot.etag;
   return new Response(snapshot.body, { status: 200, headers });
-}
-
-function getEdgeCache(): Cache | undefined {
-  return (globalThis as { caches?: { default: Cache } }).caches?.default;
 }
 
 interface FetchProjectsOptions {

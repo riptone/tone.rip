@@ -1,4 +1,4 @@
-import { fetchWithTimeout, resolveProbePath } from "@repo/content";
+import { fetchWithTimeout } from "@repo/content";
 import type { SelfHostedApp } from "@repo/validation";
 import type { Bindings } from "../env";
 
@@ -26,7 +26,10 @@ type HealthStatus = "up" | "down" | "unknown";
 const PROBE_TIMEOUT_MS = 2000;
 const TAILSCALE_TIMEOUT_MS = 1500;
 
-export async function probeAppHealth(href: string): Promise<HealthStatus> {
+export async function probeAppHealth(
+  href: string,
+  probePath = "/",
+): Promise<HealthStatus> {
   let url: URL;
   try {
     url = new URL(href);
@@ -36,7 +39,7 @@ export async function probeAppHealth(href: string): Promise<HealthStatus> {
 
   try {
     const response = await fetchWithTimeout(
-      new URL(resolveProbePath(url), url),
+      new URL(probePath, url),
       PROBE_TIMEOUT_MS,
       { cache: "no-store", redirect: "manual" },
     );
@@ -81,7 +84,7 @@ export async function probeAllApps(
       href: app.href,
       status: isTailnetOnly(app)
         ? ("unknown" as HealthStatus)
-        : await probeAppHealth(app.href),
+        : await probeAppHealth(app.href, app.probePath),
     })),
   );
 }

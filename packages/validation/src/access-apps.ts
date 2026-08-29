@@ -83,6 +83,15 @@ export interface SelfHostedApp {
   name: string;
   href: string;
   tags: string[];
+  /**
+   * Path to request when checking whether this app is reachable.
+   *
+   * Per app rather than derived from its hostname, because the hostnames are
+   * not this repository's to know: it is public, and the set of services
+   * somebody self-hosts is a map of their attack surface. The exceptions live
+   * in a Worker secret and are applied in apps/api - see PROBE_PATHS there.
+   */
+  probePath: string;
   iconUrl: string | null;
 }
 
@@ -118,8 +127,8 @@ export function toSelfHostedApps(
     const tags = application.tags ?? [];
     if (!hasLauncherTag(tags)) continue;
 
-    // A domain arrives bare ("notes.tone.rip") or with a path
-    // ("tone.rip/admin"), never with a scheme.
+    // A domain arrives bare ("app.example.com") or with a path
+    // ("example.com/admin"), never with a scheme.
     let href: string;
     try {
       href = new URL(
@@ -133,6 +142,9 @@ export function toSelfHostedApps(
     apps.push({
       name: application.name,
       href,
+      // The default. apps/api overrides it for the hosts named in its
+      // PROBE_PATHS secret; this module deliberately knows none of them.
+      probePath: "/",
       // The launcher tag is kept, not stripped.
       //
       // It is tempting to drop it here - it is on every entry by definition,

@@ -4,6 +4,7 @@ import {
   type SelfHostedApp,
   toSelfHostedApps,
 } from "@repo/validation";
+import { getEdgeCache } from "./edge-cache";
 
 /* The dashboard's tile list, read from Cloudflare Access.
  *
@@ -48,10 +49,6 @@ export interface AccessAppsResult {
    something rather than with an empty launcher. */
 let memoryApps: SelfHostedApp[] | null = null;
 
-function getEdgeCache(): Cache | undefined {
-  return (globalThis as { caches?: { default: Cache } }).caches?.default;
-}
-
 function isFresh(response: Response, nowMs: number): boolean {
   const cachedAt = Number(response.headers.get(CACHED_AT_HEADER));
   return (
@@ -64,6 +61,62 @@ function isFresh(response: Response, nowMs: number): boolean {
 export interface AccessAppsOptions {
   accountId?: string;
   token?: string;
+  /**
+   * Hosts that must be probed somewhere other than "/", as
+   * `host=path` pairs separated by commas:
+   *
+   *     secrets.example.com=/favicon.ico,other.example.com=/health
+   *
+   * A secret rather than a constant, because the hostnames are the point. A
+   * public repository listing the services somebody self-hosts hands over a
+   * map of their attack surface, and the fact that one of them answers 200 at
+   * "/" while signed out is exactly the kind of detail worth not publishing.
+   *
+   * Absent means every app is probed at "/", which is correct for most and
+   * merely imprecise for the rest.
+   */
+  probePaths?: string;
+}
+
+/**
+ * Parse the PROBE_PATHS secret into a host -> path map.
+ *
+ * Malformed pairs are skipped rather than thrown on: this runs on the render
+ * path of the launcher, and one typo in a secret should cost one app a
+ * accurate probe, not the whole board.
+ */
+function parseProbePaths(raw: string | undefined): Map<string, string> {
+  const paths = new Map<string, string>();
+  if (!raw) return paths;
+
+  for (const entry of raw.split(",")) {
+    const [host, path] = entry.split("=");
+    const cleanHost = host?.trim().toLowerCase();
+    const cleanPath = path?.trim();
+    if (!cleanHost || !cleanPath?.startsWith("/")) continue;
+    paths.set(cleanHost, cleanPath);
+  }
+  return paths;
+}
+
+/** Apply the configured overrides to a freshly mapped list. */
+export function withProbePaths(
+  apps: SelfHostedApp[],
+  raw: string | undefined,
+): SelfHostedApp[] {
+  const paths = parseProbePaths(raw);
+  if (paths.size === 0) return apps;
+
+  return apps.map((app) => {
+    let hostname: string;
+    try {
+      hostname = new URL(app.href).hostname.toLowerCase();
+    } catch {
+      return app;
+    }
+    const override = paths.get(hostname);
+    return override ? { ...app, probePath: override } : app;
+  });
 }
 
 /**
@@ -81,7 +134,7 @@ export interface AccessAppsOptions {
 export async function fetchAccessApps(
   options: AccessAppsOptions,
 ): Promise<AccessAppsResult> {
-  const { accountId, token } = options;
+  const { accountId, token, probePaths } = options;
 
   const cache = getEdgeCache();
   const cacheKey = new Request(CACHE_KEY_URL);
@@ -137,7 +190,10 @@ export async function fetchAccessApps(
       );
     }
 
-    const apps = toSelfHostedApps(parsed.data.result ?? []);
+    const apps = withProbePaths(
+      toSelfHostedApps(parsed.data.result ?? []),
+      probePaths,
+    );
 
     // An empty result from a *successful* call is not cached: an account
     // genuinely has applications, so zero of them almost certainly means a

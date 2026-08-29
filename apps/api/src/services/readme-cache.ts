@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "@repo/content";
+import { getEdgeCache } from "./edge-cache";
 import { fetchProjects } from "./projects-cache";
 
 const GITHUB_USER = "riptone";
@@ -36,10 +37,6 @@ export function isValidRepoName(name: string): boolean {
 interface FetchReadmeOptions {
   githubToken?: string;
   onUpstreamError?: (details: { error: string; hasStale: boolean }) => void;
-}
-
-function getEdgeCache(): Cache | undefined {
-  return (globalThis as { caches?: { default: Cache } }).caches?.default;
 }
 
 function readCachedAtMs(res: Response): number {

@@ -57,7 +57,7 @@ test("the filter narrows the visible tiles", async ({ page, baseURL }) => {
   const totalCount = await items.count();
   expect(totalCount).toBeGreaterThan(1);
 
-  await page.locator("[data-filter-search]").fill("Immich");
+  await page.locator("[data-filter-search]").fill("Gallery");
   await expect(visibleItems).toHaveCount(1);
 
   await page.locator("[data-filter-search]").fill("zzz-no-such-app");

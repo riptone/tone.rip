@@ -42,15 +42,30 @@ describe("probeAppHealth", () => {
     expect(await probeAppHealth("https://example.com")).toBe("down");
   });
 
-  it("probes Vaultwarden's favicon instead of / (it 200s behind an auth wall)", async () => {
+  // Some services answer 200 at "/" even when signed out, so the root cannot
+  // tell "up" from "up but useless" and a different path has to be probed.
+  // Which hosts need that is configuration, not code - it lives in apps/api's
+  // PROBE_PATHS secret, because this repository is public and the hostnames
+  // are the sensitive half.
+  it("probes the path it is given rather than always the root", async () => {
     const fetchMock = vi.fn(
       async (_input: string | URL | Request) =>
         new Response(null, { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    await probeAppHealth("https://pass.tone.rip");
+    await probeAppHealth("https://app.example.com", "/favicon.ico");
     const requestedUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
     expect(requestedUrl.pathname).toBe("/favicon.ico");
+  });
+
+  it("probes the root by default", async () => {
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request) =>
+        new Response(null, { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await probeAppHealth("https://app.example.com");
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe("/");
   });
 });
 
@@ -62,11 +77,16 @@ describe("probeAllApps", () => {
     globalThis.fetch = originalFetch;
   });
 
-  const app = (name: string, tags: SelfHostedApp["tags"]): SelfHostedApp => ({
+  const app = (
+    name: string,
+    tags: SelfHostedApp["tags"],
+    probePath = "/",
+  ): SelfHostedApp => ({
     name,
     href: `https://${name}.example.com`,
     tags,
-    iconUrl: "",
+    probePath,
+    iconUrl: null,
   });
 
   it("reports 'unknown' for tailnet-only apps without probing them at all", async () => {
@@ -75,7 +95,7 @@ describe("probeAllApps", () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 403 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const [result] = await probeAllApps([app("pass", ["Self-Hosted"])]);
+    const [result] = await probeAllApps([app("secrets", ["Self-Hosted"])]);
     expect(result?.status).toBe("unknown");
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -84,7 +104,7 @@ describe("probeAllApps", () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 302 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const [result] = await probeAllApps([app("tailscale", ["Network"])]);
+    const [result] = await probeAllApps([app("public-thing", ["Network"])]);
     expect(result?.status).toBe("up");
     expect(fetchMock).toHaveBeenCalledOnce();
   });

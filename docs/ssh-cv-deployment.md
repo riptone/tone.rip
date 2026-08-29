@@ -280,31 +280,38 @@ that.
 ### Can the rest of the self-hosted estate live here too?
 
 Short answer: yes, and it is the reason to take the A1 rather than the micro.
-The seven services in `packages/content`'s registry - Tailscale, Nginx,
-Portainer, Vaultwarden, Joplin, Immich, OpenCloud - fit inside 2 OCPU / 12 GB
-without much thought. `ssh-cv` alongside them is noise.
+Half a dozen typical self-hosted services - a reverse proxy, a container
+manager, a password vault, a notes server, a photo library and a file share -
+fit inside 2 OCPU / 12 GB without much thought. `ssh-cv` alongside them is
+noise.
+
+(Which services are actually running is not listed here, or anywhere in this
+repository. It comes from Cloudflare Access at runtime - see apps/api's
+`/apps` - because a public repo enumerating somebody's self-hosted estate is
+a map of their attack surface, given away for free and impossible to take
+back.)
 
 Three real constraints, in the order they will actually bite:
 
 **1. Storage, not CPU.** Always Free gives you 200 GB of block volume total,
-across every instance. Immich and OpenCloud are the whole question here: a
-photo library and a file share are the two things on that list that grow
-without asking. Everything else - Vaultwarden, Joplin, config for the rest -
-is single-digit GB. Plan the 200 GB as "about 150 for media, 50 for
+across every instance. A photo library and a file share are the whole question
+here: they are the two kinds of service that grow without asking. Everything
+else - a vault, a notes server, config for the rest - is single-digit GB. Plan the 200 GB as "about 150 for media, 50 for
 everything else", and treat object storage or a different box as the answer
 when the photos outgrow it, because they will.
 
-**2. Immich wants more than its share.** Transcoding and the ML jobs (face
-and object detection) are the only genuinely heavy things on the list.
-On 2 Ampere cores they work, but the initial library import will peg the box
-for hours and machine learning is best left to run overnight. Its containers
-are built for `arm64`, so the A1 is not a problem in itself.
+**2. A photo library wants more than its share.** Transcoding and the ML jobs
+(face and object detection) are the only genuinely heavy things of this kind.
+On 2 Ampere cores they work, but the initial import will peg the box for hours
+and the machine learning is best left to run overnight. Check the containers
+are built for `arm64`; the mainstream ones are, so the A1 is not a problem in
+itself.
 
 **3. One instance or two.** The 1,500 OCPU-hours are a monthly pool, so
 2 OCPU running 24/7 is exactly the budget: you can split it as one 2-core VM
 or two 1-core VMs, not both. Prefer **one 2-core VM**. Two 1 GB halves would
-put Immich on a core it cannot use and leave nothing spare, and the split
-buys nothing - an outage takes the host either way.
+put the heaviest service on a core it cannot use and leave nothing spare, and
+the split buys nothing - an outage takes the host either way.
 
 Egress is not a constraint: Always Free includes 10 TB/month outbound, which
 is more than a personal photo library will move in a year.

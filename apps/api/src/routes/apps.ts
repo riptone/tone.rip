@@ -20,6 +20,7 @@ appsRoute.get("/", async (c) => {
   const { apps, state } = await fetchAccessApps({
     accountId: c.env.CF_ACCOUNT_ID,
     token: c.env.CF_ACCESS_TOKEN,
+    probePaths: c.env.PROBE_PATHS,
   });
 
   if (state === "unconfigured") {

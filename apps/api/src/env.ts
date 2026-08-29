@@ -17,6 +17,12 @@ export interface Bindings extends CloudflareBindings {
    */
   CF_ACCESS_TOKEN?: string;
   CF_ACCOUNT_ID?: string;
+  /**
+   * Hosts needing a probe path other than "/", as `host=path` pairs separated
+   * by commas. A secret, not a constant: this repository is public and the
+   * hostnames are the sensitive part. See services/access-apps.ts.
+   */
+  PROBE_PATHS?: string;
 }
 
 export interface AppEnv {

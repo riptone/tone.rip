@@ -1,6 +1,7 @@
 import { SELF } from "cloudflare:test";
-import { toSelfHostedApps } from "@repo/validation";
+import { type SelfHostedApp, toSelfHostedApps } from "@repo/validation";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { withProbePaths } from "../src/services/access-apps";
 
 /* The mapping is pure, so it is tested directly rather than through a fetch.
    Every case here is a shape Cloudflare genuinely returns. */
@@ -10,19 +11,20 @@ describe("toSelfHostedApps", () => {
       toSelfHostedApps([
         {
           id: "1",
-          name: "Vaultwarden",
-          domain: "pass.tone.rip",
+          name: "Secrets",
+          domain: "secrets.example.com",
           type: "self_hosted",
-          logo_url: "https://cdn.example/vaultwarden.webp",
+          logo_url: "https://cdn.example/icon.webp",
           tags: ["Security", "Self-Hosted"],
         },
       ]),
     ).toEqual([
       {
-        name: "Vaultwarden",
-        href: "https://pass.tone.rip/",
+        name: "Secrets",
+        href: "https://secrets.example.com/",
         tags: ["Security", "Self-Hosted"],
-        iconUrl: "https://cdn.example/vaultwarden.webp",
+        probePath: "/",
+        iconUrl: "https://cdn.example/icon.webp",
       },
     ]);
   });
@@ -33,7 +35,7 @@ describe("toSelfHostedApps", () => {
     expect(
       toSelfHostedApps([
         { id: "1", name: "No domain", type: "self_hosted" },
-        { id: "2", domain: "nameless.tone.rip", type: "self_hosted" },
+        { id: "2", domain: "nameless.example.com", type: "self_hosted" },
       ]),
     ).toEqual([]);
   });
@@ -42,11 +44,11 @@ describe("toSelfHostedApps", () => {
   // account, not to a launcher.
   it("drops application types a launcher cannot open", () => {
     const apps = toSelfHostedApps([
-      { id: "1", name: "Box", domain: "ssh.tone.rip", type: "ssh" },
+      { id: "1", name: "Box", domain: "ssh.example.com", type: "ssh" },
       {
         id: "2",
         name: "Notes",
-        domain: "notes.tone.rip",
+        domain: "notes.example.com",
         type: "self_hosted",
         tags: ["Self-Hosted"],
       },
@@ -63,7 +65,7 @@ describe("toSelfHostedApps", () => {
         {
           id: "1",
           name: "Plain",
-          domain: "plain.tone.rip",
+          domain: "plain.example.com",
           type: "self_hosted",
           tags: ["Self-Hosted"],
         },
@@ -71,8 +73,9 @@ describe("toSelfHostedApps", () => {
     ).toEqual([
       {
         name: "Plain",
-        href: "https://plain.tone.rip/",
+        href: "https://plain.example.com/",
         tags: ["Self-Hosted"],
+        probePath: "/",
         iconUrl: null,
       },
     ]);
@@ -85,7 +88,7 @@ describe("toSelfHostedApps", () => {
       {
         id: "1",
         name: "Insecure",
-        domain: "x.tone.rip",
+        domain: "x.example.com",
         type: "self_hosted",
         tags: ["Self-Hosted"],
         logo_url: "http://cdn.example/x.png",
@@ -110,12 +113,12 @@ describe("toSelfHostedApps", () => {
       {
         id: "1",
         name: "Scheme",
-        domain: "https://scheme.tone.rip",
+        domain: "https://scheme.example.com",
         type: "self_hosted",
         tags: ["Self-Hosted"],
       },
     ]);
-    expect(app?.href).toBe("https://scheme.tone.rip/");
+    expect(app?.href).toBe("https://scheme.example.com/");
   });
 
   // Inclusion is opt-in: an Access account holds more than a launcher's worth
@@ -126,14 +129,14 @@ describe("toSelfHostedApps", () => {
         {
           id: "1",
           name: "Internal",
-          domain: "internal.tone.rip",
+          domain: "internal.example.com",
           type: "self_hosted",
           tags: ["Ops"],
         },
         {
           id: "2",
           name: "Untagged",
-          domain: "untagged.tone.rip",
+          domain: "untagged.example.com",
           type: "self_hosted",
         },
       ]),
@@ -148,14 +151,14 @@ describe("toSelfHostedApps", () => {
       {
         id: "1",
         name: "Shouty",
-        domain: "a.tone.rip",
+        domain: "a.example.com",
         type: "self_hosted",
         tags: ["SELF-HOSTED"],
       },
       {
         id: "2",
         name: "Padded",
-        domain: "b.tone.rip",
+        domain: "b.example.com",
         type: "self_hosted",
         tags: ["  self-hosted  "],
       },
@@ -171,8 +174,8 @@ describe("toSelfHostedApps", () => {
     const [app] = toSelfHostedApps([
       {
         id: "1",
-        name: "Immich",
-        domain: "photos.tone.rip",
+        name: "Gallery",
+        domain: "gallery.example.com",
         type: "self_hosted",
         tags: ["Self-Hosted", "Media"],
       },
@@ -188,14 +191,14 @@ describe("toSelfHostedApps", () => {
       {
         id: "1",
         name: "Zulip",
-        domain: "z.tone.rip",
+        domain: "z.example.com",
         type: "self_hosted",
         tags: ["Self-Hosted"],
       },
       {
         id: "2",
         name: "Actual",
-        domain: "a.tone.rip",
+        domain: "a.example.com",
         type: "self_hosted",
         tags: ["Self-Hosted"],
       },
@@ -210,7 +213,7 @@ describe("GET /apps", () => {
   // No token is the expected state of a fork and of `wrangler dev`, so it has
   // to be a 200 with an empty list and a named state - not an error.
   it("answers 200 and says so when no token is configured", async () => {
-    const res = await SELF.fetch("https://api.tone.rip/apps");
+    const res = await SELF.fetch("https://api.example.com/apps");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { apps: unknown[]; state: string };
     expect(Array.isArray(body.apps)).toBe(true);
@@ -225,8 +228,63 @@ describe("GET /apps", () => {
 
   it("is listed in the API catalog so it is discoverable", async () => {
     const res = await SELF.fetch(
-      "https://api.tone.rip/.well-known/api-catalog",
+      "https://api.example.com/.well-known/api-catalog",
     );
     expect(await res.text()).toContain("/apps");
+  });
+});
+
+/* PROBE_PATHS is a secret typed by hand, and a typo in it should cost one app
+   an accurate probe rather than the whole board - so the parsing is total. */
+describe("withProbePaths", () => {
+  const app = (name: string, host: string): SelfHostedApp => ({
+    name,
+    href: `https://${host}/`,
+    tags: ["Self-Hosted"],
+    probePath: "/",
+    iconUrl: null,
+  });
+
+  it("overrides only the hosts it names", () => {
+    const [a, b] = withProbePaths(
+      [app("A", "a.example.com"), app("B", "b.example.com")],
+      "a.example.com=/favicon.ico",
+    );
+    expect(a?.probePath).toBe("/favicon.ico");
+    expect(b?.probePath).toBe("/");
+  });
+
+  it("takes several pairs", () => {
+    const [a, b] = withProbePaths(
+      [app("A", "a.example.com"), app("B", "b.example.com")],
+      "a.example.com=/favicon.ico, b.example.com=/health",
+    );
+    expect(a?.probePath).toBe("/favicon.ico");
+    expect(b?.probePath).toBe("/health");
+  });
+
+  // The host is compared lowercased because it is typed into a secret, where
+  // a capital letter is a plausible slip and a silent no-op would look like
+  // the override simply not working.
+  it("matches the host whatever case it was typed in", () => {
+    const [a] = withProbePaths(
+      [app("A", "a.example.com")],
+      "A.Example.COM=/favicon.ico",
+    );
+    expect(a?.probePath).toBe("/favicon.ico");
+  });
+
+  it("ignores malformed pairs instead of throwing", () => {
+    const [a] = withProbePaths(
+      [app("A", "a.example.com")],
+      "no-equals-sign,=/orphan,a.example.com=missing-leading-slash",
+    );
+    expect(a?.probePath).toBe("/");
+  });
+
+  it("leaves the list alone when the secret is absent or empty", () => {
+    const apps = [app("A", "a.example.com")];
+    expect(withProbePaths(apps, undefined)).toBe(apps);
+    expect(withProbePaths(apps, "")).toBe(apps);
   });
 });

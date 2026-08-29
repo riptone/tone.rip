@@ -1,4 +1,3 @@
-export { resolveProbePath } from "./app-probe";
 export {
   type CspReportSummary,
   summarizeCspReport,

@@ -71,6 +71,7 @@ interface Tile {
   name: string;
   tags: string;
   isSelfHosted: boolean;
+  probePath: string;
   statusEl: HTMLElement;
   statusTextEl: HTMLElement;
 }
@@ -91,6 +92,7 @@ function collectTiles(): Tile[] {
       name: el.dataset.name ?? "",
       tags,
       isSelfHosted: tags.includes("Self-Hosted"),
+      probePath: el.dataset.probePath || "/",
       statusEl,
       statusTextEl,
     };
@@ -152,6 +154,7 @@ export function initDashboard(): void {
           ? await pingUrl(
               tile.href,
               tile.isSelfHosted ? CLIENT_TIMEOUT_MS : PUBLIC_PING_TIMEOUT_MS,
+              tile.probePath,
             )
           : null;
 

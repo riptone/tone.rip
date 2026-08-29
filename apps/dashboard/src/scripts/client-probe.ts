@@ -6,11 +6,12 @@
  * Cloudflare Worker running apps/api - may itself be on the Tailscale network.
  */
 
-import { fetchWithTimeout, resolveProbePath } from "@repo/content";
+import { fetchWithTimeout } from "@repo/content";
 
 export async function pingUrl(
   href: string,
   timeoutMs: number,
+  probePath = "/",
 ): Promise<boolean> {
   let url: URL;
   try {
@@ -20,7 +21,7 @@ export async function pingUrl(
   }
 
   try {
-    await fetchWithTimeout(new URL(resolveProbePath(url), url), timeoutMs, {
+    await fetchWithTimeout(new URL(probePath, url), timeoutMs, {
       mode: "no-cors",
       cache: "no-store",
     });
