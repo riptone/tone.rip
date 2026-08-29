@@ -1,20 +1,24 @@
+import { requireCloudflareAccess } from "@repo/hono-middleware";
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { fetchAccessApps } from "../services/access-apps";
+import { ACCESS_AUD, ACCESS_TEAM_DOMAIN } from "./status";
 
 /* GET /apps - the self-hosted applications, from Cloudflare Access.
  *
- * Public, unlike /status. What this returns is a list of names, hostnames,
- * tags and icon URLs for services that are *already* published at those
- * hostnames and gated by Access on arrival - so it discloses nothing that
- * resolving the DNS would not. `/status` stays behind Access because up/down
- * over time is a different thing to publish than a list of names.
- *
- * The dashboard is the only consumer today, and it needs this before it can
- * render, so the cheap and cacheable version matters more than the private
- * one.
+ * Gated behind Cloudflare Access, like /status. The list is the set of
+ * services somebody self-hosts — hostnames, names, tags, icons — which is a
+ * map of the attack surface. Serving it publicly would be enumeration: to
+ * resolve DNS you already need the names, this endpoint hands you the list.
+ * The dashboard is the only consumer and it forwards the Access JWT
+ * server-side, so the cheap public cache is not worth the leak.
  */
 export const appsRoute = new Hono<AppEnv>();
+
+appsRoute.use(
+  "*",
+  requireCloudflareAccess({ teamDomain: ACCESS_TEAM_DOMAIN, aud: ACCESS_AUD }),
+);
 
 appsRoute.get("/", async (c) => {
   const { apps, state } = await fetchAccessApps({
@@ -30,11 +34,6 @@ appsRoute.get("/", async (c) => {
   }
 
   return c.json({ apps, state }, 200, {
-    // Shorter than the service's own 15-minute edge TTL on purpose: this
-    // header governs the *browser*, and a visitor who has just added a
-    // service should not have to hard-refresh for five minutes to see it.
-    // The expensive half - the credentialed upstream call - is already
-    // absorbed by the edge cache behind this.
-    "Cache-Control": "public, max-age=60, s-maxage=60",
+    "Cache-Control": "no-store",
   });
 });

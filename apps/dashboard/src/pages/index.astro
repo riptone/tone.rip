@@ -70,8 +70,11 @@ if (DEV_HOSTNAMES.has(Astro.url.hostname)) {
   apps = DEV_APPS;
 } else {
   try {
+    const jwt = Astro.request.headers.get("Cf-Access-Jwt-Assertion");
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (jwt) headers["Cf-Access-Jwt-Assertion"] = jwt;
     const response = await fetch("https://api.tone.rip/apps", {
-      headers: { accept: "application/json" },
+      headers,
     });
     if (response.ok) {
       apps = ((await response.json()) as { apps?: Tile[] }).apps ?? [];

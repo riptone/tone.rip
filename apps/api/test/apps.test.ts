@@ -1,7 +1,29 @@
 import { SELF } from "cloudflare:test";
 import { type SelfHostedApp, toSelfHostedApps } from "@repo/validation";
+import { sign } from "hono/jwt";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { withProbePaths } from "../src/services/access-apps";
+
+const ACCESS_TEAM_DOMAIN = "riptone.cloudflareaccess.com";
+const ACCESS_ISSUER = `https://${ACCESS_TEAM_DOMAIN}`;
+const ACCESS_AUD =
+  "28a3efd8f96a2e859f3bcd8158570e67538c297b25a8d7de9803b877e8a1881a";
+const ACCESS_JWKS_URL = `${ACCESS_ISSUER}/cdn-cgi/access/certs`;
+const ACCESS_HEADER = "Cf-Access-Jwt-Assertion";
+const KID = "test-kid";
+
+async function generateSignedAccessToken(payload: Record<string, unknown>) {
+  const keyPair = (await crypto.subtle.generateKey(
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]) },
+    true,
+    ["sign", "verify"],
+  )) as CryptoKeyPair;
+  const privateJwk = (await crypto.subtle.exportKey("jwk", keyPair.privateKey)) as JsonWebKey;
+  const publicJwk = (await crypto.subtle.exportKey("jwk", keyPair.publicKey)) as JsonWebKey;
+  const token = await sign(payload, { ...privateJwk, alg: "RS256", kid: KID }, "RS256");
+  const jwks = { keys: [{ ...publicJwk, alg: "RS256", kid: KID, use: "sig" }] };
+  return { token, jwks };
+}
 
 /* The mapping is pure, so it is tested directly rather than through a fetch.
    Every case here is a shape Cloudflare genuinely returns. */
@@ -208,28 +230,54 @@ describe("toSelfHostedApps", () => {
 });
 
 describe("GET /apps", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    globalThis.fetch = originalFetch;
+  });
 
-  // No token is the expected state of a fork and of `wrangler dev`, so it has
-  // to be a 200 with an empty list and a named state - not an error.
-  it("answers 200 and says so when no token is configured", async () => {
+  it("rejects requests missing the Access JWT header", async () => {
     const res = await SELF.fetch("https://api.example.com/apps");
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects requests bearing an invalid Access JWT", async () => {
+    const res = await SELF.fetch("https://api.example.com/apps", {
+      headers: { [ACCESS_HEADER]: "not-a-real-token" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  // No CF token is the expected state of a fork and of `wrangler dev`, but the
+  // Access JWT is still required - enumeration is not allowed even when the
+  // upstream is unconfigured. The route is gated before it checks the CF token.
+  it("answers 200 and says so when no CF token is configured, given a valid Access JWT", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { token, jwks } = await generateSignedAccessToken({
+      iss: ACCESS_ISSUER,
+      aud: ACCESS_AUD,
+      iat: now,
+      exp: now + 3600,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url === ACCESS_JWKS_URL) return new Response(JSON.stringify(jwks), { status: 200 });
+        return new Response(null, { status: 200 });
+      }),
+    );
+    const res = await SELF.fetch("https://api.example.com/apps", {
+      headers: { [ACCESS_HEADER]: token },
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { apps: unknown[]; state: string };
     expect(Array.isArray(body.apps)).toBe(true);
-    expect([
-      "unconfigured",
-      "unavailable",
-      "stale",
-      "hit",
-      "updated",
-    ]).toContain(body.state);
+    expect(["unconfigured", "unavailable", "stale", "hit", "updated"]).toContain(body.state);
   });
 
   it("is listed in the API catalog so it is discoverable", async () => {
-    const res = await SELF.fetch(
-      "https://api.example.com/.well-known/api-catalog",
-    );
+    const res = await SELF.fetch("https://api.example.com/.well-known/api-catalog");
     expect(await res.text()).toContain("/apps");
   });
 });

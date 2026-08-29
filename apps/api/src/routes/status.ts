@@ -20,12 +20,12 @@ export const statusRoute = new Hono<AppEnv>();
 // Cloudflare redirects an unauthenticated visitor straight to it:
 //
 //   curl -sI https://dash.tone.rip | grep -i ^location
-const ACCESS_TEAM_DOMAIN = "riptone.cloudflareaccess.com";
+export const ACCESS_TEAM_DOMAIN = "riptone.cloudflareaccess.com";
 
 // The Access application's AUD tag, which survived that rename untouched -
 // it identifies the application, not the team. Verified against the `kid`
 // parameter on the same redirect.
-const ACCESS_AUD =
+export const ACCESS_AUD =
   "28a3efd8f96a2e859f3bcd8158570e67538c297b25a8d7de9803b877e8a1881a";
 
 // Self-hosted app up/down + Tailscale device presence is only meant for the

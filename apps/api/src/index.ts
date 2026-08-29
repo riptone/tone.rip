@@ -82,7 +82,8 @@ app.use(
 const ENDPOINTS = [
   {
     href: `${API_ORIGIN}/apps`,
-    description: "Self-hosted applications, from Cloudflare Access.",
+    description:
+      "Self-hosted applications. Requires a Cloudflare Access JWT, like /status.",
   },
   { href: `${API_ORIGIN}/projects`, description: "Public GitHub repo list." },
   {
