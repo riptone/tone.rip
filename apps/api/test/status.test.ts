@@ -2,7 +2,7 @@ import { SELF } from "cloudflare:test";
 import { sign } from "hono/jwt";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const ACCESS_TEAM_DOMAIN = "no-tone.cloudflareaccess.com";
+const ACCESS_TEAM_DOMAIN = "riptone.cloudflareaccess.com";
 const ACCESS_ISSUER = `https://${ACCESS_TEAM_DOMAIN}`;
 const ACCESS_AUD =
   "28a3efd8f96a2e859f3bcd8158570e67538c297b25a8d7de9803b877e8a1881a";
@@ -87,17 +87,24 @@ describe("GET /status", () => {
       apps: Array<{ name: string; status: string }>;
       tailnet: { device: unknown };
     };
-    expect(body.apps.length).toBeGreaterThan(0);
-    // Tailnet-only apps are deliberately not probed - Cloudflare's edge can't
-    // route to their CGNAT addresses, so any probe result would be fiction
-    // (see probeAllApps). Only genuinely public entries get a real verdict.
-    const tailscale = body.apps.find((app) => app.name === "Tailscale");
-    expect(tailscale?.status).toBe("up");
-    expect(
-      body.apps
-        .filter((app) => app.name !== "Tailscale")
-        .every((app) => app.status === "unknown"),
-    ).toBe(true);
+    // The list itself is no longer this route's to produce: it comes from
+    // Cloudflare Access (services/access-apps.ts), which without a token in
+    // the test environment answers with nothing. So this asserts the contract
+    // - authenticated, right shape - and not a count that now depends on an
+    // external account.
+    //
+    // The two halves it used to cover live where they can be tested against
+    // fixtures instead of real data:
+    //   - Access -> tile mapping: apps.test.ts
+    //   - which hosts get probed:  app-health.test.ts
+    expect(Array.isArray(body.apps)).toBe(true);
+    expect(body).toHaveProperty("tailnet");
+
+    // Whatever is in the list, a tailnet-only host is never given a verdict:
+    // Cloudflare's edge cannot route to a CGNAT address, so a probe result
+    // would be fiction. The browser's own ping decides those tiles instead
+    // (apps/dashboard's client-probe.ts).
+    expect(body.apps.every((app) => app.status === "unknown")).toBe(true);
     // No TAILSCALE_* vars are configured in the test environment, so the
     // tailnet lookup should short-circuit to null without an extra fetch.
     expect(body.tailnet.device).toBeNull();

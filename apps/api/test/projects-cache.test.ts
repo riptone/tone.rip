@@ -5,8 +5,8 @@ import {
 } from "../src/services/projects-cache";
 
 const REPO = {
-  name: "tonil",
-  html_url: "https://github.com/no-tone/tonil",
+  name: "tone.rip",
+  html_url: "https://github.com/riptone/tone.rip",
   updated_at: "2026-01-01T00:00:00Z",
 };
 
@@ -43,7 +43,7 @@ describe("fetchProjects", () => {
     const second = await fetchProjects({ forceRevalidate: true });
     expect(["stale", "memory-stale"]).toContain(second.cacheState);
     expect(JSON.parse(second.snapshot.body)).toEqual([
-      expect.objectContaining({ name: "tonil" }),
+      expect.objectContaining({ name: "tone.rip" }),
     ]);
   });
 

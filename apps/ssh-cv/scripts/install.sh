@@ -2,7 +2,7 @@
 #
 # Install, update or check ssh-cv on the box that serves it.
 #
-#   curl -fsSL https://raw.githubusercontent.com/no-tone/tonil/main/apps/ssh-cv/scripts/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/riptone/tone.rip/main/apps/ssh-cv/scripts/install.sh | sudo bash
 #
 # This exists because apps/ssh-cv is the one app in this repo that `main`
 # cannot deploy for itself. The three Workers get pushed by CI; this one runs
@@ -43,16 +43,16 @@ set -euo pipefail
 # most recently and most explicitly wins, and the file is only ever a default
 # - which is what makes it safe for the timer to read the same file.
 #
-# The repository is configurable at all because this repo's GitHub account is
-# mid-rename (no-tone -> riptone), and the default is the name that exists
-# *now* rather than the one that is coming. That direction is deliberate:
-# GitHub redirects an old owner name to a new one after a rename and never the
-# reverse, so `no-tone/tonil` resolves today and keeps resolving afterwards,
-# while `riptone/tonil` is a 404 until the day it is not.
+# The repository is configurable because this one has already moved twice -
+# the account from `no-tone` to `riptone`, and the repository from `tonil` to
+# `tone.rip`. Both old names still resolve, because GitHub redirects a renamed
+# owner and a renamed repository indefinitely, which is exactly why a box
+# installed before either rename kept updating without anyone noticing.
 #
-# Once the rename has happened, change this to riptone/tonil so the box stops
-# depending on a redirect. Nothing breaks in the meantime if you forget.
-DEFAULT_REPO="no-tone/tonil"
+# The default is the current name rather than a redirect, so a fresh install
+# does not depend on GitHub keeping those redirects forever. `--repo` exists
+# for the next move, and for anyone running a fork.
+DEFAULT_REPO="riptone/tone.rip"
 
 env_repo="${SSH_CV_REPO:-}"
 env_notify="${SSH_CV_NOTIFY_URL:-}"
@@ -118,7 +118,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --repo)
       flag_repo="${2:-}"
-      [[ -n "${flag_repo}" ]] || die "--repo needs a value, e.g. --repo no-tone/tonil"
+      [[ -n "${flag_repo}" ]] || die "--repo needs a value, e.g. --repo riptone/tone.rip"
       shift 2
       ;;
     --repo=*)
@@ -306,7 +306,7 @@ SSH_CV_UPDATE_MODE=apply
 #SSH_CV_NOTIFY_URL=https://ntfy.sh/change-me-to-something-unguessable
 
 # Uncomment while this repo's GitHub organisation rename is outstanding.
-#SSH_CV_REPO=no-tone/tonil
+#SSH_CV_REPO=riptone/tone.rip
 EOF
     chmod 644 "${DEFAULTS_FILE}"
     log "wrote ${DEFAULTS_FILE}"

@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const GITHUB_REPOS = [
   {
-    name: "tonil",
-    html_url: "https://github.com/no-tone/tonil",
+    name: "tone.rip",
+    html_url: "https://github.com/riptone/tone.rip",
     stargazers_count: 5,
     updated_at: "2026-01-01T00:00:00Z",
   },
@@ -32,7 +32,7 @@ describe("GET /projects", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Array<{ name: string }>;
     expect(body).toEqual([
-      expect.objectContaining({ name: "tonil", stars: 5, forks: 0 }),
+      expect.objectContaining({ name: "tone.rip", stars: 5, forks: 0 }),
     ]);
   });
 
@@ -102,7 +102,7 @@ describe("GET /projects/:name/readme", () => {
   const repo = (name: string) => [
     {
       name,
-      html_url: `https://github.com/no-tone/${name}`,
+      html_url: `https://github.com/riptone/${name}`,
       stargazers_count: 0,
       updated_at: "2026-01-01T00:00:00Z",
     },
@@ -110,17 +110,21 @@ describe("GET /projects/:name/readme", () => {
 
   it("returns the rendered README html for a known repo", async () => {
     await stubGitHubAndPrime(okReadme);
-    const res = await SELF.fetch("https://api.tone.rip/projects/tonil/readme");
+    const res = await SELF.fetch(
+      "https://api.tone.rip/projects/tone.rip/readme",
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ html: "<h1>hi</h1>" });
   });
 
   it("proxies to GitHub's readme endpoint for that repo", async () => {
     const fetchMock = await stubGitHubAndPrime(okReadme);
-    await SELF.fetch("https://api.tone.rip/projects/tonil/readme");
+    await SELF.fetch("https://api.tone.rip/projects/tone.rip/readme");
 
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-    expect(urls).toContain("https://api.github.com/repos/no-tone/tonil/readme");
+    expect(urls).toContain(
+      "https://api.github.com/repos/riptone/tone.rip/readme",
+    );
   });
 
   it("never calls GitHub for a repo that isn't in the projects list", async () => {

@@ -7,9 +7,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/riptone/tonil/apps/ssh-cv/internal/authz"
-	"github.com/riptone/tonil/apps/ssh-cv/internal/cv"
-	"github.com/riptone/tonil/apps/ssh-cv/internal/version"
+	"github.com/riptone/tone.rip/apps/ssh-cv/internal/authz"
+	"github.com/riptone/tone.rip/apps/ssh-cv/internal/cv"
+	"github.com/riptone/tone.rip/apps/ssh-cv/internal/version"
 )
 
 func testDoc(t *testing.T) *cv.Document {

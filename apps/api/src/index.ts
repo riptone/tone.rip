@@ -8,6 +8,7 @@ import {
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { AppEnv } from "./env";
+import { appsRoute } from "./routes/apps";
 import { cspReportRoute } from "./routes/csp-report";
 import { infoRoute } from "./routes/info";
 import { projectsRoute } from "./routes/projects";
@@ -79,6 +80,10 @@ app.use(
 );
 
 const ENDPOINTS = [
+  {
+    href: `${API_ORIGIN}/apps`,
+    description: "Self-hosted applications, from Cloudflare Access.",
+  },
   { href: `${API_ORIGIN}/projects`, description: "Public GitHub repo list." },
   {
     href: `${API_ORIGIN}/projects/{repo}/readme`,
@@ -117,6 +122,7 @@ app.get("/", (c) =>
   ),
 );
 
+app.route("/apps", appsRoute);
 app.route("/projects", projectsRoute);
 app.route("/status", statusRoute);
 app.route("/csp-report", cspReportRoute);

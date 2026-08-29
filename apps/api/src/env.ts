@@ -9,6 +9,14 @@ export interface Bindings extends CloudflareBindings {
   SSH_GATEWAY_TOKEN?: string;
   /** Newline-separated allowlist; see services/ssh-allowlist.ts for the format. */
   SSH_AUTHORIZED_KEYS?: string;
+  /**
+   * Cloudflare API token with Access: Apps Read, and the account it belongs
+   * to. Both optional: without them /apps answers "unconfigured" and the
+   * dashboard renders no tiles, which is the correct behaviour for a fork or
+   * a local `wrangler dev` rather than an error.
+   */
+  CF_ACCESS_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
 }
 
 export interface AppEnv {

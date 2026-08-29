@@ -15,7 +15,7 @@ const Dev = "dev"
 // Version is the release this binary was built from: a tag like "v1.4.0",
 // stamped at link time by .github/workflows/release-ssh-cv.yml.
 //
-//	-ldflags "-X github.com/riptone/tonil/apps/ssh-cv/internal/version.Version=v1.4.0"
+//	-ldflags "-X github.com/riptone/tone.rip/apps/ssh-cv/internal/version.Version=v1.4.0"
 //
 // A plain `go build` leaves it at Dev, which is both the honest answer and
 // the safe one: the updater treats anything that is not a release tag as "not

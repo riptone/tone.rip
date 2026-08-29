@@ -56,10 +56,15 @@ select {
   letter-spacing: -0.012em;
 }
 
+/* Worn by both the refresh <button> and the Tailscale <a>, so it has to
+   neutralise a link's defaults as well as a button's - `text-decoration`
+   would otherwise put a rule under the icon, and `flex-shrink` keeps the
+   pair square when the title beside them is long. */
 .dash__iconbtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   width: 30px;
   height: 30px;
   padding: 0;
@@ -67,6 +72,7 @@ select {
   border-radius: 5px;
   background: none;
   color: var(--text-muted);
+  text-decoration: none;
   cursor: pointer;
   transition: var(--transition-border);
 }
@@ -345,4 +351,20 @@ html[data-theme="dark"] .status[data-status="vpn"] .dot {
   .dash__refresh.spinning svg {
     animation: none;
   }
+}
+
+/* An application with no custom logo in Access. The first letter, sized and
+   centred in the same 28px box the icon would have taken, so a tile without
+   an image is the same shape as one with it rather than a collapsed row. */
+.tile__initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-transform: uppercase;
 }

@@ -4,6 +4,35 @@ Technical conventions for this monorepo. For the visual/brand philosophy, see [c
 
 ---
 
+# Before opening a pull request
+
+Run the gate CI runs. It is one command, and it is the same command on a
+laptop and on a runner — there is no shorter subset that CI will accept:
+
+```bash
+bun run ci
+```
+
+Which is, in order: Biome format, Biome lint, type-check (`astro check`,
+`tsc`, `gofmt` + `go vet`), tests (Vitest everywhere, `go test` for
+`apps/ssh-cv`), build, Worker bundle sizes, Playwright end-to-end, `knip` for
+unused files/exports/dependencies, `madge` for import cycles, `shellcheck` on
+the SSH CV's installer, `govulncheck` on the Go module, and finally a check
+that the CV embedded in the Go binary has not drifted from
+`packages/content`.
+
+Two of those fail in ways worth recognising:
+
+- **The drift check** (`git diff --exit-code -- apps/ssh-cv/internal/cv/cv.json`)
+  fails when the generated CV is regenerated but not committed. It is not a
+  test failure; it is telling you to `git add` the generated file. That file
+  is committed on purpose, so a plain `go build` works in a checkout with no
+  Bun.
+- **Playwright** needs its browser once per machine:
+  `cd apps/web && bun run playwright install --with-deps chromium`.
+
+---
+
 # Performance
 
 Optimize by default.

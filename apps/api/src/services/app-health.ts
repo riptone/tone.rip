@@ -1,8 +1,5 @@
-import {
-  fetchWithTimeout,
-  resolveProbePath,
-  type SelfHostedApp,
-} from "@repo/content";
+import { fetchWithTimeout, resolveProbePath } from "@repo/content";
+import type { SelfHostedApp } from "@repo/validation";
 import type { Bindings } from "../env";
 
 type HealthStatus = "up" | "down" | "unknown";

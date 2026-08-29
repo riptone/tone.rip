@@ -4,7 +4,7 @@ import { projectsResponseSchema } from "../src/projects";
 /** One entry shaped the way apps/api actually serves it. */
 const REAL = {
   name: "tonil",
-  url: "https://github.com/no-tone/tonil",
+  url: "https://github.com/riptone/tone.rip",
   homepage: "https://tone.rip",
   language: "TypeScript",
   description: "Monorepo for tone.rip",
@@ -30,7 +30,7 @@ describe("projectsResponseSchema", () => {
     // `fork`, found neither, and dropped every row - an empty page with no
     // error anywhere. A raw payload must fail loudly instead.
     const raw = [
-      { name: "tonil", html_url: "https://github.com/no-tone/tonil" },
+      { name: "tonil", html_url: "https://github.com/riptone/tone.rip" },
     ];
     const parsed = projectsResponseSchema.safeParse(raw);
     expect(parsed.success && parsed.data).toEqual([]);
@@ -51,7 +51,7 @@ describe("projectsResponseSchema", () => {
 
   it("fills in the optional fields so the page never reads undefined", () => {
     const parsed = projectsResponseSchema.safeParse([
-      { name: "bare", url: "https://github.com/no-tone/bare" },
+      { name: "bare", url: "https://github.com/riptone/bare" },
     ]);
     expect(parsed.success && parsed.data[0]).toMatchObject({
       description: "",

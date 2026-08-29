@@ -2,7 +2,6 @@
 // biome-ignore-all lint/correctness/noUnusedVariables: these are used in the
 // template below the frontmatter fence, which Biome's Astro support doesn't analyze.
 // biome-ignore-all lint/correctness/noUnusedImports: same reason.
-import { ALL_APP_TAGS, SELF_HOSTED_APPS } from "@repo/content";
 import BaseHead from "@repo/ui/BaseHead.astro";
 import Logo from "@repo/ui/brand/Logo.astro";
 import ContextMenu, {
@@ -38,7 +37,53 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "../consts";
 
 const EAGER_ICON_COUNT = 8;
 
-const GITHUB = "https://github.com/no-tone";
+/* The tiles, from Cloudflare Access rather than from a list in this repo.
+   Server-side, so the board arrives rendered rather than assembling itself
+   after a round trip - and so the API token never leaves apps/api.
+
+   Failure is degradation, not an error page: an empty list renders an empty
+   board with the "No matches." line already in the markup, which is the
+   honest thing for a launcher whose source is briefly unreachable. */
+interface Tile {
+  name: string;
+  href: string;
+  tags: string[];
+  iconUrl: string | null;
+}
+
+let apps: Tile[] = [];
+try {
+  const response = await fetch("https://api.tone.rip/apps", {
+    headers: { accept: "application/json" },
+  });
+  if (response.ok) {
+    apps = ((await response.json()) as { apps?: Tile[] }).apps ?? [];
+  }
+} catch {
+  // Left empty on purpose - see above.
+}
+
+/* "Self-Hosted" is on every application by definition - it is the tag the API
+   filters on - so as a *label* it distinguishes nothing and as a filter option
+   it would select everything. It is hidden from both.
+
+   It is not removed from `data-tags`, and that distinction is the whole point:
+   dashboard.ts reads that attribute to decide `isSelfHosted`, which decides
+   whether the browser probes a host at all. Strip it there and every tile is
+   treated as publicly reachable - so the browser pings six Tailscale-only
+   hosts it cannot reach, fills the console with ERR_TUNNEL_CONNECTION_FAILED,
+   and shows "down" where the honest answer is "vpn".
+
+   Data keeps the tag. Presentation hides it. */
+const LAUNCHER_TAG = "self-hosted";
+const visibleTags = (tags: string[]) =>
+  tags.filter((tag) => tag.trim().toLowerCase() !== LAUNCHER_TAG);
+
+const allTags = Array.from(
+  new Set(apps.flatMap((app) => visibleTags(app.tags))),
+).sort();
+
+const GITHUB = "https://github.com/riptone";
 const EMAIL = "m@tone.rip";
 
 /* The counterpart to the site's "log in": this app is gated by Cloudflare
@@ -97,6 +142,42 @@ const MENU: ContextMenuEntry[] = [
 
         <header class="dash__head">
           <h1 class="dash__title">self-hosted</h1>
+          {/*
+            Tailscale sits here rather than in the list because it is not one
+            of these services - it is the network they are on. As a tile it
+            was the one entry you could not probe (its status is the reason
+            the others have a status at all) and the one that was not
+            self-hosted, which is now also the tag the list is built from.
+
+            An admin link, next to the other admin control.
+          */}
+          <a
+            class="dash__iconbtn"
+            href="https://login.tailscale.com/admin/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Tailscale admin console"
+            title="Tailscale admin console"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {/*
+                Tailscale's mark: a three-by-three grid with the middle row
+                and the lower-left filled. Drawn rather than fetched from the
+                icon CDN so the header does not wait on a remote image.
+              */}
+              <g fill="currentColor">
+                <circle cx="5" cy="5" r="2.1" opacity="0.4"></circle>
+                <circle cx="12" cy="5" r="2.1" opacity="0.4"></circle>
+                <circle cx="19" cy="5" r="2.1" opacity="0.4"></circle>
+                <circle cx="5" cy="12" r="2.1"></circle>
+                <circle cx="12" cy="12" r="2.1"></circle>
+                <circle cx="19" cy="12" r="2.1"></circle>
+                <circle cx="5" cy="19" r="2.1"></circle>
+                <circle cx="12" cy="19" r="2.1" opacity="0.4"></circle>
+                <circle cx="19" cy="19" r="2.1" opacity="0.4"></circle>
+              </g>
+            </svg>
+          </a>
           <button
             class="dash__iconbtn dash__refresh"
             id="refresh"
@@ -130,7 +211,7 @@ const MENU: ContextMenuEntry[] = [
             <span class="dash__fieldlabel">tag</span>
             <select id="tag" name="tag" data-filter-tag>
               <option value="">all</option>
-              {ALL_APP_TAGS.map((t) => <option value={t}>{t}</option>)}
+              {allTags.map((t) => <option value={t}>{t}</option>)}
             </select>
           </label>
 
@@ -139,7 +220,7 @@ const MENU: ContextMenuEntry[] = [
 
         <ul class="dash__list" aria-label="Self-hosted applications">
           {
-            SELF_HOSTED_APPS.map((app, i) => (
+            apps.map((app, i) => (
               <li>
                 <a
                   class="tile"
@@ -154,29 +235,37 @@ const MENU: ContextMenuEntry[] = [
                   {/*
                     A plain <img>, not astro:assets' <Image>.
 
-                    These are remote .webp files on a CDN built for exactly
-                    this. Astro cannot pre-optimise a remote image at build
-                    time, so <Image> routed all nine through the runtime
-                    /_image endpoint: nine Worker invocations per page load,
-                    each fetching and re-encoding a file that was already the
-                    right format at the right size. Letting the browser ask
-                    jsDelivr directly removes the Worker from the path
-                    entirely. img-src already allows https:.
+                    These are remote images on whatever host each Access
+                    application names in its logo_url. Astro cannot
+                    pre-optimise a remote image at build time, so <Image>
+                    routed every one through the runtime /_image endpoint:
+                    a Worker invocation per icon per page load, each fetching
+                    and re-encoding a file that was already the right format
+                    at the right size. Letting the browser fetch it directly
+                    removes the Worker from the path entirely.
+
+                    An application with no custom logo renders the first
+                    letter of its name instead. A missing icon should leave a
+                    tile that still reads, not a broken-image glyph.
                   */}
                   <span class="tile__icon" aria-hidden="true">
-                    <img
-                      src={app.iconUrl}
-                      width="28"
-                      height="28"
-                      alt=""
-                      loading={i < EAGER_ICON_COUNT ? "eager" : "lazy"}
-                      decoding="async"
-                      fetchpriority={i < EAGER_ICON_COUNT ? "high" : "auto"}
-                      referrerpolicy="no-referrer"
-                    />
+                    {app.iconUrl ? (
+                      <img
+                        src={app.iconUrl}
+                        width="28"
+                        height="28"
+                        alt=""
+                        loading={i < EAGER_ICON_COUNT ? "eager" : "lazy"}
+                        decoding="async"
+                        fetchpriority={i < EAGER_ICON_COUNT ? "high" : "auto"}
+                        referrerpolicy="no-referrer"
+                      />
+                    ) : (
+                      <span class="tile__initial">{app.name.charAt(0)}</span>
+                    )}
                   </span>
                   <span class="tile__name">{app.name}</span>
-                  <span class="tile__tags">{app.tags.join(" · ")}</span>
+                  <span class="tile__tags">{visibleTags(app.tags).join(" · ")}</span>
                   <span
                     class="status"
                     data-status="unknown"

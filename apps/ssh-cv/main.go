@@ -37,10 +37,10 @@ import (
 	"github.com/muesli/termenv"
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/riptone/tonil/apps/ssh-cv/internal/authz"
-	"github.com/riptone/tonil/apps/ssh-cv/internal/cv"
-	"github.com/riptone/tonil/apps/ssh-cv/internal/tui"
-	"github.com/riptone/tonil/apps/ssh-cv/internal/version"
+	"github.com/riptone/tone.rip/apps/ssh-cv/internal/authz"
+	"github.com/riptone/tone.rip/apps/ssh-cv/internal/cv"
+	"github.com/riptone/tone.rip/apps/ssh-cv/internal/tui"
+	"github.com/riptone/tone.rip/apps/ssh-cv/internal/version"
 )
 
 // contextKey is unexported so nothing outside this package can collide with

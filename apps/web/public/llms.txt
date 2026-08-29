@@ -18,7 +18,7 @@
 
 ## Elsewhere
 
-- [GitHub](https://github.com/no-tone): source, including the source of this site
+- [GitHub](https://github.com/riptone): source, including the source of this site
 - [CV over SSH](ssh://cv.tone.rip): `ssh cv.tone.rip` renders the same CV in a terminal
 
 ## Contact

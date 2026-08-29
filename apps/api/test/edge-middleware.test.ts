@@ -11,6 +11,7 @@ describe("app-wide middleware", () => {
     );
     const body = (await res.json()) as { linkset: { anchor: string }[] };
     expect(body.linkset.map((entry) => entry.anchor)).toEqual([
+      "https://api.tone.rip/apps",
       "https://api.tone.rip/projects",
       "https://api.tone.rip/projects/{repo}/readme",
       "https://api.tone.rip/status",

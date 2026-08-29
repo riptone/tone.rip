@@ -394,7 +394,7 @@ fingerprints are privileged. A half-configured deploy fails closed.
 On the box:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/no-tone/tonil/main/apps/ssh-cv/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/riptone/tone.rip/main/apps/ssh-cv/scripts/install.sh | sudo bash
 sudo useradd --system --home /var/lib/ssh-cv --shell /usr/sbin/nologin ssh-cv
 sudo mkdir -p /var/lib/ssh-cv
 sudo chown ssh-cv:ssh-cv /var/lib/ssh-cv
@@ -406,14 +406,12 @@ it at `/usr/local/bin/ssh-cv`. It detects Arm and x86 itself, so the A1 and the
 E2.1.Micro take the same command. Section 8 is how the box keeps itself
 current afterwards.
 
-> **On the account name.** The tree says `tone` and `tone.rip`, but the GitHub
-> account is still `no-tone`, so every GitHub URL here does too - including the
-> installer's default. That is the safe direction rather than the tidy one:
-> GitHub redirects an old owner name to a new one after a rename and never the
-> reverse, so these keep working *through* the rename. Afterwards, update
-> `DEFAULT_REPO` in `scripts/install.sh` so the box stops leaning on a
-> redirect; nothing breaks if you forget. To pull from somewhere else in the
-> meantime: `curl … | sudo bash -s -- --repo owner/name`.
+> **If a box was installed before the rename**, it is still updating fine. The
+> account moved `no-tone` → `riptone` and the repository `tonil` → `tone.rip`,
+> and GitHub redirects both indefinitely, so an updater pinned to the old URL
+> keeps resolving. Nothing needs doing on the box; the next run of the
+> installer picks up the current name on its own. To pull from a fork or a
+> future rename: `curl … | sudo bash -s -- --repo owner/name`.
 
 The service account has `nologin` and owns only its own directory - which holds
 one file, the host key. The CV itself is embedded in the binary. It needs no
@@ -615,7 +613,7 @@ release" answerable in a monorepo, and it is what the updater filters on.
 Same command as the install, any time:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/no-tone/tonil/main/apps/ssh-cv/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/riptone/tone.rip/main/apps/ssh-cv/scripts/install.sh | sudo bash
 ```
 
 It exits without doing anything if the box already has the newest release, so
@@ -624,7 +622,7 @@ running it when there is nothing to do is free.
 ### Or let it update itself
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/no-tone/tonil/main/apps/ssh-cv/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/riptone/tone.rip/main/apps/ssh-cv/scripts/install.sh \
   | sudo bash -s -- --install-timer
 ```
 

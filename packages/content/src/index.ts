@@ -1,3 +1,4 @@
+export { resolveProbePath } from "./app-probe";
 export {
   type CspReportSummary,
   summarizeCspReport,
@@ -31,11 +32,4 @@ export {
   buildProfilePageSchema,
   type PersonSchemaOptions,
 } from "./person-schema";
-export {
-  ALL_APP_TAGS,
-  type AppTag,
-  resolveProbePath,
-  SELF_HOSTED_APPS,
-  type SelfHostedApp,
-} from "./self-hosted-apps";
 export { DASHBOARD_INFO, type SiteInfo, TONE_INFO } from "./site-info";

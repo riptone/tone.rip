@@ -1,4 +1,4 @@
-import type { SelfHostedApp } from "@repo/content";
+import type { SelfHostedApp } from "@repo/validation";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   findTailnetDevice,

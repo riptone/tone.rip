@@ -6,7 +6,7 @@ describe("simplifyRepos", () => {
     const result = simplifyRepos([
       {
         name: "tonil",
-        html_url: "https://github.com/no-tone/tonil",
+        html_url: "https://github.com/riptone/tone.rip",
         stargazers_count: 3,
         updated_at: "2026-01-01T00:00:00Z",
       },
@@ -14,7 +14,7 @@ describe("simplifyRepos", () => {
     expect(result).toEqual([
       {
         name: "tonil",
-        url: "https://github.com/no-tone/tonil",
+        url: "https://github.com/riptone/tone.rip",
         homepage: "",
         language: "Other",
         description: "",

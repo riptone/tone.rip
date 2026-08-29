@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { pingUrl } from "../src/scripts/client-probe";
 
 // The Vaultwarden-favicon path resolution pingUrl relies on moved to
-// @repo/content's resolveProbePath - see packages/content/test/self-hosted-apps.test.ts.
+// @repo/content's resolveProbePath - see packages/content/src/app-probe.ts.
 
 describe("pingUrl", () => {
   const originalFetch = globalThis.fetch;

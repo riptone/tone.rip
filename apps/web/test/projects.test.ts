@@ -4,7 +4,7 @@ import { clearProjectsCache, loadProjects } from "../src/services/projects";
 const ONE_REPO = [
   {
     name: "tonil",
-    url: "https://github.com/no-tone/tonil",
+    url: "https://github.com/riptone/tone.rip",
     homepage: "",
     language: "TypeScript",
     description: "",
