@@ -25,7 +25,7 @@ const STORAGE_KEY = "lang";
 const DEFAULT_LANG: SiteLang = "en";
 
 /** Fired on `window` after the language changes, for anything that has to re-render. */
-export const LANG_CHANGE_EVENT = "tonil:langchange";
+export const LANG_CHANGE_EVENT = "tone:langchange";
 
 function isLang(value: string | null): value is SiteLang {
   return value === "en" || value === "pt";

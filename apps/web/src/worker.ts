@@ -14,7 +14,7 @@ const warmProjectsCache = async (): Promise<void> => {
       method: "GET",
       headers: {
         accept: "application/json",
-        "x-tonil-revalidate": "1",
+        "x-tone-revalidate": "1",
         "user-agent": "tone-web-cron-warmup",
       },
     });

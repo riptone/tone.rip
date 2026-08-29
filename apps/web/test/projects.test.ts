@@ -3,7 +3,7 @@ import { clearProjectsCache, loadProjects } from "../src/services/projects";
 
 const ONE_REPO = [
   {
-    name: "tonil",
+    name: "tone.rip",
     url: "https://github.com/riptone/tone.rip",
     homepage: "",
     language: "TypeScript",
@@ -102,7 +102,7 @@ describe("loadProjects", () => {
     );
 
     const stale = await loadProjects();
-    expect(stale.repos.map((r) => r.name)).toEqual(["tonil"]);
+    expect(stale.repos.map((r) => r.name)).toEqual(["tone.rip"]);
 
     // And when it does land, it replaces what is served from then on.
     release?.();

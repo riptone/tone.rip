@@ -43,11 +43,9 @@ set -euo pipefail
 # most recently and most explicitly wins, and the file is only ever a default
 # - which is what makes it safe for the timer to read the same file.
 #
-# The repository is configurable because this one has already moved twice -
-# the account from `no-tone` to `riptone`, and the repository from `tonil` to
-# `tone.rip`. Both old names still resolve, because GitHub redirects a renamed
-# owner and a renamed repository indefinitely, which is exactly why a box
-# installed before either rename kept updating without anyone noticing.
+# The repository is configurable to support forks or future renames.
+# GitHub redirects a renamed owner and repository indefinitely, so a box
+# installed before a rename keeps updating without anyone noticing.
 #
 # The default is the current name rather than a redirect, so a fresh install
 # does not depend on GitHub keeping those redirects forever. `--repo` exists

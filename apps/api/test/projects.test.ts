@@ -89,7 +89,7 @@ describe("GET /projects/:name/readme", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     await SELF.fetch("https://api.tone.rip/projects", {
-      headers: { "x-tonil-revalidate": "1" },
+      headers: { "x-tone-revalidate": "1" },
     });
     fetchMock.mockClear();
     return fetchMock;

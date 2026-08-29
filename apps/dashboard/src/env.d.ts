@@ -13,7 +13,7 @@ declare namespace App {
   }
 }
 
-// window.tonil's shape (installed by packages/ui's BaseHead.astro) is
+// window.tone's shape (installed by packages/ui's BaseHead.astro) is
 // declared once, globally, in src/scripts/theme.ts - the one file that
 // actually consumes it - instead of here, since a `declare global` needs to
 // live in a module (a file with an import/export), and this file is a plain

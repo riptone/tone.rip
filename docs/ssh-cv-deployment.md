@@ -413,12 +413,10 @@ it at `/usr/local/bin/ssh-cv`. It detects Arm and x86 itself, so the A1 and the
 E2.1.Micro take the same command. Section 8 is how the box keeps itself
 current afterwards.
 
-> **If a box was installed before the rename**, it is still updating fine. The
-> account moved `no-tone` → `riptone` and the repository `tonil` → `tone.rip`,
-> and GitHub redirects both indefinitely, so an updater pinned to the old URL
-> keeps resolving. Nothing needs doing on the box; the next run of the
-> installer picks up the current name on its own. To pull from a fork or a
-> future rename: `curl … | sudo bash -s -- --repo owner/name`.
+> **If a box was installed before the rename**, it is still updating. Nothing 
+> needs doing on the box; the next run of the installer picks up the current 
+> name on its own. To pull from a fork or a future rename: 
+> `curl … | sudo bash -s -- --repo owner/name`.
 
 The service account has `nologin` and owns only its own directory - which holds
 one file, the host key. The CV itself is embedded in the binary. It needs no

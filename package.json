@@ -1,5 +1,5 @@
 {
-  "name": "tonil",
+  "name": "tone.rip",
   "private": true,
   "scripts": {
     "build": "turbo run build",

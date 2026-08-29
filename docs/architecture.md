@@ -13,7 +13,7 @@ Both Astro apps are deliberately thin: they render markup and ship the client-si
 
 ## Why the API is centralized
 
-Before this monorepo existed, no-tone.com and main-menu were separate repos, each with its own Cloudflare Worker doing its own GitHub-proxy caching, its own Tailscale OAuth probing, its own CSP-report ingestion. Centralizing all of that in `apps/api` means:
+Before this monorepo existed, the site and dashboard were separate repos, each with its own Cloudflare Worker doing its own GitHub-proxy caching, its own Tailscale OAuth probing, its own CSP-report ingestion. Centralizing all of that in `apps/api` means:
 
 - One cache/ETag-revalidation implementation for the GitHub repos proxy (`GET /projects`), not two.
 - One Tailscale-OAuth + app-health-probing implementation (`GET /status`), reusable by both `apps/web` (if it ever needs live status) and `apps/dashboard`.

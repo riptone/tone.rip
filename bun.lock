@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "tonil",
+      "name": "tone.rip",
       "devDependencies": {
         "@biomejs/biome": "^2.5.10",
         "@types/node": "^26.2.0",

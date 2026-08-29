@@ -5,7 +5,7 @@ describe("simplifyRepos", () => {
   it("maps GitHub's repo shape to the simplified shape", () => {
     const result = simplifyRepos([
       {
-        name: "tonil",
+        name: "tone.rip",
         html_url: "https://github.com/riptone/tone.rip",
         stargazers_count: 3,
         updated_at: "2026-01-01T00:00:00Z",
@@ -13,7 +13,7 @@ describe("simplifyRepos", () => {
     ]);
     expect(result).toEqual([
       {
-        name: "tonil",
+        name: "tone.rip",
         url: "https://github.com/riptone/tone.rip",
         homepage: "",
         language: "Other",

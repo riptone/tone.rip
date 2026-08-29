@@ -10,7 +10,7 @@ import { fetchReadmeHtml, isValidRepoName } from "../services/readme-cache";
 
 const BROWSER_TTL_SECONDS = 300;
 const EDGE_TTL_SECONDS = 900;
-const LAST_UPDATED_HEADER = "x-tonil-last-updated";
+const LAST_UPDATED_HEADER = "x-tone-last-updated";
 
 // CORS (Access-Control-Allow-Origin, Vary) and Cross-Origin-Resource-Policy
 // are both handled once for the whole API in src/index.ts - this route used
@@ -35,7 +35,7 @@ export const projectsRoute = new Hono<AppEnv>();
 projectsRoute.get("/", async (c) => {
   const { snapshot, cacheState } = await fetchProjects({
     githubToken: c.env.GITHUB_TOKEN,
-    forceRevalidate: c.req.header("x-tonil-revalidate") === "1",
+    forceRevalidate: c.req.header("x-tone-revalidate") === "1",
     onUpstreamError: (details) =>
       console.warn("[projects-api] upstream_failed", details),
   });
@@ -66,7 +66,7 @@ projectsRoute.get("/:name/readme", async (c) => {
         : `public, max-age=${BROWSER_TTL_SECONDS}, s-maxage=${EDGE_TTL_SECONDS}`,
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
-    "X-Tonil-Cache": cacheState,
+    "X-Tone-Cache": cacheState,
   };
   if (etag) headers.ETag = etag;
 
@@ -83,7 +83,7 @@ function respond(
 ) {
   const extra: Record<string, string> = {
     [LAST_UPDATED_HEADER]: snapshot.lastUpdated,
-    "X-Tonil-Cache": cacheState,
+    "X-Tone-Cache": cacheState,
   };
   if (cacheState === "stale" || cacheState === "memory-stale") {
     extra.Warning = '110 - "Response is stale"';
@@ -92,7 +92,7 @@ function respond(
     return c.body(snapshot.body, 200, {
       ...buildHeaders({
         "Cache-Control": "no-store",
-        "X-Tonil-Cache": cacheState,
+        "X-Tone-Cache": cacheState,
       }),
     });
   }

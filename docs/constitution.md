@@ -1,6 +1,6 @@
 # Design constitution
 
-The philosophy and visual language behind tonil's product surfaces (`apps/web`, `apps/dashboard`). This is the "why it looks and feels the way it does" reference - for the technical conventions (validation, API shape, git, project layout), see [engineering.md](./engineering.md).
+The philosophy and visual language behind tone.rip's product surfaces (`apps/web`, `apps/dashboard`). This is the "why it looks and feels the way it does" reference - for the technical conventions (validation, API shape, git, project layout), see [engineering.md](./engineering.md).
 
 ---
 

@@ -3,7 +3,7 @@ import { projectsResponseSchema } from "../src/projects";
 
 /** One entry shaped the way apps/api actually serves it. */
 const REAL = {
-  name: "tonil",
+  name: "tone.rip",
   url: "https://github.com/riptone/tone.rip",
   homepage: "https://tone.rip",
   language: "TypeScript",
@@ -21,7 +21,7 @@ describe("projectsResponseSchema", () => {
   it("accepts what the API serves, extra fields and all", () => {
     const parsed = projectsResponseSchema.safeParse([REAL]);
     expect(parsed.success).toBe(true);
-    expect(parsed.success && parsed.data[0]?.name).toBe("tonil");
+    expect(parsed.success && parsed.data[0]?.name).toBe("tone.rip");
   });
 
   it("rejects raw GitHub payloads rather than silently returning nothing", () => {
@@ -30,7 +30,7 @@ describe("projectsResponseSchema", () => {
     // `fork`, found neither, and dropped every row - an empty page with no
     // error anywhere. A raw payload must fail loudly instead.
     const raw = [
-      { name: "tonil", html_url: "https://github.com/riptone/tone.rip" },
+      { name: "tone.rip", html_url: "https://github.com/riptone/tone.rip" },
     ];
     const parsed = projectsResponseSchema.safeParse(raw);
     expect(parsed.success && parsed.data).toEqual([]);
@@ -44,7 +44,7 @@ describe("projectsResponseSchema", () => {
     ]);
     expect(parsed.success).toBe(true);
     expect(parsed.success && parsed.data.map((p) => p.name)).toEqual([
-      "tonil",
+      "tone.rip",
       "other",
     ]);
   });

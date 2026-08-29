@@ -47,8 +47,8 @@ import (
 // it in the session context.
 type contextKey string
 
-const grantKey contextKey = "tonil.grant"
-const fingerprintKey contextKey = "tonil.fingerprint"
+const grantKey contextKey = "tone.grant"
+const fingerprintKey contextKey = "tone.fingerprint"
 
 type config struct {
 	showVersion    bool

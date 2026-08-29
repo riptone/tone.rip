@@ -194,7 +194,7 @@ func (a *APIAuthorizer) Authorize(ctx context.Context, fingerprint string) Grant
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "tonil-ssh-cv")
+	req.Header.Set("User-Agent", "tone-ssh-cv")
 	if a.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+a.Token)
 	}

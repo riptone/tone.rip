@@ -4,10 +4,10 @@ import { fetchProjects } from "./projects-cache";
 
 const GITHUB_USER = "riptone";
 const GITHUB_API_ORIGIN = "https://api.github.com";
-const CACHE_KEY_PREFIX = "https://readme-api.tonil.internal/v1/";
+const CACHE_KEY_PREFIX = "https://readme-api.tone.internal/v1/";
 const EDGE_TTL_SECONDS = 3600;
 const UPSTREAM_TIMEOUT_MS = 8000;
-const CACHED_AT_HEADER = "x-tonil-cached-at";
+const CACHED_AT_HEADER = "x-tone-cached-at";
 
 type ReadmeCacheState =
   | "hit"
@@ -129,7 +129,7 @@ export async function fetchReadmeHtml(
       UPSTREAM_TIMEOUT_MS,
       {
         headers: {
-          "User-Agent": "tonil-api",
+          "User-Agent": "tone-api",
           Accept: "application/vnd.github.html+json",
           ...(options.githubToken
             ? { Authorization: `Bearer ${options.githubToken}` }

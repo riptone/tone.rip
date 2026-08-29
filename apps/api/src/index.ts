@@ -114,7 +114,7 @@ app.use("*", apiCatalog({ entries: ENDPOINTS.map(({ href }) => ({ href })) }));
 app.get("/", (c) =>
   c.json(
     {
-      name: "tonil api",
+      name: "tone api",
       catalog: "/.well-known/api-catalog",
       endpoints: ENDPOINTS,
     },

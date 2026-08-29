@@ -11,7 +11,7 @@ import BaseHead from "@repo/ui/BaseHead.astro";
 import { btnLink, chips, codeBlock, panelHead, tag } from "@repo/ui/components";
 import { h, clear } from "@repo/ui/dom";
 import { readStored, writeStored } from "@repo/ui/storage";
-import type { TonilThemeHelpers, Theme } from "@repo/ui/theme-bootstrap";
+import type { ToneThemeHelpers, Theme } from "@repo/ui/theme-bootstrap";
 
 import resetCss from "@repo/ui/styles/reset.css?inline";   // inlined under a CSP nonce (apps/web's pattern)
 import tokensCss from "@repo/ui/styles/tokens.css?inline";
@@ -23,7 +23,7 @@ import "@repo/ui/styles/tokens.css";                        // or linked as a re
 
 ### `BaseHead.astro`
 
-The shared `<head>`: favicon/meta tags, canonical/hreflang, OG/Twitter tags, JSON-LD (merges a default `WebSite` schema with a per-page `schema` prop), and two inline nonce'd scripts - a pre-paint theme bootstrap (reads `localStorage.theme`, sets `documentElement.dataset.theme` before first paint to avoid a flash) and the `window.tonil` theme helpers described below. See the `Props` interface at the top of the file for the full prop list.
+The shared `<head>`: favicon/meta tags, canonical/hreflang, OG/Twitter tags, JSON-LD (merges a default `WebSite` schema with a per-page `schema` prop), and two inline nonce'd scripts - a pre-paint theme bootstrap (reads `localStorage.theme`, sets `documentElement.dataset.theme` before first paint to avoid a flash) and the `window.tone` theme helpers described below. See the `Props` interface at the top of the file for the full prop list.
 
 Every consumer needs `Astro.locals.cspNonce` typed in its own `env.d.ts` - see the comment in `src/env.d.ts` for why that can't be inherited across a package boundary.
 
@@ -31,7 +31,7 @@ Every consumer needs `Astro.locals.cspNonce` typed in its own `env.d.ts` - see t
 
 - `tokens.css` - `@font-face` declarations + every design token as a CSS custom property (`--bg`, `--text*`, `--accent*`, `--font-*`, spacing/radius/motion scales, …), with a `html[data-theme="light"]` block overriding the semantic tokens for light mode. Dark is the implicit default.
 - `reset.css` - box-sizing, focus rings, `.sr-only`, and other app-agnostic base styles. Deliberately does **not** set `body { overflow: hidden }` - that's a layout choice specific to apps/web's locked-viewport "desktop" page, so it stays in `apps/web/src/styles/desktop/base.css`.
-- `theme-bootstrap.ts` - just the `Theme`/`TonilThemeHelpers` types for the `window.tonil` object `BaseHead.astro`'s inline script installs at runtime (`getStoredTheme`, `applyTheme`, `readTheme`, `syncTheme`, `setStoredTheme`, plus a `tonil:themechange` event for cross-widget sync). Each app's own theme-toggle script (`apps/web/src/scripts/desktop/theme.ts`, `apps/dashboard/src/scripts/theme.ts`) types against this instead of hand-declaring its own copy.
+- `theme-bootstrap.ts` - just the `Theme`/`ToneThemeHelpers` types for the `window.tone` object `BaseHead.astro`'s inline script installs at runtime (`getStoredTheme`, `applyTheme`, `readTheme`, `syncTheme`, `setStoredTheme`, plus a `tone:themechange` event for cross-widget sync). Each app's own theme-toggle script (`apps/web/src/scripts/desktop/theme.ts`, `apps/dashboard/src/scripts/theme.ts`) types against this instead of hand-declaring its own copy.
 
 ### Design-system primitives (`components.ts` + `styles/components.css`)
 
