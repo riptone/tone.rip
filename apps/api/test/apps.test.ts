@@ -14,13 +14,28 @@ const KID = "test-kid";
 
 async function generateSignedAccessToken(payload: Record<string, unknown>) {
   const keyPair = (await crypto.subtle.generateKey(
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]) },
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: "SHA-256",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+    },
     true,
     ["sign", "verify"],
   )) as CryptoKeyPair;
-  const privateJwk = (await crypto.subtle.exportKey("jwk", keyPair.privateKey)) as JsonWebKey;
-  const publicJwk = (await crypto.subtle.exportKey("jwk", keyPair.publicKey)) as JsonWebKey;
-  const token = await sign(payload, { ...privateJwk, alg: "RS256", kid: KID }, "RS256");
+  const privateJwk = (await crypto.subtle.exportKey(
+    "jwk",
+    keyPair.privateKey,
+  )) as JsonWebKey;
+  const publicJwk = (await crypto.subtle.exportKey(
+    "jwk",
+    keyPair.publicKey,
+  )) as JsonWebKey;
+  const token = await sign(
+    payload,
+    { ...privateJwk, alg: "RS256", kid: KID },
+    "RS256",
+  );
   const jwks = { keys: [{ ...publicJwk, alg: "RS256", kid: KID, use: "sig" }] };
   return { token, jwks };
 }
@@ -263,7 +278,8 @@ describe("GET /apps", () => {
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
         const url = typeof input === "string" ? input : input.toString();
-        if (url === ACCESS_JWKS_URL) return new Response(JSON.stringify(jwks), { status: 200 });
+        if (url === ACCESS_JWKS_URL)
+          return new Response(JSON.stringify(jwks), { status: 200 });
         return new Response(null, { status: 200 });
       }),
     );
@@ -273,11 +289,19 @@ describe("GET /apps", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { apps: unknown[]; state: string };
     expect(Array.isArray(body.apps)).toBe(true);
-    expect(["unconfigured", "unavailable", "stale", "hit", "updated"]).toContain(body.state);
+    expect([
+      "unconfigured",
+      "unavailable",
+      "stale",
+      "hit",
+      "updated",
+    ]).toContain(body.state);
   });
 
   it("is listed in the API catalog so it is discoverable", async () => {
-    const res = await SELF.fetch("https://api.example.com/.well-known/api-catalog");
+    const res = await SELF.fetch(
+      "https://api.example.com/.well-known/api-catalog",
+    );
     expect(await res.text()).toContain("/apps");
   });
 });
