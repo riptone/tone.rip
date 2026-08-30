@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 import { beforeAll, expect, test } from "bun:test";
 import {
+  clickInView,
   collectWebViewProblems,
   countVisibleItems,
   createWebView,
@@ -31,7 +32,11 @@ test("home page loads clean and the language switch works", async () => {
     await view.navigate(`${BASE_URL}/`);
     await waitForText(view, "h1", "Hi, I'm tone.");
 
-    await view.click('[data-lang-set="pt"]');
+    // The switch is in the footer, well below a 720px viewport. WebView's
+    // click waits for the element to be *in* the viewport and does not scroll
+    // to it the way Playwright does, so a plain click here waits out its full
+    // 30s default and the test reads as a bare timeout with no selector in it.
+    await clickInView(view, '[data-lang-set="pt"]');
     await waitForText(view, "h1", "Olá, sou o tone.");
 
     expect(problems.errors, problems.errors.join("\n")).toEqual([]);
@@ -52,9 +57,9 @@ test("navigating to another page produces no CSP violation", async () => {
   });
   try {
     await view.navigate(`${BASE_URL}/`);
-    // waitForText ensures heading ready before click — click(selector) also waits actionable
+    // waitForText ensures heading ready before click — clickInView also waits actionable
     await waitForText(view, "h1", "Hi, I'm tone.");
-    await view.click('a[data-section="work"]');
+    await clickInView(view, 'a[data-section="work"]');
 
     // navigate via click triggers onNavigated before next evaluate settles
     // poll URL and heading instead of relying on WebView.url timing

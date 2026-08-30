@@ -165,12 +165,66 @@ function featherEdge(
  *
  * `host` is emptied and takes over as the positioning context. Returns a
  * handle; call `destroy()` to terminate the worker and release observers.
+ *
+ * If the field cannot run, `host` is left exactly as it was and the returned
+ * handle is inert - see the note on the worker below.
  */
 export function mountNoiseGradient(
   host: HTMLElement,
   options: NoiseGradientOptions = {},
 ): NoiseGradientHandle {
   let settings = { ...DEFAULTS, ...options };
+
+  /* The worker is built first, before a single DOM mutation, because it is
+     the one step here that can fail outright - and this function runs first
+     in the entries that use it. apps/web's SiteLayout calls `syncField()`
+     ahead of the contact, context-menu, filter and language mounts, and they
+     minify into one comma expression, so an exception escaping this function
+     takes all four down with it. A decorative background is then able to
+     disable the language switch, which is not a trade anything here would
+     make deliberately.
+
+     Not hypothetical: an embedded runtime returned a `Worker` stub with no
+     `postMessage`, so construction succeeded and the first `send()` threw
+     `TypeError: o.postMessage is not a function` - which is why the guard
+     below checks the shape rather than only catching the constructor. A
+     `try` around `new Worker` alone would have caught nothing.
+
+     Failing here leaves `host` as the server rendered it. The stylesheets
+     already expect that: both `var(--field-ramp, …)` sites carry a fallback,
+     and site-footer.css spells out what happens without a field running. */
+  let worker: Worker;
+  try {
+    // Before the Worker, which is a Trusted Types sink under the production CSP.
+    installDefaultTrustedTypesPolicy();
+    /* The `new Worker(new URL(…, import.meta.url), { type: "module" })` shape is
+       load-bearing and must stay literal: Vite matches it as an AST pattern to
+       decide that field-worker.ts is a worker entry and bundle it as one.
+       Lifting the URL into a variable or a helper is enough to lose the match,
+       and then Vite copies the raw .ts file to dist as a static asset instead -
+       which builds cleanly, ships, and 404s the worker in production. Verified
+       by doing exactly that: dist held `field-worker.CiJLJbue.ts`. */
+    worker = new Worker(new URL("./field-worker.ts", import.meta.url), {
+      type: "module",
+    });
+    // The two methods this module goes on to call. Checked together so the
+    // stub case fails here, once, rather than at whichever call site reaches
+    // its missing method first - `terminate()` in `destroy()` is the other.
+    if (
+      typeof worker.postMessage !== "function" ||
+      typeof worker.terminate !== "function"
+    ) {
+      throw new TypeError("Worker is missing postMessage or terminate");
+    }
+  } catch (error) {
+    // `warn`, not `error`: the page works without the field, and both e2e
+    // suites fail on console errors so that the real ones stay worth reading.
+    console.warn("[noise-gradient] field unavailable:", error);
+    return {
+      update() {},
+      destroy() {},
+    };
+  }
 
   host.classList.add("ntg");
   host.setAttribute("aria-hidden", "true");
@@ -185,18 +239,6 @@ export function mountNoiseGradient(
   host.appendChild(grain);
 
   const context = canvas.getContext("2d");
-  // Before the Worker, which is a Trusted Types sink under the production CSP.
-  installDefaultTrustedTypesPolicy();
-  /* The `new Worker(new URL(…, import.meta.url), { type: "module" })` shape is
-     load-bearing and must stay literal: Vite matches it as an AST pattern to
-     decide that field-worker.ts is a worker entry and bundle it as one.
-     Lifting the URL into a variable or a helper is enough to lose the match,
-     and then Vite copies the raw .ts file to dist as a static asset instead -
-     which builds cleanly, ships, and 404s the worker in production. Verified
-     by doing exactly that: dist held `field-worker.CiJLJbue.ts`. */
-  const worker = new Worker(new URL("./field-worker.ts", import.meta.url), {
-    type: "module",
-  });
 
   let visible = true;
   let reducedMotion = false;
