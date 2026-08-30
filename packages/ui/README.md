@@ -114,10 +114,17 @@ cd packages/ui && bun run fonts
 ```
 
 `scripts/subset-font.py` cuts `assets/fonts/hanken-grotesk-var.woff2` - the
-full 100-900 variable face, kept out of `public/` because it is the input
+full 100-900 variable face, kept out of the build because it is the input
 rather than an asset - down to the weight range the design uses, and writes
-the result into `public/fonts/`. That is 34,664 B down to 21,176 B, a 39%
+the result into `src/styles/fonts/`. That is 34,664 B down to 21,176 B, a 39%
 saving on every first visit, with no glyph or codepoint removed.
+
+Into `src/` rather than `public/` so the bundler owns the URL: `tokens.css`
+resolves it with a relative `url()` and `src/fonts.ts` imports the same file
+with `?url`, which emits one content-hashed copy under `_astro/` that the
+`@font-face` and the preload share. A hand-named file in `public/` needed a
+`_headers` rule to grant it a year of `immutable` caching on trust; a hashed
+one earns it, because a different cut is a different URL.
 
 It needs `fonttools` and `brotli`, the only third-party Python dependencies
 anywhere in this repository:

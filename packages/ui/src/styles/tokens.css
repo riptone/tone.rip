@@ -30,7 +30,12 @@
      rather than by complaining. test/fonts.test.ts holds the two in step. */
   font-weight: 400 500;
   font-display: optional;
-  src: url("/fonts/hanken-grotesk-400-500.woff2") format("woff2");
+  /* Relative, so the bundler resolves it and emits a content-hashed copy
+     under _astro/ rather than us serving a hand-named file out of public/.
+     The hash is what makes the year-long `immutable` cache correct by
+     construction: change the cut and the URL changes with it, instead of
+     depending on somebody remembering to rename the file. */
+  src: url("./fonts/hanken-grotesk-400-500.woff2") format("woff2");
 }
 :root {
   --tone-black: #000000;

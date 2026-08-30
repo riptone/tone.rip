@@ -55,10 +55,14 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # under `public/` is served, and shipping both cuts would mean paying for the
 # saving and the thing it saved us from.
 SOURCE = ROOT / "assets" / "fonts" / "hanken-grotesk-var.woff2"
-# The name carries the axis, which `public/_headers` asks for: fonts are
-# served `immutable` for a year, so a changed cut has to be a changed URL or
-# returning visitors keep the old file until it expires.
-OUTPUT = ROOT / "public" / "fonts" / f"hanken-grotesk-{WEIGHTS[0]}-{WEIGHTS[1]}.woff2"
+# Into src/, not public/: the bundler resolves the relative url() in
+# tokens.css, emits one content-hashed copy under _astro/, and the adapter's
+# immutable rule covers it there. The name still carries the axis because
+# test/fonts.test.ts reads the range back out of it to check the @font-face
+# descriptor is not promising weights this file cannot draw.
+OUTPUT = (
+    ROOT / "src" / "styles" / "fonts" / f"hanken-grotesk-{WEIGHTS[0]}-{WEIGHTS[1]}.woff2"
+)
 
 
 def main() -> None:

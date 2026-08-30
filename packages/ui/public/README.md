@@ -1,8 +1,14 @@
 # Shared static assets
 
-The font, the favicons, the icon set, and the `_headers` rules that give them
-a cache lifetime. One copy, here, because `@repo/ui` is what *references*
-them: `src/fonts.ts` names `/fonts/hanken-grotesk-400-500.woff2`, `BaseHead.astro`
+The favicons, the icon set, and the `_headers` rules that give them a cache
+lifetime and a `nosniff`.
+
+The webfont used to be here too. It is now `src/styles/fonts/`, because a
+file under `public/` is served at the name it was given, and a font wants a
+content hash so its year-long `immutable` lifetime follows from the URL
+rather than from a convention. The bundler emits it under `_astro/` - see
+`src/fonts.ts`. One copy, here, because `@repo/ui` is what *references*
+them: `BaseHead.astro`
 emits the `<link rel="icon">` tags and the font preload, and `_headers` exists
 for exactly those paths. The package that declares the contract now also holds
 the files.
