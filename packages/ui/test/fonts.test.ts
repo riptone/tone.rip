@@ -28,6 +28,26 @@ describe("the preloaded font", () => {
     expect(declared?.[1]).toBe(FONT_HREF);
   });
 
+  it("promises only the weights the shipped file can draw", () => {
+    /* The face is cut down to a weight range by scripts/subset-font.py, and
+       the filename carries that range because `public/_headers` serves fonts
+       `immutable` for a year - a new cut has to be a new URL.
+
+       Which makes the filename the one honest record of what is in the file,
+       and this the place the `@font-face` descriptor is checked against it.
+       Widening the descriptor without re-running the script is the failure
+       worth catching: the browser then believes it can ask for a weight the
+       file has no data for, and answers its own request by synthesising one.
+       That looks like a slightly wrong font rather than like a bug. */
+    const src = tokensCss.match(/src:\s*url\("[^"]*?-(\d+)-(\d+)\.woff2"\)/);
+    expect(src, "font filename does not carry a weight range").not.toBeNull();
+    const declared = tokensCss.match(
+      /@font-face[^}]*font-weight:\s*(\d+)\s+(\d+)/s,
+    );
+    expect(declared, "no @font-face font-weight range found").not.toBeNull();
+    expect([declared?.[1], declared?.[2]]).toEqual([src?.[1], src?.[2]]);
+  });
+
   it("is declared `optional`, which is what makes the preload load-bearing", () => {
     // Under `swap` or `fallback` a missed window costs a flash, not the whole
     // page's typography. Under `optional` it costs the typeface for the life

@@ -5,8 +5,14 @@
 
 import { CONTACT } from "@repo/content";
 import T from "@repo/ui/site/T.astro";
+/* The filter's behavioural rules, and this page's own. Both used to be in
+   the layout's shared sheet, which put them on the home page and the CV
+   too - see SiteLayout's `pageCss` prop. This is the only route with
+   anything to filter. */
+import filterCss from "@repo/ui/styles/filter.css?inline";
 import SiteLayout from "../layouts/SiteLayout.astro";
 import { loadProjects } from "../services/projects";
+import workCss from "../styles/work.css?inline";
 
 const { repos, ok } = await loadProjects();
 
@@ -30,6 +36,7 @@ const languages = [...new Set(repos.map((r) => r.language))].sort();
 ---
 
 <SiteLayout
+  pageCss={[filterCss, workCss].join("\n")}
   title="Work · public repositories and projects · tone"
   description="Every public repository, newest first, straight from GitHub, filterable by language and topic. Forks and archived repositories are left out, so what is listed is work rather than history."
   section="work"

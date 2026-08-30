@@ -12,7 +12,6 @@ import ContextMenu, {
 import Footer from "@repo/ui/site/Footer.astro";
 import brandCss from "@repo/ui/styles/brand.css?inline";
 import contextMenuCss from "@repo/ui/styles/context-menu.css?inline";
-import filterCss from "@repo/ui/styles/filter.css?inline";
 import gradientCss from "@repo/ui/styles/gradient.css?inline";
 import resetCss from "@repo/ui/styles/reset.css?inline";
 import shellCss from "@repo/ui/styles/shell.css?inline";
@@ -61,6 +60,19 @@ interface Props {
   /** Route id, for the nav's active state. */
   section: string;
   /**
+   * This page's own stylesheet, appended after the shared one.
+   *
+   * The layout inlines its CSS into every response, and that response is
+   * uncacheable - it carries a per-request CSP nonce - so a rule that only
+   * one route uses is re-sent on every visit to every other route. Measured
+   * before this existed: 16,279 B of CSS on `/`, 59% of it matching nothing
+   * on the page, with the work filter and the CV list the bulk of it.
+   *
+   * Appended rather than prepended, which keeps the order these rules had
+   * when they sat at the bottom of site.css.
+   */
+  pageCss?: string;
+  /**
    * Extra JSON-LD for this page, merged after the site-wide `WebSite` node.
    *
    * Per page rather than site-wide because the useful nodes are page-shaped:
@@ -76,6 +88,7 @@ const {
   ramp = "moss",
   section,
   schema,
+  pageCss,
 } = Astro.props as Props;
 
 const cspNonce = Astro.locals.cspNonce as string | undefined;
@@ -89,8 +102,8 @@ const css = [
   brandCss,
   siteFooterCss,
   contextMenuCss,
-  filterCss,
   siteCss,
+  pageCss ?? "",
 ].join("\n");
 
 /* Both languages per label, like every other string on the page - the nav

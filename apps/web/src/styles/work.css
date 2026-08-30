@@ -1,0 +1,147 @@
+/* Loaded by pages/work.astro, not by the layout.
+
+   It used to live in site.css, which SiteLayout inlines into every response
+   - so every visit to the home page carried the rules for this one. Measured
+   before splitting: 16,279 B of CSS on / of which 59% matched nothing on the
+   page, and the HTML carrying it is uncacheable because it holds a
+   per-request CSP nonce, so that was paid on every navigation rather than
+   once.
+
+   SiteLayout takes this as `pageCss` and appends it after the shared sheet,
+   which preserves the order these rules had when they sat at the bottom of
+   site.css. */
+
+/* The same control the dashboard has, wearing this page's clothes: the
+   behaviour is @repo/ui's mountFilter, only the type and the rules are
+   local. */
+.workfilter {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  max-width: var(--measure);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.9rem;
+  font-size: var(--body-size);
+}
+
+.workfilter__field {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.workfilter__field--tag {
+  flex: 0 0 auto;
+}
+
+.workfilter__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+
+/* The controls themselves - underlines rather than boxes, and the tag
+   picker's dropdown - are in @repo/ui/styles/filter.css, keyed on the same
+   data attributes mountFilter() binds to. They were written out here and
+   again in the dashboard, which is how the two ended up with different
+   padding. What stays here is only where they sit. */
+
+.workfilter__count {
+  display: inline-block;
+  min-width: 6ch;
+  min-height: 1lh;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+  /* Reserve the line even before mountFilter() writes “N / M”, so the
+     empty span doesn't collapse then expand and push the list. The server
+     now renders the count, but the min keeps JS updates (e.g. “1 / 12”
+     vs “12 / 12”) from reflowing. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 1lh;
+}
+
+/* After the base rules, not before: these override them at equal
+   specificity, so source order is the whole mechanism. */
+@media (max-width: 620px) {
+  .workfilter {
+    flex-wrap: wrap;
+    gap: 0.7rem 1rem;
+  }
+
+  .workfilter__field {
+    flex: 1 0 100%;
+  }
+
+  .workfilter__field--tag {
+    flex: 1 0 auto;
+  }
+}
+
+/* Owned by the list, not by its first row: filtering hides rows, and a
+   border belonging to "the first child" disappears with it. */
+.work {
+  border-top: 1px solid var(--border);
+}
+
+.work__item[hidden] {
+  display: none;
+}
+
+.work__item {
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.work__name {
+  font-family: var(--font-mono);
+  font-size: var(--body-size);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.work__name:hover,
+.work__name:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.work__desc {
+  margin: 0.35rem 0 0.45rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.work__meta {
+  display: flex;
+  /* Four items now that the date is here - language, stars, date, live -
+     and at 320px that is wider than the column. Wrapping rather than
+     overflowing: the row is metadata, so a second line costs nothing and a
+     horizontal scrollbar on a phone costs the layout. */
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--text-faint);
+}
+
+.work__live {
+  color: var(--text-faint);
+  text-underline-offset: 3px;
+}
+
+.work__live:hover {
+  color: var(--text);
+}
+
+.work__note {
+  max-width: var(--measure);
+  margin: 0 0 1.5rem;
+  font-size: var(--body-size);
+  color: var(--text-muted);
+}

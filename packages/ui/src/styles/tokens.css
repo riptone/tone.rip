@@ -23,9 +23,14 @@
 @font-face {
   font-family: "Hanken Grotesk";
   font-style: normal;
-  font-weight: 100 900;
+  /* The range the file actually carries, not the range the typeface has.
+     scripts/subset-font.py cuts the variable axis down to the two weights
+     the design uses, so declaring 100 900 here would promise a bold this
+     face cannot draw - and the browser answers that by synthesising one
+     rather than by complaining. test/fonts.test.ts holds the two in step. */
+  font-weight: 400 500;
   font-display: optional;
-  src: url("/fonts/hanken-grotesk-var.woff2") format("woff2");
+  src: url("/fonts/hanken-grotesk-400-500.woff2") format("woff2");
 }
 :root {
   --tone-black: #000000;

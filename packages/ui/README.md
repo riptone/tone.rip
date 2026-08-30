@@ -107,6 +107,30 @@ The second half used to be a comment saying to regenerate the rasters by hand
 "when the mark changes". That is how the mark became a headstone in August and
 every raster icon on both properties stayed the old backslash for a month.
 
+### The webfont
+
+```bash
+cd packages/ui && bun run fonts
+```
+
+`scripts/subset-font.py` cuts `assets/fonts/hanken-grotesk-var.woff2` - the
+full 100-900 variable face, kept out of `public/` because it is the input
+rather than an asset - down to the weight range the design uses, and writes
+the result into `public/fonts/`. That is 34,664 B down to 21,176 B, a 39%
+saving on every first visit, with no glyph or codepoint removed.
+
+It needs `fonttools` and `brotli`, the only third-party Python dependencies
+anywhere in this repository:
+
+```bash
+python3 -m pip install fonttools brotli
+```
+
+Run by hand, like `brand`, and for the same reason: the input changes when the
+typeface changes. The output is committed. Widening the range is a two-line
+edit to `WEIGHTS` and a re-run - and `test/fonts.test.ts` fails if the
+`@font-face` descriptor claims a range the shipped file was not cut to.
+
 ## Adding a new shared component
 
 1. Ask whether it genuinely needs to render the same way in more than one app.

@@ -12,4 +12,4 @@
  * So: one constant, and a test that reads the stylesheet back and checks it
  * still says the same thing (test/fonts.test.ts).
  */
-export const FONT_HREF = "/fonts/hanken-grotesk-var.woff2";
+export const FONT_HREF = "/fonts/hanken-grotesk-400-500.woff2";

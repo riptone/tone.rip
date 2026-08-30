@@ -27,6 +27,7 @@
   },
   "scripts": {
     "brand": "python3 scripts/generate-brand.py && bun run scripts/rasterize-icons.ts",
+    "fonts": "python3 scripts/subset-font.py",
     "check-types": "astro check && tsc --noEmit",
     "test": "vitest run"
   },

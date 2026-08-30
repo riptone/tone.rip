@@ -2,7 +2,7 @@
 
 The font, the favicons, the icon set, and the `_headers` rules that give them
 a cache lifetime. One copy, here, because `@repo/ui` is what *references*
-them: `src/fonts.ts` names `/fonts/hanken-grotesk-var.woff2`, `BaseHead.astro`
+them: `src/fonts.ts` names `/fonts/hanken-grotesk-400-500.woff2`, `BaseHead.astro`
 emits the `<link rel="icon">` tags and the font preload, and `_headers` exists
 for exactly those paths. The package that declares the contract now also holds
 the files.

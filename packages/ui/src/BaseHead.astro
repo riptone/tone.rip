@@ -93,7 +93,16 @@ const cspNonce = Astro.locals.cspNonce;
 const canonicalURL = Astro.site
   ? new URL(Astro.url.pathname, Astro.site)
   : Astro.url;
-const ogImageUrl = new URL(image, Astro.url);
+/* Against `Astro.site`, the same base the canonical above uses, and not
+   against `Astro.url`. The two sat next to each other resolving differently
+   for no reason anyone recorded: the canonical is pinned to the configured
+   origin precisely so it cannot follow whatever host the request arrived on,
+   and the social image had no such protection. Production is fine today -
+   `workers_dev` and `preview_urls` are both off, so there is no second
+   hostname to be reached on - but that is a wrangler.jsonc setting standing
+   in for a correctness property, and the local `wrangler dev` build already
+   shows the difference: `http://tone.rip/...` in `og:image:secure_url`. */
+const ogImageUrl = new URL(image, canonicalURL);
 const canonicalHref = canonicalURL.toString();
 const ogImageHref = ogImageUrl.toString();
 const ogImageWidth = image === "/images/meta/og.png" ? "1200" : undefined;

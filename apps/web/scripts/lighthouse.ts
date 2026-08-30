@@ -99,6 +99,7 @@ interface AuditRow {
   subpart?: string;
   duration?: number;
   url?: string;
+  totalBytes?: number;
 }
 
 /**
@@ -252,6 +253,25 @@ async function main(): Promise<void> {
         console.log("\n  LCP breakdown");
         for (const key of lcpKeys) {
           console.log(`    ${key.slice(4).padEnd(22)} ${median(key)} ms`);
+        }
+      }
+
+      /* What the page actually costs a first-time visitor. The chain audit
+         above says how the requests are ordered; this says how big they are,
+         which is the other half and the one that stays true when the network
+         is not the bottleneck. */
+      const weight = lhr.audits["total-byte-weight"];
+      if (weight?.numericValue) {
+        console.log(
+          `\n  Total transferred  ${(weight.numericValue / 1024).toFixed(1)} KiB`,
+        );
+        for (const row of findRows(weight.details).slice(0, 5)) {
+          const kib =
+            typeof row.totalBytes === "number"
+              ? `${(row.totalBytes / 1024).toFixed(1)} KiB`
+              : "?";
+          const path = String(row.url ?? "").replace(/^https?:\/\/[^/]+/, "");
+          console.log(`    ${kib.padStart(9)}  ${path || "/"}`);
         }
       }
 

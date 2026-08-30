@@ -1,0 +1,100 @@
+/* Loaded by pages/cv.astro, not by the layout.
+
+   It used to live in site.css, which SiteLayout inlines into every response
+   - so every visit to the home page carried the rules for this one. Measured
+   before splitting: 16,279 B of CSS on / of which 59% matched nothing on the
+   page, and the HTML carrying it is uncacheable because it holds a
+   per-request CSP nonce, so that was paid on every navigation rather than
+   once.
+
+   SiteLayout takes this as `pageCss` and appends it after the shared sheet,
+   which preserves the order these rules had when they sat at the bottom of
+   site.css. */
+
+.cv__head {
+  margin: 2.75rem 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--body-size);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-caps);
+  text-transform: lowercase;
+  color: var(--text-faint);
+}
+
+.cv__entry {
+  margin-bottom: 1.6rem;
+}
+
+.cv__role {
+  margin: 0;
+  font-size: var(--body-size);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+/* The one place mono earns its keep in running content: these are dates and
+   labels, not prose, and they want to line up rather than read well. */
+.cv__meta {
+  margin: 0.15rem 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--text-faint);
+}
+
+/* The languages and frameworks a role actually used. Same mono treatment as
+   the dates above it - these are a list of names, not prose - but at muted
+   rather than faint, because the stack is content and the dates are labels.
+   `:has` pulls the line above it tight so the two read as one header block
+   instead of a header and a stray paragraph. */
+.cv__meta:has(+ .cv__stack) {
+  margin-bottom: 0.15rem;
+}
+
+.cv__stack {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--text-muted);
+}
+
+.cv__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.cv__list li {
+  margin-bottom: 0.35rem;
+}
+
+/* Two columns where there is room for them, stacked where there is not -
+   a term and its expansion read as a pair either way. */
+.cv__defs {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) 1fr;
+  gap: 0.55rem 1.5rem;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.cv__defs dt {
+  color: var(--text-faint);
+}
+
+.cv__defs dd {
+  margin: 0;
+  color: var(--text);
+}
+
+@media (max-width: 620px) {
+  .cv__defs {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .cv__defs dd {
+    margin-bottom: 0.7rem;
+  }
+}
