@@ -236,7 +236,6 @@ const MENU: ContextMenuEntry[] = [
         mountContextMenu,
         mountFilter,
         mountLang,
-        syncField,
       } from "@repo/ui/site";
 
       // Runs once per document, which since the move off ClientRouter is also
@@ -245,15 +244,37 @@ const MENU: ContextMenuEntry[] = [
       // after each soft swap; with cross-document transitions the browser
       // gives us a new document and a new module instance, so the listener
       // would only ever have fired zero times.
-      syncField();
       mountContact();
       mountContextMenu();
       // A no-op on pages with nothing to filter; /work is the only one so
       // far, and putting it here means a second such page needs no wiring.
       mountFilter();
-      // Last: the document renders in English, so this is what turns it into
-      // the visitor's language.
+      // Last of the four: the document renders in English, so this is what
+      // turns it into the visitor's language.
       mountLang();
+
+      /* The field is imported here rather than at the top, and the reason is
+         the shape of the request waterfall rather than taste.
+
+         A static import of it made this entry a three-deep critical chain:
+         the HTML, then this module, then the 8.5 KB chunk holding the
+         gradient, the noise field and the ramps - and a module does not
+         execute until every static import of it has landed, so all four
+         mounts above sat behind a download whose only job is a background.
+         Lighthouse measured the whole chain at 413ms.
+
+         Dynamic, the four run as soon as this file does, and the field
+         arrives on its own schedule. It is not perceptibly later: the
+         browser could not have started that request before parsing this
+         module either way. What changes is what waits on it, which is now
+         nothing.
+
+         Same reasoning as the guard in @repo/ui's noise-gradient, arrived at
+         from the other direction: decoration must not be able to hold up the
+         things a visitor came to use. */
+      void import("@repo/ui/site/field").then(({ syncField }) => {
+        syncField();
+      });
     </script>
   </body>
 </html>

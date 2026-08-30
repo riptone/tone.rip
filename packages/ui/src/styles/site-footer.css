@@ -51,13 +51,35 @@
 }
 
 /* en / pt. Two buttons rather than a select: there are two options, and a
-   select would be a menu that opens to show one alternative. */
+   select would be a menu that opens to show one alternative.
+
+   The gap was 0.6rem and is now 0.25rem, which is not a change of mind about
+   the spacing - it is what keeps the spacing looking the same now that the
+   buttons below carry a real target box. Measured: the two labels sat 9.6px
+   apart and now sit ~13px apart, rather than the ~19px the old gap would
+   have given once each box grew to 24px. */
 .sitefoot__lang {
   display: inline-flex;
-  gap: 0.6rem;
+  gap: 0.25rem;
 }
 
+/* WCAG 2.5.8 Target Size (Minimum) is 24x24 CSS px. These were 15.7x23 and
+   13.4x23 - the height was a rounding error away and the width was half.
+   Two 13px-wide targets 9.6px apart is a coin flip on a phone, and it is the
+   one control in the footer whose whole job is to be pressed by somebody who
+   could not read the page in the language it arrived in.
+
+   `min-width`/`min-height` with the label centred, rather than padding: the
+   box grows around the text instead of displacing it, so the row's baseline
+   and the rules either side of it stay where they were. The row is unchanged
+   in height too - its neighbours are already 25.6px, so a 24px box fits
+   inside the line box that existed. */
 .sitefoot__langbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
   padding: 0;
   border: 0;
   background: none;

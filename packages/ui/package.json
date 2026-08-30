@@ -10,6 +10,7 @@
     "./gradient": "./src/gradient/index.ts",
     "./motion/scroll-progress": "./src/motion/scroll-progress.ts",
     "./site": "./src/site/index.ts",
+    "./site/field": "./src/site/field.ts",
     "./site/ContextMenu.astro": "./src/site/ContextMenu.astro",
     "./site/Footer.astro": "./src/site/Footer.astro",
     "./site/NotFound.astro": "./src/site/NotFound.astro",

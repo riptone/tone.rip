@@ -122,6 +122,25 @@ const languages = [...new Set(repos.map((r) => r.language))].sort();
           <p class="work__meta">
             <span class="work__lang">{repo.language}</span>
             {repo.stars > 0 && <span class="work__stars">{repo.stars}★</span>}
+            {/*
+              The date the list is already sorted by, finally shown. It came
+              down from the API with every repo and was rendered nowhere, so
+              "newest first" in the note above was a claim the page gave the
+              reader no way to check.
+
+              ISO, sliced to the day, rather than a formatted or relative
+              date: `<T>` would need a translation of every month name for a
+              string that is the same fact in both languages, and "3 weeks
+              ago" is a moving target rendered into a response that is cached
+              for fifteen minutes. The `datetime` attribute carries the full
+              timestamp for anything reading the page rather than looking at
+              it.
+            */}
+            {repo.updatedAt && (
+              <time class="work__updated" datetime={repo.updatedAt}>
+                {repo.updatedAt.slice(0, 10)}
+              </time>
+            )}
             {repo.homepage && (
               <a class="work__live" href={repo.homepage} rel="noopener">
                 <T en="live" pt="site" />

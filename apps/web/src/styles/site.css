@@ -305,7 +305,12 @@ body {
 
 .work__meta {
   display: flex;
-  gap: 1rem;
+  /* Four items now that the date is here - language, stars, date, live -
+     and at 320px that is wider than the column. Wrapping rather than
+     overflowing: the row is metadata, so a second line costs nothing and a
+     horizontal scrollbar on a phone costs the layout. */
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
   margin: 0;
   font-family: var(--font-mono);
   font-size: 0.86em;

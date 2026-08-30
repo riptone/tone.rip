@@ -23,6 +23,40 @@ test("home page loads clean and the language switch works", async ({
   expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);
 });
 
+test("the language buttons are big enough to press", async ({ page }) => {
+  // WCAG 2.5.8 Target Size (Minimum). They were 15.7x23 and 13.4x23 - close
+  // enough to look deliberate, half the required width, and the one control
+  // in the footer whose whole job is to be found by somebody who cannot read
+  // the page in the language it arrived in.
+  //
+  // Asserted from the rendered box rather than from the stylesheet: the rule
+  // is a `min-width` on an inline-flex button, so whether it actually
+  // produces a 24px target depends on the layout around it, and reading the
+  // CSS back would only confirm the declaration is still typed.
+  await page.goto("/");
+  const buttons = page.locator("[data-lang-set]");
+  await expect(buttons).toHaveCount(2);
+
+  const boxes: { x: number; width: number }[] = [];
+  for (const button of await buttons.all()) {
+    const label = (await button.textContent())?.trim();
+    const box = await button.boundingBox();
+    expect(box, label).not.toBeNull();
+    if (!box) continue;
+    expect(box.width, `${label} width`).toBeGreaterThanOrEqual(24);
+    expect(box.height, `${label} height`).toBeGreaterThanOrEqual(24);
+    boxes.push(box);
+  }
+
+  // They sit 4px apart and each is only just large enough, so a gap that
+  // went negative would put one target partly on top of the other without
+  // either of the size assertions above noticing.
+  const [first, second] = boxes;
+  if (first && second) {
+    expect(second.x).toBeGreaterThanOrEqual(first.x + first.width);
+  }
+});
+
 /* The exact bug class docs/engineering.md documents under "Per-request
    nonces and soft navigation do not mix": a client-side router that parses
    the next response against the previous document's nonce produces CSP
