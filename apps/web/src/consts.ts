@@ -4,14 +4,13 @@ import { TONE_INFO } from "@repo/content";
 // rather than restating the name and URL here, which is what apps/dashboard
 // already did with DASHBOARD_INFO. Two apps solving the same problem two ways
 // is how "tone" and "https://tone.rip" ended up written out in six files.
+//
+// There were two more constants here, `SITE_TITLE` and `SITE_DESCRIPTION`,
+// and deleting /rss.xml left both with no readers - the feed was the last
+// thing that wanted a site-wide title and blurb. `SITE_TITLE` was a second
+// name for `SITE_NAME` (both were `TONE_INFO.name`), and every page already
+// writes its own <title> and <meta description>, which is also where
+// BaseHead's default WebSite schema takes them from. knip found them; that
+// is the whole reason it runs.
 export const SITE_NAME = TONE_INFO.name;
 export const SITE_URL = TONE_INFO.url;
-export const SITE_TITLE = TONE_INFO.name;
-
-// The one field that is deliberately *not* TONE_INFO's. That record's
-// `description` is the cross-app machine-readable summary, served to agents by
-// the markdown-negotiation branch in middleware.ts. This one is written for a
-// search result, and drives feeds and the default WebSite schema - each page
-// writes its own <meta description> on top (see index/work/cv).
-export const SITE_DESCRIPTION =
-  "Software engineer building web applications end to end - the front-end, the API behind it, and the infrastructure both run on. Work, CV and contact.";

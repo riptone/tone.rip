@@ -49,8 +49,6 @@ interface Props {
    * inset to its gutter).
    */
   viewport?: string;
-  /** Discovery link for an RSS feed, if this app has one. */
-  rssTitle?: string;
   /**
    * The theme this page is designed for. Required.
    *
@@ -83,7 +81,6 @@ const {
   schema,
   css,
   viewport = "width=device-width,initial-scale=1,viewport-fit=cover",
-  rssTitle,
   theme,
   robots = "index,follow",
 } = Astro.props as Props;
@@ -205,10 +202,6 @@ const resolvedSchema = [...defaultSchema, ...schemaItems];
 <link rel="canonical" href={canonicalHref} />
 <link rel="alternate" hreflang="en" href={canonicalHref} />
 <link rel="alternate" hreflang="x-default" href={canonicalHref} />
-
-{rssTitle && (
-  <link rel="alternate" type="application/rss+xml" title={rssTitle} href="/rss.xml" />
-)}
 
 <title>{title}</title>
 <meta name="title" content={title} />

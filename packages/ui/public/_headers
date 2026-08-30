@@ -39,6 +39,23 @@
 /icons/*
   Cache-Control: public, max-age=86400, s-maxage=604800
 
+# Small static text, apps/web only - the rules simply never match on
+# apps/dashboard, which is cheaper than un-sharing this file to say so.
+#
+# Without a rule Workers Assets answers these with `max-age=0,
+# must-revalidate`, so every crawler and agent fetch is a round trip to
+# revalidate a file that changes when the site is rebuilt and not between
+# requests. An hour in the browser and a day at the edge; a sitemap that is a
+# day stale still lists the same three routes.
+/llms.txt
+  Cache-Control: public, max-age=3600, s-maxage=86400
+
+/ads.txt
+  Cache-Control: public, max-age=3600, s-maxage=86400
+
+/sitemap-*
+  Cache-Control: public, max-age=3600, s-maxage=86400
+
 # The webfont used to need a rule here, when it was a hand-named file in
 # public/. It now lives in src/ and the bundler emits it under _astro/ with a
 # content hash, where the adapter's own immutable rule already covers it - so
