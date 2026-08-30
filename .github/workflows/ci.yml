@@ -60,7 +60,7 @@ jobs:
       # writes its own entry, with a prefix fallback so a new commit starts
       # from the previous one rather than from nothing.
       - name: Restore turbo cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-checks-${{ runner.os }}-${{ github.sha }}
@@ -87,7 +87,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Restore turbo cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-e2e-${{ runner.os }}-${{ github.sha }}
@@ -102,7 +102,7 @@ jobs:
       # libraries in place, which are outside the cached directory.
       - name: Cache Playwright's browser
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -187,7 +187,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Restore turbo cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .turbo
           key: turbo-go-${{ runner.os }}-${{ github.sha }}
