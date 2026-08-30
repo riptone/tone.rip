@@ -154,7 +154,7 @@ jobs:
       # sit under a dot-path, and upload-artifact has silently dropped those
       # since v4.4 - which is how the redirect went missing here to begin with.
       - name: Upload the built sites
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: worker-dist
           include-hidden-files: true
