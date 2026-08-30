@@ -159,6 +159,19 @@ const MENU: ContextMenuEntry[] = [
       the content lands. `rel="expect"` is the standards-track way to say
       "this is when the page is ready", and if the id never appears the
       browser releases the block when parsing ends rather than hanging.
+
+      It looks like it should be expensive and it is not, which is worth
+      writing down because Lighthouse's LCP breakdown puts the whole of this
+      page's LCP under "element render delay" and this is the first thing
+      anyone will suspect. Measured with `bun run perf`, three runs each:
+
+        with     59 / 59 / 123 ms element render delay
+        without  81 / 95 / 84 ms
+
+      No difference beyond the noise, and LCP stays 0.3s and CLS stays 0
+      either way. The delay is the document parsing and painting - there are
+      no render-blocking resources at all - so holding the frame until the
+      content exists is free.
     */}
     <link rel="expect" href="#field" blocking="render" />
   </head>
@@ -226,6 +239,20 @@ const MENU: ContextMenuEntry[] = [
       after all [data-en] nodes are parsed but before the browser commits its
       first frame (and before rel=expect releases). The module script below
       stays for toggles and idempotency, but the first paint is already right.
+
+      The loop runs for English too, where every write sets the string that is
+      already there - T.astro renders `{en}` as both the text and the
+      `data-en`. Skipping it for `l === "en"` was tried and measured, nine
+      Lighthouse runs per variant, two replicates each:
+
+        baseline   LCP 300ms, then 291ms
+        skipped    LCP 291ms, then 308ms
+
+      The identical build moved further between its own replicates than the
+      change moved anything, and timing the loop directly in the page put it
+      under 0.1ms across 200 iterations - nine nodes, not enough work to
+      find. So it stays uniform: this applies the stored language whatever it
+      is, and does not need the server to have rendered English to be correct.
     */}
     <script is:inline nonce={cspNonce}
       >try{var l=localStorage.getItem("lang");if(l!=="pt"&&l!=="en")l="en";document.documentElement.lang=l==="pt"?"pt-PT":"en";var ns=document.querySelectorAll("[data-en]");for(var i=0;i<ns.length;i++){var e=ns[i],v=e.dataset[l];if(v!==void 0)e.textContent=v}var bs=document.querySelectorAll("[data-lang-set]");for(var j=0;j<bs.length;j++)bs[j].setAttribute("aria-pressed",String(bs[j].dataset.langSet===l))}catch(e){}</script>

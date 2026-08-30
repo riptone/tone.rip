@@ -155,7 +155,7 @@ class FakeWorker {
   /** The last state the host asked for, which is the only one on screen. */
   get lastState() {
     const last = this.posted.at(-1);
-    if (!last || last.type !== "state") throw new Error("no state posted");
+    if (last?.type !== "state") throw new Error("no state posted");
     return last.state;
   }
 }
