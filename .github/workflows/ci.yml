@@ -262,7 +262,7 @@ jobs:
       # Rather than `bun run build`, which used to run here and rebuild
       # everything the `e2e` job had just built and tested.
       - name: Download the built sites
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: worker-dist
           path: apps
