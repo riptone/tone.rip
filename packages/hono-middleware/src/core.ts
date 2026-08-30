@@ -1,9 +1,11 @@
 /**
  * Framework-agnostic building blocks behind the Hono middlewares in this
- * package. Astro apps (which run as their own Cloudflare Worker, outside the
- * Hono API) import these directly from their own `src/middleware.ts` so the
- * security-header/CSP policy has exactly one implementation shared across
- * every app, instead of being reimplemented per framework.
+ * package, kept separate so the security-header/CSP policy is one pure
+ * function with its own tests, independent of the middleware that applies it.
+ *
+ * Every app reaches them through that middleware now. The Astro apps used to
+ * import these directly, because a Worker-per-app project could not run Hono
+ * middleware; Astro 7's `astro/hono` ended that. See apps/web/src/fetch.ts.
  */
 
 export const DEFAULT_PERMISSIONS_POLICY = [

@@ -26,7 +26,8 @@
     "@repo/net": "*",
     "@repo/ui": "*",
     "@repo/validation": "*",
-    "astro": "catalog:"
+    "astro": "catalog:",
+    "hono": "catalog:"
   },
   "devDependencies": {
     "@astrojs/check": "catalog:",

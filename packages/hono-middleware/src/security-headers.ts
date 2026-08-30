@@ -10,10 +10,16 @@ export type SecurityHeadersOptions = Omit<
 >;
 
 /**
- * Sets a CSP nonce on the context (readable via c.get("cspNonce")) and, after
- * the handler runs, applies the full baseline security-header set + a nonce'd
- * CSP built by ./core's buildSecurityHeaders - the same logic Astro apps use
- * directly in their own middleware.ts.
+ * Sets a CSP nonce on the context (readable via `c.get("cspNonce")`) and,
+ * after the handler runs, applies the full baseline security-header set + a
+ * nonce'd CSP built by ./core's buildSecurityHeaders.
+ *
+ * This is the only implementation. The Astro apps used to carry a second one
+ * written against Astro's middleware signature, because a Worker-per-app
+ * project could not run Hono middleware; Astro 7's `astro/hono` ended that,
+ * and apps/web, apps/dashboard and apps/api all run this now. The Astro apps
+ * additionally copy the nonce onto `Astro.locals.cspNonce`, which is where
+ * BaseHead.astro reads it - see apps/web/src/fetch.ts.
  */
 export function securityHeaders(
   options: SecurityHeadersOptions = {},

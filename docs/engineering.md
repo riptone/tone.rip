@@ -146,7 +146,7 @@ real strict-CSP document, not inferred.
 The same applies to `<style nonce>` blocks: `BaseHead.astro` inlines the
 page's CSS with the request nonce, which is why every page passes its
 stylesheet down as a string rather than importing it into a `<style>` Astro
-would emit unnonced. `apps/web/src/middleware.ts` stamps the nonce onto
+would emit unnonced. `apps/web/src/fetch.ts` stamps the nonce onto
 anything Astro inlines that the templates did not, as a backstop.
 
 ## Per-request nonces and soft navigation do not mix

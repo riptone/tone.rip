@@ -5,8 +5,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./astro-security": "./src/astro-security.ts",
-    "./core": "./src/core.ts",
     "./problem-json": "./src/problem-json.ts"
   },
   "scripts": {

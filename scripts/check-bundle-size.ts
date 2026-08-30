@@ -27,8 +27,8 @@ interface WorkerApp {
    * Only apps/api does, and the asymmetry is real rather than an oversight:
    * wrangler bundles that Worker straight from TypeScript, so minifying it
    * takes 153 KiB gzip to 115. apps/web and apps/dashboard hand wrangler a
-   * build Astro has already minified - measured at 231.68 KiB with the flag
-   * and 231.68 without, to the byte.
+   * build Astro has already minified - measured at 194.06 KiB with the flag
+   * and 194.06 without, to the byte.
    *
    * This mattered because the flag was in apps/api's `deploy` script and the
    * CI workflow ran a hand-copied `wrangler deploy` without it, so the 25%

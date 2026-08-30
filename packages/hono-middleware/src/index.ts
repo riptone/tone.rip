@@ -7,11 +7,12 @@ export {
   type CloudflareAccessOptions,
   requireCloudflareAccess,
 } from "./cloudflare-access";
-// NOTE: astro-security.ts is intentionally NOT re-exported here - it's the
-// one file in this package that's Astro-specific (types against Astro's
-// MiddlewareHandler + App.Locals), and this barrel is also imported by
-// apps/api, which has no Astro dependency at all. Astro apps import it via
-// the explicit subpath instead: `@repo/hono-middleware/astro-security`.
+// Everything here is framework-agnostic Hono middleware, imported by all
+// three apps. There used to be an astro-security.ts kept out of this barrel
+// because it was Astro-specific and apps/api has no Astro dependency; Astro 7
+// made it unnecessary - `astro/hono` lets the Astro apps run these same
+// middlewares, so `securityHeaders` below has one implementation instead of
+// two. See apps/web/src/fetch.ts.
 export {
   type ApiCatalogEntryInput,
   type BuildSecurityHeadersOptions,

@@ -22,7 +22,8 @@
     "@repo/hono-middleware": "*",
     "@repo/net": "*",
     "@repo/ui": "*",
-    "astro": "catalog:"
+    "astro": "catalog:",
+    "hono": "catalog:"
   },
   "devDependencies": {
     "@astrojs/check": "catalog:",

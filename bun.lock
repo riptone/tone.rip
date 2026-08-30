@@ -45,6 +45,7 @@
         "@repo/net": "*",
         "@repo/ui": "*",
         "astro": "catalog:",
+        "hono": "catalog:",
       },
       "devDependencies": {
         "@astrojs/check": "catalog:",
@@ -77,6 +78,7 @@
         "@repo/ui": "*",
         "@repo/validation": "*",
         "astro": "catalog:",
+        "hono": "catalog:",
       },
       "devDependencies": {
         "@astrojs/check": "catalog:",

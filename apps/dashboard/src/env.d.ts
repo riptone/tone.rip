@@ -13,7 +13,7 @@
 type Runtime = import("@astrojs/cloudflare").Runtime;
 
 // BaseHead.astro (packages/ui) reads Astro.locals.cspNonce, set by our own
-// src/middleware.ts via @repo/hono-middleware/core's buildSecurityHeaders.
+// src/fetch.ts via @repo/hono-middleware's securityHeaders.
 // TypeScript ambient declarations don't cross package boundaries
 // automatically, so this app needs its own copy of the same augmentation -
 // see packages/ui/src/env.d.ts for the canonical explanation.

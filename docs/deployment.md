@@ -7,7 +7,7 @@ This monorepo deploys three Cloudflare Workers from **one** repo - `apps/web`, `
 | Hostname | Worker (this repo) | Notes |
 |---|---|---|
 | `tone.rip` | `apps/web` | |
-| `www.tone.rip` | `apps/web` (same Worker, second custom domain) | `apps/web/src/middleware.ts` already 301-redirects `www` → apex - **no separate Worker needed for this.** Whatever currently serves `www.tone.rip` can be retired once this domain points at the `web` Worker instead. |
+| `www.tone.rip` | `apps/web` (same Worker, second custom domain) | `apps/web/src/fetch.ts` already 301-redirects `www` → apex - **no separate Worker needed for this.** Whatever currently serves `www.tone.rip` can be retired once this domain points at the `web` Worker instead. |
 | `dash.tone.rip` | `apps/dashboard` | |
 | `api.tone.rip` | `apps/api` | |
 
@@ -138,7 +138,7 @@ the edge.
 ### HTML is deliberately uncacheable
 
 Every HTML response carries `Cache-Control: private, max-age=0,
-must-revalidate` (`packages/hono-middleware/src/astro-security.ts`) because the
+must-revalidate` (`packages/hono-middleware/src/security-headers.ts`) because the
 document embeds a per-request CSP nonce. A shared cache handing a stored copy
 to a second visitor would be handing them a nonce their response's policy never
 allowed, and the page would render unstyled.

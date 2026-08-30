@@ -4,8 +4,12 @@
   "workspaces": {
     ".": {},
     "apps/api": {},
-    "apps/dashboard": {},
-    "apps/web": {},
+    "apps/dashboard": {
+      "entry": ["src/fetch.ts!"]
+    },
+    "apps/web": {
+      "entry": ["src/fetch.ts!"]
+    },
     "packages/config/playwright-config": {},
     "packages/config/typescript-config": {},
     "packages/config/vitest-config": {},

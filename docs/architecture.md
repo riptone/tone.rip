@@ -51,9 +51,15 @@ because the CV is as public as the website. See `apps/ssh-cv/README.md`.
 
 That proxy, and the dashboard's server-side render of the tile list, reach `apps/api` through a Cloudflare **service binding** (`API` in `apps/dashboard/wrangler.jsonc`) rather than over the public internet - both Workers are on the same account, and the round trip through DNS, TLS and Cloudflare's edge was sitting in the dashboard's TTFB. The binding skips the edge, and therefore skips the Access gate on `api.tone.rip` - which changes nothing, because that gate never protected those routes from this caller in the first place. `requireCloudflareAccess()` inside `apps/api` is what does, and it still verifies the JWT the dashboard forwards. See `apps/dashboard/src/lib/api.ts`.
 
-## Why the security/CSP logic is a plain function, not just Hono middleware
+## Why every app runs the same Hono middleware
 
-`apps/web` and `apps/dashboard` are each their own Cloudflare Worker - they don't run through `apps/api`'s Hono app, so they can't use Hono middleware directly. But the CSP-nonce-generation and security-header logic needs to be identical everywhere (that's the whole point of centralizing it). The fix: `packages/hono-middleware/src/core.ts` exports plain, framework-agnostic functions (`buildSecurityHeaders`, `buildApiCatalogBody`). `apps/api` wraps them as Hono middleware (`securityHeaders()`, `apiCatalog()`); `apps/web`/`apps/dashboard` call the same core functions directly from their own Astro `middleware.ts`. One implementation, two thin adapters.
+`apps/web` and `apps/dashboard` are each their own Cloudflare Worker, so for a long time they could not run `apps/api`'s Hono middleware: they had to reimplement it against Astro's `middleware.ts` signature. That produced a second security middleware (`astro-security.ts`) and four hand-written copies of middleware that already existed in the package - the www redirect, the dev robots.txt, the RFC 9727 catalog and the markdown negotiation, three of which had no other consumer at all.
+
+Astro 7 removed the constraint. `src/fetch.ts` is a Hono app, and `astro/hono` exposes Astro's own pipeline as Hono middleware (`astro()` runs routing, sessions, middleware, redirects, actions and pages), so all three apps now compose the *same* middleware from `packages/hono-middleware`. `core.ts` still holds the policy as plain framework-agnostic functions (`buildSecurityHeaders`, `buildApiCatalogBody`) and `securityHeaders()`/`apiCatalog()` still wrap them - but there is now one wrapper rather than one per framework.
+
+The one piece that stays per-app is the bridge from the Hono context to `Astro.locals.cspNonce`, because `BaseHead.astro` reads the nonce from there. It is three lines in each `fetch.ts`.
+
+It cost about 18 KiB gzip per Astro Worker (the Hono runtime plus the `astro/hono` pipeline), measured; page weight and Lighthouse are unchanged, since none of it reaches the browser.
 
 ## Why site content lives in `packages/content`, not each app
 
