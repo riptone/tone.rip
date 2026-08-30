@@ -15,6 +15,7 @@
     "e2e": "playwright test",
     "e2e:webview": "bun test e2e/smoke.webview.test.ts",
     "e2e:webview:ci": "bun run build && (bun run e2e:server & pid=$!; trap 'kill $pid' EXIT; bun test e2e/smoke.webview.test.ts --timeout 30000; kill $pid)",
+    "perf": "astro build && bun run scripts/lighthouse.ts",
     "types": "wrangler types"
   },
   "dependencies": {
@@ -38,7 +39,9 @@
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "bun-types": "catalog:",
+    "chrome-launcher": "^1.2.1",
     "jsdom": "catalog:",
+    "lighthouse": "^13.4.1",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

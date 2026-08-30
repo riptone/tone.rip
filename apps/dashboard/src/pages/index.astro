@@ -329,7 +329,7 @@ const MENU: ContextMenuEntry[] = [
     <ContextMenu entries={MENU} />
 
     <script>
-      import { mountContact, mountContextMenu } from "@repo/ui/site";
+      import { mountContact, mountContextMenu, syncField } from "@repo/ui/site";
       import { initDashboard } from "../scripts/dashboard";
 
       initDashboard();
@@ -340,12 +340,7 @@ const MENU: ContextMenuEntry[] = [
       // here and it only ate the panel's left edge - the field is a framed
       // rectangle, and fading one side of a frame reads as a rendering
       // fault rather than as light.
-      //
-      // Imported dynamically for the reason apps/web's SiteLayout spells
-      // out: the launcher's own boot should not queue behind the gradient.
-      void import("@repo/ui/site/field").then(({ syncField }) => {
-        syncField();
-      });
+      syncField();
     </script>
   </body>
 </html>

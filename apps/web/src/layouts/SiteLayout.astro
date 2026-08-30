@@ -236,6 +236,7 @@ const MENU: ContextMenuEntry[] = [
         mountContextMenu,
         mountFilter,
         mountLang,
+        syncField,
       } from "@repo/ui/site";
 
       // Runs once per document, which since the move off ClientRouter is also
@@ -249,32 +250,32 @@ const MENU: ContextMenuEntry[] = [
       // A no-op on pages with nothing to filter; /work is the only one so
       // far, and putting it here means a second such page needs no wiring.
       mountFilter();
-      // Last of the four: the document renders in English, so this is what
-      // turns it into the visitor's language.
+      // The document renders in English, so this is what turns it into the
+      // visitor's language. Before the field, because it is the control a
+      // visitor might already be reaching for and the field is scenery.
       mountLang();
 
-      /* The field is imported here rather than at the top, and the reason is
-         the shape of the request waterfall rather than taste.
+      /* `syncField` is a plain static import, and last, and that is the
+         answer to a question worth not asking twice.
 
-         A static import of it made this entry a three-deep critical chain:
-         the HTML, then this module, then the 8.5 KB chunk holding the
-         gradient, the noise field and the ramps - and a module does not
-         execute until every static import of it has landed, so all four
-         mounts above sat behind a download whose only job is a background.
-         Lighthouse measured the whole chain at 413ms.
+         The static import makes this module wait on the 4.2 KiB chunk
+         holding the gradient - so Lighthouse draws a three-level request
+         tree, and the obvious read is that the four mounts above are stuck
+         behind scenery. Moving it to `import("@repo/ui/site/field")` was
+         tried, and measured with `bun run perf`, three runs per variant on
+         both presets:
 
-         Dynamic, the four run as soon as this file does, and the field
-         arrives on its own schedule. It is not perceptibly later: the
-         browser could not have started that request before parsing this
-         module either way. What changes is what waits on it, which is now
-         nothing.
+           static   3 requests, 3 levels, chain 63/68/69ms desktop
+           dynamic  4 requests, 3 levels, chain 66/67/78ms desktop
 
-         Same reasoning as the guard in @repo/ui's noise-gradient, arrived at
-         from the other direction: decoration must not be able to hold up the
-         things a visitor came to use. */
-      void import("@repo/ui/site/field").then(({ syncField }) => {
-        syncField();
-      });
+         Identical, because the two chunks arrive within ~10ms of each other
+         and the page is server-rendered - FCP, LCP, TBT and CLS do not move
+         either, on desktop or throttled mobile. What the dynamic version did
+         buy was 0.41 KiB more entry chunk, a fourth request, and a rule that
+         the site barrel may never re-export this. The depth never changed:
+         the two chunks are siblings, and Lighthouse's indented list makes
+         parallel requests read as a chain. */
+      syncField();
     </script>
   </body>
 </html>
