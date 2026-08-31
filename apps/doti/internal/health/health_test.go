@@ -8,6 +8,15 @@ import (
 	"github.com/riptone/tone.rip/apps/doti/internal/manifest"
 )
 
+// fakeDetector answers without touching PATH or /Applications.
+type fakeDetector struct {
+	cmds map[string]bool
+	apps map[string]bool
+}
+
+func (f fakeDetector) Look(name string) bool   { return f.cmds[name] }
+func (f fakeDetector) HasApp(name string) bool { return f.apps[name] }
+
 const src = `{
   "app": "dotfiles",
   "tools": [{ "cmd": "jq", "brew": "jq" }, { "cmd": "stow", "brew": "stow" }],
@@ -58,7 +67,7 @@ func opts(t *testing.T, repo, home string, installed ...string) Options {
 	}
 	return Options{
 		Manifest: m, Platform: manifest.MacOS, Repo: repo, Home: home,
-		Look: func(cmd string) bool { return have[cmd] },
+		Detect: fakeDetector{cmds: have},
 	}
 }
 

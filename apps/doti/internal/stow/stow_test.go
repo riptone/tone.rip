@@ -3,6 +3,7 @@ package stow
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,7 +89,7 @@ func TestApplyCreatesWorkingSymlinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Apply(ops, filepath.Join(home, ".backups"), false); err != nil {
+	if err := Apply(ops, filepath.Join(home, ".backups"), home, false); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(home, ".zshrc"))
@@ -124,7 +125,7 @@ func TestAnExistingFileIsBackedUpNotDestroyed(t *testing.T) {
 
 	backups := filepath.Join(home, ".backups")
 	plan, _ := Plan(pkg, home, nil)
-	if err := Apply(plan, backups, false); err != nil {
+	if err := Apply(plan, backups, home, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,7 +159,7 @@ func TestAnExistingFileIsBackedUpNotDestroyed(t *testing.T) {
 func TestAnAlreadyCorrectLinkIsSkipped(t *testing.T) {
 	pkg, home := buildPackage(t, map[string]string{".zshrc": "x\n"})
 	plan, _ := Plan(pkg, home, nil)
-	if err := Apply(plan, filepath.Join(home, ".b"), false); err != nil {
+	if err := Apply(plan, filepath.Join(home, ".b"), home, false); err != nil {
 		t.Fatal(err)
 	}
 	again := planFor(t, pkg, home, nil)
@@ -190,7 +191,7 @@ func TestAStaleLinkFromAnotherCheckoutIsRelinked(t *testing.T) {
 func TestDryRunChangesNothing(t *testing.T) {
 	pkg, home := buildPackage(t, map[string]string{".zshrc": "x\n"})
 	plan, _ := Plan(pkg, home, nil)
-	if err := Apply(plan, filepath.Join(home, ".b"), true); err != nil {
+	if err := Apply(plan, filepath.Join(home, ".b"), home, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".zshrc")); !os.IsNotExist(err) {
@@ -236,7 +237,7 @@ func TestIgnoredEntriesAreNeverLinked(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan, _ := Plan(pkg, home, ignore)
-	if err := Apply(plan, filepath.Join(home, ".b"), false); err != nil {
+	if err := Apply(plan, filepath.Join(home, ".b"), home, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".DS_Store")); !os.IsNotExist(err) {
@@ -250,7 +251,7 @@ func TestIgnoredEntriesAreNeverLinked(t *testing.T) {
 func TestUnlinkRemovesOnlyWhatThisPackageOwns(t *testing.T) {
 	pkg, home := buildPackage(t, map[string]string{".zshrc": "x\n"})
 	plan, _ := Plan(pkg, home, nil)
-	if err := Apply(plan, filepath.Join(home, ".b"), false); err != nil {
+	if err := Apply(plan, filepath.Join(home, ".b"), home, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -319,7 +320,7 @@ func linkPkg(t *testing.T, pkg, home string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Apply(ops, filepath.Join(home, ".backups"), false); err != nil {
+	if err := Apply(ops, filepath.Join(home, ".backups"), home, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -404,5 +405,141 @@ func TestRelinkingAfterAnUnfoldIsStillIdempotent(t *testing.T) {
 					filepath.Base(pkg), op)
 			}
 		}
+	}
+}
+
+func TestBackupsAreNewestFirst(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"2026-01-01T00-00-00Z", "2026-06-01T00-00-00Z", "2025-01-01T00-00-00Z"} {
+		if err := os.MkdirAll(filepath.Join(root, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A stray file must not be offered as a backup to restore from.
+	if err := os.WriteFile(filepath.Join(root, "notes.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dirs, err := Backups(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dirs) != 3 {
+		t.Fatalf("got %d backups, want 3: %v", len(dirs), dirs)
+	}
+	if filepath.Base(dirs[0]) != "2026-06-01T00-00-00Z" {
+		t.Fatalf("newest = %s", filepath.Base(dirs[0]))
+	}
+}
+
+func TestBackupsIsEmptyWhenNothingWasEverBackedUp(t *testing.T) {
+	dirs, err := Backups(filepath.Join(t.TempDir(), "never-created"))
+	if err != nil {
+		t.Fatalf("a missing backup root is not an error: %v", err)
+	}
+	if len(dirs) != 0 {
+		t.Fatalf("got %v", dirs)
+	}
+}
+
+// The round trip the documented `--uninstall --restore` promises.
+func TestRestorePutsTheOriginalBack(t *testing.T) {
+	pkg, home := buildPackage(t, map[string]string{".zshrc": "ours\n"})
+	if err := os.WriteFile(filepath.Join(home, ".zshrc"), []byte("precious\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	backups := filepath.Join(home, ".dotfiles-backups", "2026-06-01T00-00-00Z")
+	plan, _ := Plan(pkg, home, nil)
+	if err := Apply(plan, backups, home, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Unlink(pkg, home, nil, false); err != nil {
+		t.Fatal(err)
+	}
+
+	restored, err := Restore(backups, home, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restored) != 1 {
+		t.Fatalf("restored = %v", restored)
+	}
+	body, err := os.ReadFile(filepath.Join(home, ".zshrc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "precious\n" {
+		t.Fatalf("restored content = %q, want the original", body)
+	}
+	// Moved, not copied: a leftover would be restored again next time and
+	// silently overwrite whatever the user had done since.
+	if _, err := os.Stat(filepath.Join(backups, ".zshrc")); !os.IsNotExist(err) {
+		t.Error("the backup copy should be gone after a restore")
+	}
+}
+
+// Restore has to displace the symlink that replaced the original, not write
+// through it into the repo.
+func TestRestoreReplacesTheSymlinkRatherThanWritingThroughIt(t *testing.T) {
+	pkg, home := buildPackage(t, map[string]string{".zshrc": "ours\n"})
+	if err := os.WriteFile(filepath.Join(home, ".zshrc"), []byte("precious\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	backups := filepath.Join(home, ".b", "run")
+	plan, _ := Plan(pkg, home, nil)
+	if err := Apply(plan, backups, home, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Restore(backups, home, false); err != nil {
+		t.Fatal(err)
+	}
+	if body, _ := os.ReadFile(filepath.Join(pkg, ".zshrc")); string(body) != "ours\n" {
+		t.Fatalf("the repo copy was overwritten: %q", body)
+	}
+	info, err := os.Lstat(filepath.Join(home, ".zshrc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Error("the target should be a real file again, not a link")
+	}
+}
+
+func TestRestoreDryRunChangesNothing(t *testing.T) {
+	pkg, home := buildPackage(t, map[string]string{".zshrc": "ours\n"})
+	if err := os.WriteFile(filepath.Join(home, ".zshrc"), []byte("precious\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	backups := filepath.Join(home, ".b", "run")
+	plan, _ := Plan(pkg, home, nil)
+	if err := Apply(plan, backups, home, false); err != nil {
+		t.Fatal(err)
+	}
+
+	restored, err := Restore(backups, home, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restored) != 1 {
+		t.Fatalf("a dry run should still report what it would do, got %v", restored)
+	}
+	if _, err := os.Stat(filepath.Join(backups, ".zshrc")); err != nil {
+		t.Error("a dry run moved the backup")
+	}
+}
+
+// os.Symlink stores the source verbatim, and a relative one is resolved
+// against the *link's* directory - $HOME - not the working directory it was
+// computed in. `doti link --repo dotfiles` therefore produced
+// ~/.zshrc -> dotfiles/zsh/.zshrc: a dangling link, reported as a success.
+func TestPlanRefusesARelativePackagePath(t *testing.T) {
+	_, err := Plan(filepath.Join("relative", "pkg"), t.TempDir(), nil)
+	if err == nil {
+		t.Fatal("want an error for a relative package path")
+	}
+	if !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("the error should explain why, got: %v", err)
 	}
 }

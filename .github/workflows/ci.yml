@@ -223,8 +223,11 @@ jobs:
       #   SC2312  a command substitution inside a string masks its exit status.
       #           Also true, also wanted: a failed `uname -n` should leave a
       #           notification title short, not abort an update that worked.
-      - name: Lint the installer (shellcheck)
-        run: shellcheck --enable=all --exclude=SC2310,SC2312 apps/ssh-cv/scripts/install.sh
+      - name: Lint the installers (shellcheck)
+        run: |
+          shellcheck --enable=all --exclude=SC2310,SC2312 \
+            apps/ssh-cv/scripts/install.sh \
+            apps/doti/scripts/install.sh
 
       # Go dependency vulnerabilities, filtered by whether this code can
       # actually reach them. That reachability analysis is the reason to run it
@@ -246,7 +249,7 @@ jobs:
 
   deploy:
     name: Deploy to Cloudflare Workers
-    needs: [checks, e2e, go]
+    needs: [checks, e2e, go, powershell]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
@@ -312,3 +315,39 @@ jobs:
       - name: Deploy dashboard
         working-directory: apps/dashboard
         run: bun run deploy
+
+  # apps/doti/scripts/install.ps1 is the Windows half of doti's bootstrap. It
+  # cannot be linted on Linux and it cannot be linted by Biome, so without
+  # this job it is the one file in the repository that nothing checks - and
+  # its bugs arrive on somebody's new laptop.
+  #
+  # Parse plus PSScriptAnalyzer, not execution: running it would download a
+  # release and rewrite the runner's PATH.
+  powershell:
+    name: PowerShell installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Parse it
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            "apps/doti/scripts/install.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) {
+            $errors | ForEach-Object { Write-Host "::error::$($_.Message)" }
+            exit 1
+          }
+          Write-Host "parses clean"
+
+      - name: Analyse it
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser -SkipPublisherCheck
+          $found = Invoke-ScriptAnalyzer -Path apps/doti/scripts/install.ps1 -Severity Error,Warning
+          if ($found) {
+            $found | Format-Table -AutoSize | Out-String | Write-Host
+            exit 1
+          }
+          Write-Host "no findings"

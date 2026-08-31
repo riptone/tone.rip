@@ -101,6 +101,16 @@ func (i *Ignorer) Match(name string) bool {
 // anything. Splitting this from Apply is what makes --dry-run, --check and
 // the conflict report one code path instead of three.
 func Plan(packageDir, home string, ignore *Ignorer) ([]Op, error) {
+	// Absolute, or the symlinks below dangle. os.Symlink stores the source
+	// verbatim, and a relative one is resolved against the *link's* own
+	// directory - $HOME - not the working directory it was computed in. So
+	// `--repo dotfiles` produced ~/.zshrc -> dotfiles/zsh/.zshrc, which
+	// points at nothing and reports success.
+	if !filepath.IsAbs(packageDir) {
+		return nil, fmt.Errorf(
+			"stow package path %q must be absolute (a relative link would "+
+				"resolve against $HOME and dangle)", packageDir)
+	}
 	info, err := os.Stat(packageDir)
 	if err != nil {
 		return nil, fmt.Errorf("stow package %s: %w", packageDir, err)
@@ -252,7 +262,7 @@ func describe(info fs.FileInfo) string {
 // installer's contract was that a pre-existing file is recoverable, and a
 // tool that silently discards a hand-written config people have had for years
 // is not one worth trusting on a new machine.
-func Apply(ops []Op, backupDir string, dryRun bool) error {
+func Apply(ops []Op, backupDir, home string, dryRun bool) error {
 	for _, op := range ops {
 		switch op.Kind {
 		case Skip, Ignore:
@@ -263,7 +273,7 @@ func Apply(ops []Op, backupDir string, dryRun bool) error {
 			}
 			continue
 		case Relink:
-			if err := backup(op.Target, backupDir, dryRun); err != nil {
+			if err := backup(op.Target, backupDir, home, dryRun); err != nil {
 				return err
 			}
 		}
@@ -309,15 +319,19 @@ func unfold(op Op, dryRun bool) error {
 	return nil
 }
 
-// backup moves a displaced path under backupDir, preserving its position
-// relative to $HOME so a restore is a straight copy back.
-func backup(target, backupDir string, dryRun bool) error {
+// backup moves a displaced path under backupDir.
+//
+// Stored relative to $HOME, which is what makes Restore a straight mapping
+// back: an absolute-from-root layout would put the file at
+// ~/.dotfiles-backups/<run>/Users/you/.zshrc and leave the restorer guessing
+// which prefix to strip.
+func backup(target, backupDir, home string, dryRun bool) error {
 	if dryRun {
 		return nil
 	}
-	rel := strings.TrimPrefix(target, string(filepath.Separator))
-	if vol := filepath.VolumeName(rel); vol != "" {
-		rel = strings.TrimPrefix(rel[len(vol):], string(filepath.Separator))
+	rel, err := filepath.Rel(home, target)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("refusing to back up %s: it is not under %s", target, home)
 	}
 	dest := filepath.Join(backupDir, rel)
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
@@ -362,4 +376,73 @@ func Count(ops []Op) map[Kind]int {
 		counts[op.Kind]++
 	}
 	return counts
+}
+
+// Backups returns the backup directories under root, newest first.
+//
+// Each run of Apply writes into its own timestamped directory, so "restore"
+// means "put the newest one back" rather than merging several runs together.
+// The names are RFC-3339-ish and sort lexicographically in time order, which
+// is the whole reason for that format.
+func Backups(root string) ([]string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading %s: %w", root, err)
+	}
+	var dirs []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirs = append(dirs, filepath.Join(root, entry.Name()))
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(dirs)))
+	return dirs, nil
+}
+
+// Restore puts a backup directory's contents back into home.
+//
+// Whatever is at each target is removed first - by this point that is a
+// symlink this tool created, and the file behind it stays in the repo. The
+// backup is *moved* rather than copied, so a restore cannot silently leave a
+// second copy behind to confuse the next one.
+func Restore(backupDir, home string, dryRun bool) ([]string, error) {
+	var restored []string
+	err := filepath.Walk(backupDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(backupDir, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(home, rel)
+		restored = append(restored, target)
+		if dryRun {
+			return nil
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("creating %s: %w", filepath.Dir(target), err)
+		}
+		// Remove rather than overwrite: a symlink is the expected occupant
+		// here, and os.Rename onto one replaces the *link*, not its target -
+		// which is right, but only if the link is gone first on the
+		// filesystems where Rename refuses.
+		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("clearing %s: %w", target, err)
+		}
+		if err := os.Rename(path, target); err != nil {
+			return fmt.Errorf("restoring %s: %w", target, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return restored, err
+	}
+	return restored, nil
 }

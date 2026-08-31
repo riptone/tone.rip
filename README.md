@@ -42,6 +42,7 @@ apps/
   dashboard   dash.tone.rip          Astro, behind Cloudflare Access
   api         api.tone.rip           Hono on Workers
   ssh-cv      ssh cv.tone.rip        Go - Charm Wish + Bubble Tea
+  doti        dotfiles installer     Go - released, not deployed
 
 packages/
   ui                 design tokens, the frame, the gradient field, the wordmark,
@@ -50,6 +51,8 @@ packages/
   validation         Zod schemas and an RFC 7807 failure hook
   net                fetch with a deadline, for every reachability check
   hono-middleware    security headers, CSP nonces, api-catalog, Access JWTs
+  gotui              the terminal window ssh-cv and doti both draw: the
+                     palette, and the primitives that keep it painted
   config/            shared tooling configs
     typescript-config  shared tsconfig presets
     vitest-config      shared coverage/include preset for every suite
@@ -62,6 +65,14 @@ written twice, it belongs in a package.** `packages/content/src/cv.ts` is the
 clearest case — the website's CV page, the server-rendered block crawlers
 read, and the SSH session all render that one module, and CI fails if the
 generated copy the Go binary embeds has drifted from it.
+
+`packages/gotui` is the same rule applied to a terminal. `apps/ssh-cv` and
+`apps/doti` draw the same card - three buttons, a dim name, a rule, key hints -
+and the rules that make it survive an unknown terminal are not obvious enough
+to write twice: a raw space is a hole in the black, `lipgloss.Place` renders
+through the *default* renderer, and a grey below `#303030` quantises onto the
+background on a 256-colour client. Those live there once, with the tests that
+hold them.
 
 `apps/api` exists for the same reason at the service level: one GitHub proxy
 with one cache, one Tailscale probe, one CSP-report sink. The front-ends
@@ -140,6 +151,7 @@ That starts every application at once. Individually:
 | `cd apps/dashboard && bun run dev` | the services dashboard |
 | `cd apps/api && bun run dev` | the API, on Workers locally |
 | `cd apps/ssh-cv && bun run dev` | the SSH CV, then `ssh -p 2222 localhost` |
+| `cd apps/doti && go run ./cmd/doti menu` | the dotfiles installer's menu |
 
 Nothing here needs credentials to run. The SSH CV generates its own throwaway
 host key and allowlist under `.dev/`; the API falls back to unauthenticated
@@ -149,7 +161,7 @@ GitHub requests; the dashboard renders its tiles without live status.
 | --- | --- |
 | `bun run dev` | every app at once |
 | `bun run build` | build all apps and packages |
-| `bun run test` | Vitest everywhere, `go test` for `apps/ssh-cv` |
+| `bun run test` | Vitest everywhere, `go test` for the Go modules |
 | `bun run lint` | Biome — formatting and lint in one pass |
 | `bun run check-types` | `astro check` / `tsc` / `gofmt` + `go vet` |
 | `bun run ci` | the full gate, exactly as CI runs it |
@@ -163,6 +175,14 @@ Contributing, and what the full gate actually checks:
 
 `main` deploys itself: merging runs the gate, then `wrangler deploy` for each
 Worker.
+
+`apps/doti` cannot work that way either, for the opposite reason: it is a
+binary on *other people's* machines. It is released on `doti/v*` tags and
+installed with a `curl | bash` that verifies the download against the
+release's `SHA256SUMS` — the same shape as the CV's updater. The configs it
+installs live in their own repository,
+[riptone/dotfiles](https://github.com/riptone/dotfiles), which is data only:
+this binary replaced its 2,815 lines of bash and PowerShell.
 
 `apps/ssh-cv` cannot work that way — it is a binary on a box, and nothing in
 Cloudflare can push to it — so it is *released* rather than deployed, and the

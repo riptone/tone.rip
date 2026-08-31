@@ -1,37 +1,30 @@
 // Command doti installs and maintains this machine's dotfiles.
 //
-// It is replacing scripts/install.sh and scripts/Install.ps1 in the dotfiles
-// repository, which implement the same operations twice - once in bash for
-// macOS/Linux and once in PowerShell for Windows - and carry three separate
+// It replaced scripts/install.sh and scripts/Install.ps1 in the dotfiles
+// repository, which implemented the same forty-odd operations twice - once in
+// bash for macOS and Linux, once in PowerShell for Windows - and carried three
 // "keep them in sync" rules to hold the two in step. One binary that
 // cross-compiles removes the class of bug rather than the instances.
 //
-// Only the manifest reader and the secrets renderer exist so far. Stow,
-// package installation and the interactive menu still live in the shell
-// scripts, and this does not replace them until `doti --check` reports parity
-// on a real machine.
+// This file is flags and dispatch only. What the commands *do* lives in
+// internal/app, where it is reachable from a test, and none of it prints:
+// commands report, and the rendering is chosen once, here, from whether
+// anything is watching. That is what makes `doti install` and the menu's
+// Install the same thing rather than two things that agree.
 package main
 
 import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"runtime"
-	"slices"
-	"strings"
-	"time"
-
-	"github.com/riptone/tone.rip/apps/doti/internal/health"
-	"github.com/riptone/tone.rip/apps/doti/internal/manifest"
-	"github.com/riptone/tone.rip/apps/doti/internal/pkgs"
-	"github.com/riptone/tone.rip/apps/doti/internal/secrets"
-	"github.com/riptone/tone.rip/apps/doti/internal/stow"
-	"github.com/riptone/tone.rip/apps/doti/internal/tui"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/riptone/tone.rip/apps/doti/internal/app"
+	"github.com/riptone/tone.rip/apps/doti/internal/pkgs"
+	"github.com/riptone/tone.rip/apps/doti/internal/tui"
 )
 
 // version is stamped at build time with -ldflags -X. Unstamped builds stay
@@ -41,83 +34,183 @@ var version = "dev"
 const usage = `doti - dotfiles installer
 
 usage:
-  doti menu     [--repo DIR]            interactive menu
-  doti install  [--repo DIR] [-n]       packages, then configs, then secrets
-  doti adopt    [--repo DIR] [-n]       scan first, then install only the gaps
-  doti check    [--repo DIR] [--strict] verify tools and symlinks, change nothing
-  doti sync     [--repo DIR] [-n]       git pull, then re-link
-  doti update   [--repo DIR]            upgrade installed packages
-  doti validate [--repo DIR]            parse and check manifest.jsonc
-  doti link     [--repo DIR] [-n]       link configs into $HOME
-  doti unlink   [--repo DIR] [-n]       remove the links this repo owns
-  doti packages [--repo DIR] [--brew|--winget]
-                                        print the generated package lists
-  doti secrets  [--repo DIR] [-n]       render secrets from Bitwarden
-  doti preview  [--repo DIR] [--frames DIR]
-                                        run the menu, or dump frames to files
+  doti                      interactive menu
+  doti install              clone if needed, then packages, configs, secrets
+  doti adopt                scan first, then act only on the gaps
+  doti check                verify tools and symlinks; changes nothing
+  doti link                 link configs into $HOME
+  doti unlink               remove the links this repo owns
+  doti sync                 git pull --ff-only, then re-link
+  doti update               upgrade installed packages
+  doti secrets              render secret files from Bitwarden
+  doti upgrade              replace this binary with the newest release
+  doti packages             print the generated package lists
+  doti validate             parse and check manifest.jsonc
+  doti preview              run the menu, or --frames DIR to dump screens
   doti version
 
 flags:
-  --repo DIR   dotfiles checkout (default $DOTFILES_DIR, else ~/dotfiles)
-  -n           dry run: report what would change, write nothing
+  --repo DIR    dotfiles checkout (default $DOTFILES_DIR, else ~/dotfiles)
+  --url URL     install: clone from here (default $DOTFILES_REPO_URL)
+  --only PKG    link/unlink: act on this stow package alone
+  --tools LIST  install: only these missing tools (comma separated)
+  --restore     unlink: move the newest backup back afterwards
+  --strict      check: exit non-zero when something is missing
+  --brew        packages: Brewfile only
+  --winget      packages: winget list only
+  --frames DIR  preview: write screens here instead of running
+  --verbose     stream subprocess output instead of capturing it
+  -n            dry run: report what would change, write nothing
 `
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprint(os.Stderr, usage)
-		os.Exit(2)
-	}
-
-	if err := run(os.Args[1], os.Args[2:]); err != nil {
+	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "doti: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(command string, args []string) error {
-	flags := flag.NewFlagSet(command, flag.ExitOnError)
-	repo := flags.String("repo", defaultRepo(), "dotfiles checkout")
-	dryRun := flags.Bool("n", false, "report what would change, write nothing")
-	brewOnly := flags.Bool("brew", false, "packages: Brewfile only")
-	wingetOnly := flags.Bool("winget", false, "packages: winget list only")
-	frames := flags.String("frames", "", "preview: write frames here instead of running")
-	strict := flags.Bool("strict", false, "check: exit non-zero when something is missing")
+type options struct {
+	repo    string
+	url     string
+	only    string
+	tools   string
+	frames  string
+	restore bool
+	strict  bool
+	brew    bool
+	winget  bool
+	verbose bool
+	dryRun  bool
+}
+
+func run(args []string) error {
+	// No arguments is the menu. That is the shape the shell installer had and
+	// the one people's hands know.
+	command := "menu"
+	if len(args) > 0 {
+		command = args[0]
+		args = args[1:]
+	}
+	if command == "-h" || command == "--help" || command == "help" {
+		fmt.Print(usage)
+		return nil
+	}
+	if command == "version" {
+		fmt.Println(version)
+		return nil
+	}
+
+	var opts options
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	flags.StringVar(&opts.repo, "repo", defaultRepo(), "dotfiles checkout")
+	flags.StringVar(&opts.url, "url", "", "clone from here")
+	flags.StringVar(&opts.only, "only", "", "act on this stow package alone")
+	flags.StringVar(&opts.tools, "tools", "", "install only these missing tools")
+	flags.StringVar(&opts.frames, "frames", "", "write preview screens here")
+	flags.BoolVar(&opts.restore, "restore", false, "put the newest backup back")
+	flags.BoolVar(&opts.strict, "strict", false, "exit non-zero when something is missing")
+	flags.BoolVar(&opts.brew, "brew", false, "Brewfile only")
+	flags.BoolVar(&opts.winget, "winget", false, "winget list only")
+	flags.BoolVar(&opts.verbose, "verbose", false, "stream subprocess output")
+	flags.BoolVar(&opts.dryRun, "n", false, "report what would change, write nothing")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 
+	instance, err := build(opts)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
 	switch command {
-	case "version":
-		fmt.Println(version)
-		return nil
-	case "validate":
-		return validate(*repo)
-	case "adopt":
-		return adopt(context.Background(), *repo, *dryRun)
-	case "check":
-		return check(*repo, *strict)
-	case "sync":
-		return sync(context.Background(), *repo, *dryRun)
-	case "update":
-		return update(context.Background(), *repo)
 	case "menu":
-		return runMenu(context.Background(), *repo)
-	case "preview":
-		return preview(*repo, *frames)
+		return runMenu(ctx, instance, opts)
 	case "install":
-		return install(context.Background(), *repo, *dryRun)
+		return instance.Install(ctx)
+	case "adopt":
+		return instance.Adopt(ctx)
+	case "check":
+		return instance.Check(opts.strict)
 	case "link":
-		return link(*repo, *dryRun)
+		instance.Report.Phase("configs")
+		return instance.Link()
 	case "unlink":
-		return unlink(*repo, *dryRun)
-	case "packages":
-		return printPackages(*repo, *brewOnly, *wingetOnly)
+		instance.Report.Phase("configs")
+		return instance.Unlink(opts.restore)
+	case "sync":
+		return instance.Sync(ctx)
+	case "update":
+		return instance.Update(ctx)
 	case "secrets":
-		return renderSecrets(context.Background(), *repo, *dryRun)
+		instance.Report.Phase("secrets")
+		return instance.Secrets(ctx)
+	case "upgrade":
+		return instance.SelfUpdate(ctx, version)
+	case "validate":
+		return instance.Validate()
+	case "packages":
+		out, err := instance.PackageLists(opts.brew, opts.winget)
+		if err != nil {
+			return err
+		}
+		fmt.Print(out)
+		return nil
+	case "preview":
+		return preview(ctx, instance, opts)
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", command)
 	}
+}
+
+// build assembles the App, including the two decisions that belong here and
+// nowhere else: how to render, and where subprocess output goes.
+func build(opts options) (*app.App, error) {
+	interactive := isTerminal(os.Stdout)
+	report := reporter(os.Stdout)
+	runner := pkgs.ExecRunner{}
+	if opts.verbose {
+		// Streamed rather than captured, which also means no spinner: the two
+		// cannot share a line.
+		runner.Out = os.Stdout
+	}
+
+	instance, err := app.New(opts.repo, report, runner)
+	if err != nil {
+		return nil, err
+	}
+	instance.RepoURL = app.RepoURL(opts.url)
+	instance.DryRun = opts.dryRun
+	instance.Only = opts.only
+	instance.Tools = opts.tools
+	instance.Interactive = interactive
+	return instance, nil
+}
+
+// reporter picks the rendering from whether anything is watching.
+//
+// A terminal gets colour and a spinner. A pipe, a file or CI gets plain
+// lines, because cursor movement in a log is noise and a spinner is thousands
+// of wasted rows. Same events either way, so there is no second code path.
+// isTerminal reports whether anything is watching.
+func isTerminal(out *os.File) bool {
+	info, err := out.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+func reporter(out *os.File) app.Reporter {
+	if !isTerminal(out) {
+		return app.PlainReporter{Out: out}
+	}
+	// Honour the convention rather than inventing one: NO_COLOR is set by
+	// people who mean it.
+	if os.Getenv("NO_COLOR") != "" {
+		return app.PlainReporter{Out: out}
+	}
+	return app.NewLiveReporter(out)
 }
 
 func defaultRepo() string {
@@ -131,375 +224,20 @@ func defaultRepo() string {
 	return filepath.Join(home, "dotfiles")
 }
 
-func load(repo string) (*manifest.Manifest, error) {
-	return manifest.Load(filepath.Join(repo, "manifest.jsonc"))
-}
-
-func validate(repo string) error {
-	m, err := load(repo)
-	if err != nil {
-		return err
+// runMenu shows the menu, then runs whatever was chosen - through exactly the
+// same App methods the direct commands use.
+func runMenu(ctx context.Context, instance *app.App, opts options) error {
+	if !instance.Cloned() {
+		// There is nothing to show a selector about yet. Offering an empty
+		// menu would be worse than doing the obvious thing.
+		return instance.Install(ctx)
 	}
-	fmt.Printf("%s %s - manifest ok\n", m.App, m.Version)
-	fmt.Printf("  %d stow packages, %d tools, %d secrets\n",
-		len(m.StowPackages), len(m.Tools), len(m.Secrets))
-	return nil
-}
-
-// currentPlatform maps GOOS onto the manifest's vocabulary.
-func currentPlatform() (manifest.Platform, error) {
-	switch runtime.GOOS {
-	case "darwin":
-		return manifest.MacOS, nil
-	case "linux":
-		return manifest.Linux, nil
-	case "windows":
-		return manifest.Windows, nil
-	default:
-		return "", fmt.Errorf("unsupported platform %q", runtime.GOOS)
-	}
-}
-
-func renderSecrets(ctx context.Context, repo string, dryRun bool) error {
-	m, err := load(repo)
-	if err != nil {
-		return err
-	}
-	if len(m.Secrets) == 0 {
-		fmt.Println("no secrets declared in manifest.jsonc")
-		return nil
-	}
-
-	platform, err := currentPlatform()
-	if err != nil {
-		return err
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("finding home directory: %w", err)
-	}
-
-	// BW_SESSION from the environment, never from a file: a session key on
-	// disk is a vault with the lock left open.
-	client := secrets.New(secrets.ExecRunner{}, os.Getenv("BW_SESSION"))
-	if err := client.RequireUnlocked(ctx); err != nil {
-		return err
-	}
-	// `bw` answers from a local cache, so without this a rotated credential
-	// renders as the old value and nothing says so.
-	if err := client.Sync(ctx); err != nil {
-		return fmt.Errorf("syncing vault: %w", err)
-	}
-
-	renderer := &secrets.Renderer{
-		Client:   client,
-		RepoRoot: repo,
-		Home:     home,
-		Platform: platform,
-		DryRun:   dryRun,
-	}
-	results, err := renderer.RenderAll(ctx, m.Secrets)
-	// Print what did land before returning the failure - a partial run is
-	// worth knowing about.
-	for _, r := range results {
-		switch {
-		case r.Skipped:
-			fmt.Printf("  skip    %s (%s)\n", r.Name, r.Reason)
-		case r.Changed && dryRun:
-			fmt.Printf("  would   %s -> %s\n", r.Name, r.Target)
-		case r.Changed:
-			fmt.Printf("  wrote   %s -> %s\n", r.Name, r.Target)
-		default:
-			fmt.Printf("  ok      %s (unchanged)\n", r.Name)
-		}
-	}
-	return err
-}
-
-// setup resolves the pieces every linking command needs.
-func setup(repo string) (*manifest.Manifest, *stow.Ignorer, string, manifest.Platform, error) {
-	m, err := load(repo)
-	if err != nil {
-		return nil, nil, "", "", err
-	}
-	ignore, err := stow.NewIgnorer(m.StowIgnore)
-	if err != nil {
-		return nil, nil, "", "", err
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, nil, "", "", fmt.Errorf("finding home directory: %w", err)
-	}
-	platform, err := currentPlatform()
-	if err != nil {
-		return nil, nil, "", "", err
-	}
-	return m, ignore, home, platform, nil
-}
-
-// wanted returns the stow packages that apply to this platform, in manifest
-// order. The order is load-bearing: the `stow` package carries
-// ~/.stow-global-ignore and is listed first so it is in place before anything
-// else is linked.
-func wanted(m *manifest.Manifest, platform manifest.Platform) []manifest.StowPackage {
-	var out []manifest.StowPackage
-	for _, pkg := range m.StowPackages {
-		if len(pkg.Platforms) == 0 || slices.Contains(pkg.Platforms, platform) {
-			out = append(out, pkg)
-		}
-	}
-	return out
-}
-
-func link(repo string, dryRun bool) error {
-	m, ignore, home, platform, err := setup(repo)
+	items, err := instance.MenuItems()
 	if err != nil {
 		return err
 	}
 
-	// One backup directory per run, stamped, so a restore is "copy the newest
-	// one back" rather than a merge of several runs.
-	backupDir := filepath.Join(home, ".dotfiles-backups",
-		time.Now().UTC().Format("2006-01-02T15-04-05Z"))
-
-	for _, pkg := range wanted(m, platform) {
-		ops, err := stow.Plan(filepath.Join(repo, pkg.Name), home, ignore)
-		if err != nil {
-			return err
-		}
-		counts := stow.Count(ops)
-		verb := "linked"
-		if dryRun {
-			verb = "would link"
-		}
-		fmt.Printf("  %-10s %s %d, relinked %d, already %d, ignored %d\n",
-			pkg.Name, verb, counts[stow.Link], counts[stow.Relink],
-			counts[stow.Skip], counts[stow.Ignore])
-		for _, op := range ops {
-			if op.Kind == stow.Relink {
-				fmt.Printf("      backup  %s (%s)\n", op.Target, op.Reason)
-			}
-		}
-		if err := stow.Apply(ops, backupDir, dryRun); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func unlink(repo string, dryRun bool) error {
-	m, ignore, home, platform, err := setup(repo)
-	if err != nil {
-		return err
-	}
-	for _, pkg := range wanted(m, platform) {
-		removed, err := stow.Unlink(filepath.Join(repo, pkg.Name), home, ignore, dryRun)
-		if err != nil {
-			return err
-		}
-		verb := "removed"
-		if dryRun {
-			verb = "would remove"
-		}
-		fmt.Printf("  %-10s %s %d link(s)\n", pkg.Name, verb, len(removed))
-	}
-	return nil
-}
-
-func printPackages(repo string, brewOnly, wingetOnly bool) error {
-	m, err := load(repo)
-	if err != nil {
-		return err
-	}
-	both := !brewOnly && !wingetOnly
-	if brewOnly || both {
-		fmt.Print(pkgs.Brewfile(m))
-	}
-	if both {
-		fmt.Println()
-	}
-	if wingetOnly || both {
-		out, err := pkgs.WingetPackages(m)
-		if err != nil {
-			return err
-		}
-		fmt.Print(out)
-	}
-	return nil
-}
-
-// install is the whole path: packages, then configs, then secrets.
-//
-// The order matters and so does the error handling. Secrets come last and a
-// failure there is a warning rather than a stop, because the vault is the one
-// dependency a fresh machine may legitimately not have yet - `bw login` is
-// interactive and this has to work under `--all` with nobody watching. A
-// machine with no vault still ends up fully configured, minus the credential
-// files, and is told so.
-func install(ctx context.Context, repo string, dryRun bool) error {
-	m, _, _, platform, err := setup(repo)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("packages")
-	if err := installPackages(ctx, m, platform, dryRun); err != nil {
-		return err
-	}
-
-	fmt.Println("\nconfigs")
-	if err := link(repo, dryRun); err != nil {
-		return err
-	}
-
-	if len(m.Secrets) == 0 {
-		return nil
-	}
-	fmt.Println("\nsecrets")
-	if err := renderSecrets(ctx, repo, dryRun); err != nil {
-		fmt.Printf("  skipped: %v\n", err)
-		fmt.Println("  everything else is installed; re-run `doti secrets` once the vault is available")
-	}
-	return nil
-}
-
-func installPackages(ctx context.Context, m *manifest.Manifest, platform manifest.Platform, dryRun bool) error {
-	runner := pkgs.ExecRunner{Out: os.Stdout}
-	status := pkgs.Inspect(m, runner.Look)
-	fmt.Printf("  %d of %d tools already present\n",
-		len(status.Present), len(status.Present)+len(status.Missing))
-	for _, tool := range status.Missing {
-		fmt.Printf("      missing %s\n", tool.Cmd)
-	}
-	if len(status.Missing) == 0 {
-		return nil
-	}
-
-	if platform == manifest.Windows {
-		if dryRun {
-			fmt.Println("  would run: winget import (generated from manifest.jsonc)")
-			return nil
-		}
-		return runWinget(ctx, runner, m)
-	}
-
-	if dryRun {
-		fmt.Println("  would run: brew bundle (generated from manifest.jsonc)")
-		return nil
-	}
-	if !runner.Look("brew") {
-		return fmt.Errorf("homebrew is not installed - see https://brew.sh")
-	}
-	file, cleanup, err := tempFile("Brewfile", pkgs.Brewfile(m))
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	return runner.Run(ctx, "brew", "bundle", "--no-lock", "--file="+file)
-}
-
-func runWinget(ctx context.Context, runner pkgs.Runner, m *manifest.Manifest) error {
-	body, err := pkgs.WingetPackages(m)
-	if err != nil {
-		return err
-	}
-	file, cleanup, err := tempFile("packages.json", body)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	return runner.Run(ctx, "winget", "import", "-i", file,
-		"--accept-package-agreements", "--accept-source-agreements")
-}
-
-// tempFile writes a generated package list somewhere disposable.
-//
-// Deliberately not into the repo: the shell installer generated these at
-// install time precisely so neither file is committed and neither can drift
-// from the manifest.
-func tempFile(name, body string) (string, func(), error) {
-	dir, err := os.MkdirTemp("", "doti-")
-	if err != nil {
-		return "", nil, fmt.Errorf("creating temp dir: %w", err)
-	}
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		os.RemoveAll(dir)
-		return "", nil, fmt.Errorf("writing %s: %w", path, err)
-	}
-	return path, func() { os.RemoveAll(dir) }, nil
-}
-
-// collectItems describes the machine to the selector: what is installed, what
-// is linked, what has been rendered. Everything defaults to ticked, because
-// re-running a step is how drift gets repaired and the common case is "yes,
-// all of it".
-func collectItems(repo string) ([]tui.Item, error) {
-	m, ignore, home, platform, err := setup(repo)
-	if err != nil {
-		return nil, err
-	}
-
-	runner := pkgs.ExecRunner{Out: io.Discard}
-	status := pkgs.Inspect(m, runner.Look)
-	total := len(status.Present) + len(status.Missing)
-	items := []tui.Item{{
-		Group:    "Packages",
-		Label:    "brew packages",
-		Status:   fmt.Sprintf("%d of %d present", len(status.Present), total),
-		Done:     len(status.Missing) == 0,
-		Selected: true,
-	}}
-	for _, extra := range m.Extras {
-		if len(extra.Platforms) == 0 || slices.Contains(extra.Platforms, platform) {
-			items = append(items, tui.Item{
-				Group: "Packages", Label: extra.Name, Status: "not checked", Selected: true,
-			})
-		}
-	}
-
-	for _, pkg := range wanted(m, platform) {
-		state := "not linked"
-		done := false
-		if ops, err := stow.Plan(filepath.Join(repo, pkg.Name), home, ignore); err == nil {
-			counts := stow.Count(ops)
-			if counts[stow.Link] == 0 && counts[stow.Relink] == 0 && counts[stow.Unfold] == 0 {
-				state, done = "linked", true
-			} else if counts[stow.Skip] > 0 {
-				state = "partly linked"
-			}
-		}
-		items = append(items, tui.Item{
-			Group: "Configs", Label: pkg.Name, Status: state, Done: done, Selected: true,
-		})
-	}
-
-	for _, secret := range m.Secrets {
-		if !secret.WantsPlatform(platform) {
-			continue
-		}
-		state, done := "not rendered", false
-		target := secret.Target
-		if strings.HasPrefix(target, "~/") {
-			target = filepath.Join(home, strings.TrimPrefix(target, "~/"))
-		}
-		if _, err := os.Stat(target); err == nil {
-			state, done = "rendered", true
-		}
-		items = append(items, tui.Item{
-			Group: "Secrets", Label: secret.Name, Status: state, Done: done, Selected: true,
-		})
-	}
-	return items, nil
-}
-
-func runMenu(ctx context.Context, repo string) error {
-	items, err := collectItems(repo)
-	if err != nil {
-		return err
-	}
 	model := tui.New(tui.Config{Items: items, Version: version, Width: 80, Height: 24})
-
 	final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
 	if err != nil {
 		return fmt.Errorf("running the menu: %w", err)
@@ -516,141 +254,45 @@ func runMenu(ctx context.Context, repo string) error {
 		if !chosen.Confirmed() {
 			return nil
 		}
-		return install(ctx, repo, false)
+		return instance.Install(ctx)
 	case tui.ActionAdopt:
 		if !chosen.Confirmed() {
 			return nil
 		}
-		return adopt(ctx, repo, false)
+		return instance.Adopt(ctx)
 	case tui.ActionPreview:
-		return install(ctx, repo, true)
+		instance.DryRun = true
+		return instance.Install(ctx)
 	case tui.ActionUnlink:
-		return unlink(repo, false)
+		instance.Report.Phase("configs")
+		return instance.Unlink(false)
 	case tui.ActionCheck:
-		return check(repo, false)
+		return instance.Check(false)
 	case tui.ActionSync:
-		return sync(ctx, repo, false)
+		return instance.Sync(ctx)
 	case tui.ActionUpdate:
-		return update(ctx, repo)
+		return instance.Update(ctx)
 	}
 	return nil
 }
 
-func preview(repo, framesDir string) error {
-	if framesDir == "" {
-		return runMenu(context.Background(), repo)
+func preview(ctx context.Context, instance *app.App, opts options) error {
+	if opts.frames == "" {
+		return runMenu(ctx, instance, opts)
 	}
-	items, err := collectItems(repo)
+	items, err := instance.MenuItems()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(framesDir, 0o755); err != nil {
+	if err := os.MkdirAll(opts.frames, 0o755); err != nil {
 		return err
 	}
 	for i, frame := range tui.Frames(items, version, 80, 26) {
-		path := filepath.Join(framesDir, fmt.Sprintf("%02d-%s.ansi", i+1, frame.Name))
+		path := filepath.Join(opts.frames, fmt.Sprintf("%02d-%s.ansi", i+1, frame.Name))
 		if err := os.WriteFile(path, []byte(frame.Body), 0o644); err != nil {
 			return err
 		}
 		fmt.Println("wrote", path)
 	}
 	return nil
-}
-
-// scan is the read-only look at the machine that `check` prints and `adopt`
-// acts on.
-func scan(repo string) (health.Report, error) {
-	m, _, home, platform, err := setup(repo)
-	if err != nil {
-		return health.Report{}, err
-	}
-	runner := pkgs.ExecRunner{Out: io.Discard}
-	return health.Check(health.Options{
-		Manifest: m, Platform: platform, Repo: repo, Home: home, Look: runner.Look,
-	}), nil
-}
-
-// check prints the report and changes nothing.
-//
-// --strict is what makes this usable from a login shell or a cron job: the
-// default exit code is 0 even with drift, because "tell me" and "fail" are
-// different questions and only the caller knows which one it is asking.
-func check(repo string, strict bool) error {
-	report, err := scan(repo)
-	if err != nil {
-		return err
-	}
-	passed, total := report.Counts()
-	fmt.Printf("%d of %d checks passed\n", passed, total)
-	for _, finding := range report.Missing() {
-		fmt.Printf("  %-6s %-34s %s\n", finding.Kind, finding.Name, finding.Detail)
-	}
-	if strict && !report.OK() {
-		return fmt.Errorf("%d check(s) failed", len(report.Missing()))
-	}
-	return nil
-}
-
-// adopt is install for a machine that is already in use: scan, say what is
-// already there, then act only on the gaps.
-//
-// The scan is the whole point. Someone running this has tools they installed
-// by hand and configs they wrote years ago, and the question they actually
-// want answered before anything is touched is "what are you about to do".
-func adopt(ctx context.Context, repo string, dryRun bool) error {
-	report, err := scan(repo)
-	if err != nil {
-		return err
-	}
-	passed, total := report.Counts()
-	fmt.Printf("scan: %d of %d already in place\n", passed, total)
-	for _, finding := range report.Missing() {
-		fmt.Printf("  gap    %-6s %-30s %s\n", finding.Kind, finding.Name, finding.Detail)
-	}
-	if report.OK() {
-		fmt.Println("\nnothing to do")
-		return nil
-	}
-	fmt.Println()
-	// `brew bundle` and the link planner are both already idempotent - they
-	// skip what exists - so acting on the gaps is the same call as install.
-	// What adopt adds is the report above, before anything happens.
-	return install(ctx, repo, dryRun)
-}
-
-// sync brings the repo forward and re-links.
-func sync(ctx context.Context, repo string, dryRun bool) error {
-	runner := pkgs.ExecRunner{Out: os.Stdout}
-	if dryRun {
-		fmt.Printf("would run: git -C %s pull --ff-only\n", repo)
-	} else {
-		// --ff-only rather than a merge: this runs unattended, and a sync
-		// that stops to ask about a merge conflict is a sync that hangs.
-		if err := runner.Run(ctx, "git", "-C", repo, "pull", "--ff-only"); err != nil {
-			return fmt.Errorf("%w (resolve it by hand, then re-run)", err)
-		}
-	}
-	fmt.Println()
-	return link(repo, dryRun)
-}
-
-// update upgrades what the package manager installed, and nothing else.
-func update(ctx context.Context, repo string) error {
-	_, _, _, platform, err := setup(repo)
-	if err != nil {
-		return err
-	}
-	runner := pkgs.ExecRunner{Out: os.Stdout}
-
-	if platform == manifest.Windows {
-		return runner.Run(ctx, "winget", "upgrade", "--all",
-			"--accept-package-agreements", "--accept-source-agreements")
-	}
-	if !runner.Look("brew") {
-		return fmt.Errorf("homebrew is not installed - see https://brew.sh")
-	}
-	if err := runner.Run(ctx, "brew", "update"); err != nil {
-		return err
-	}
-	return runner.Run(ctx, "brew", "upgrade")
 }

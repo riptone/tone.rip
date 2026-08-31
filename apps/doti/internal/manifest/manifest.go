@@ -86,11 +86,22 @@ type StowPackage struct {
 	Platforms []Platform `json:"platforms"`
 }
 
-// Tool is a CLI installed through a package manager.
+// Tool is something installed through a package manager.
 type Tool struct {
 	Cmd    string `json:"cmd"`
 	Brew   string `json:"brew,omitempty"`
 	Winget string `json:"winget,omitempty"`
+	// App is the application bundle to look for when Cmd is not on PATH.
+	//
+	// A macOS GUI app installs to /Applications/<App>.app and puts nothing
+	// on PATH, so `command -v ghostty` is a false negative - it reported
+	// Ghostty missing on a machine where it was open at the time. The shell
+	// installer had the same bug; this is the field that fixes it rather
+	// than a hardcoded list of names in the detector.
+	//
+	// Checked on macOS only. On Linux and Windows the command is the
+	// application, and an app-bundle path means nothing.
+	App string `json:"app,omitempty"`
 }
 
 // Cask is a macOS GUI application.
@@ -127,10 +138,60 @@ type CLI struct {
 	ExistingMachine string      `json:"existing_machine,omitempty"`
 }
 
-// Health is what `doti --check` verifies beyond the tool list: extra binaries
+// ExtraTool is something to verify that no `tools` entry covers - zsh, brew,
+// stow itself.
+//
+// Written as a bare string in the common case, or as an object when the thing
+// is a GUI application:
+//
+//	"extra_tools": { "macos": ["zsh", { "cmd": "ghostty", "app": "Ghostty" }] }
+//
+// The object form exists because `command -v ghostty` is a permanent false
+// negative: a macOS app installs to /Applications/Ghostty.app and puts
+// nothing on PATH, so `check --strict` could never pass on a machine where
+// Ghostty was open at the time.
+type ExtraTool struct {
+	Cmd string `json:"cmd"`
+	// App is the bundle to look for when Cmd is not on PATH. macOS only.
+	App string `json:"app,omitempty"`
+}
+
+// UnmarshalJSON accepts either a bare command name or the object form.
+func (e *ExtraTool) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		e.Cmd = name
+		return nil
+	}
+	// Aliased so this does not recurse back into itself.
+	type plain ExtraTool
+	var obj plain
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("extra_tools entry must be a string or {cmd, app}: %w", err)
+	}
+	if obj.Cmd == "" {
+		return fmt.Errorf("extra_tools entry has no cmd")
+	}
+	*e = ExtraTool(obj)
+	return nil
+}
+
+// Vault is where the secrets come from.
+//
+// Not a secret itself - it is which Bitwarden deployment the account lives
+// on, and getting it wrong produces "Invalid master password", which sends
+// you looking at the wrong thing entirely.
+type Vault struct {
+	// Server is the deployment URL, e.g. https://vault.bitwarden.eu for the
+	// EU cloud. Omit for Bitwarden's default (the US cloud), or for a CLI
+	// somebody has configured by hand.
+	Server string `json:"server,omitempty"`
+}
+
+// Health is what `doti check` verifies beyond the tool list: extra binaries
 // per platform, and the symlinks that should exist.
 type Health struct {
-	ExtraTools map[Platform][]string          `json:"extra_tools,omitempty"`
+	ExtraTools map[Platform][]ExtraTool       `json:"extra_tools,omitempty"`
 	Links      map[Platform]map[string]string `json:"links,omitempty"`
 }
 
@@ -155,6 +216,7 @@ type Manifest struct {
 	// Secrets is optional: a checkout with no vault configured still
 	// installs, it just renders nothing.
 	Secrets []Secret `json:"secrets,omitempty"`
+	Vault   *Vault   `json:"vault,omitempty"`
 }
 
 // Load reads and validates a manifest.

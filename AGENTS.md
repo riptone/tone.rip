@@ -11,12 +11,13 @@ The goal is not just to build features. The goal is to preserve a consistent pro
 
 ## Quick facts (so you don't have to open the docs above just to know these)
 
-- Stack: Bun + Turborepo, Astro (`apps/web`, `apps/dashboard`), Hono on Cloudflare Workers (`apps/api`), Biome (not ESLint), Vitest everywhere. `apps/dashboard` is gated by Cloudflare Access, not app-level auth code. No Neon/Postgres/Drizzle, no mobile app - out of scope until there's an actual need.
+- Stack: Bun + Turborepo, Astro (`apps/web`, `apps/dashboard`), Hono on Cloudflare Workers (`apps/api`), Go (`apps/ssh-cv`, `apps/doti`, `packages/gotui` - three modules wired with `replace` directives), Biome (not ESLint), Vitest everywhere. `apps/dashboard` is gated by Cloudflare Access, not app-level auth code. No Neon/Postgres/Drizzle, no mobile app - out of scope until there's an actual need.
 - No god-files, no circular dependencies. Run `bun run check-cycles` (madge) and `bun run knip` before considering a change done.
 - `bun run ci` runs the whole gate locally - one Biome pass (`biome check --write`), then turbo schedules check-types, test, build, knip, check-cycles, check-bundle-size and e2e in parallel, then the generated-CV drift check. The one command to run before considering a change done. `shellcheck` and `govulncheck` are CI-only.
 - `bun run test` enforces per-package coverage thresholds (each `vitest.config.ts` passes them to `defineTestConfig` from `packages/config/vitest-config`), `bun run check-bundle-size` guards each Worker's bundled-script size, and `bun run e2e` (Playwright, `packages/config/playwright-config`) smoke-tests `apps/web`/`apps/dashboard` against a real `wrangler dev` - all three run in CI; see [docs/deployment.md](./docs/deployment.md) for the bundle-size budget.
 - `bun outdated` (aliased as `bun run outdated`) lists outdated dependencies natively - no need for `npm-check-updates` or similar.
-- Shared logic belongs in a package (see architecture.md's package map) - never duplicate business logic between `apps/web` and `apps/dashboard`.
+- Shared logic belongs in a package (see architecture.md's package map) - never duplicate business logic between `apps/web` and `apps/dashboard`, and the same rule holds for Go: the terminal chrome `apps/ssh-cv` and `apps/doti` share lives in `packages/gotui`.
+- `apps/doti` installs the configs in [riptone/dotfiles](https://github.com/riptone/dotfiles). That repo is data - manifest plus stow packages - and installer *behaviour* changes here, not there.
 
 ## Final Principle
 

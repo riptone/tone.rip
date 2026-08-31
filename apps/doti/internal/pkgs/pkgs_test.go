@@ -1,7 +1,9 @@
 package pkgs
 
 import (
+	"context"
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -111,9 +113,19 @@ func TestADuplicateExtraIsNotEmittedTwice(t *testing.T) {
 	}
 }
 
+// fakeRunner answers without touching PATH, /Applications or a package
+// manager.
+type fakeRunner struct {
+	cmds map[string]bool
+	apps map[string]bool
+}
+
+func (f fakeRunner) Run(context.Context, string, ...string) error { return nil }
+func (f fakeRunner) Look(name string) bool                        { return f.cmds[name] }
+func (f fakeRunner) HasApp(name string) bool                      { return f.apps[name] }
+
 func TestInspectSplitsPresentFromMissing(t *testing.T) {
-	installed := map[string]bool{"jq": true, "code": true}
-	status := Inspect(load(t), func(cmd string) bool { return installed[cmd] })
+	status := Inspect(load(t), fakeRunner{cmds: map[string]bool{"jq": true, "code": true}})
 
 	if len(status.Present) != 2 || len(status.Missing) != 1 {
 		t.Fatalf("present=%v missing=%v", status.Present, status.Missing)
@@ -127,8 +139,113 @@ func TestInspectSplitsPresentFromMissing(t *testing.T) {
 // other way still answers "can I run this", which is what makes --adopt
 // usable on a machine someone has had for years.
 func TestInspectDoesNotCareHowSomethingWasInstalled(t *testing.T) {
-	status := Inspect(load(t), func(string) bool { return true })
+	status := Inspect(load(t), fakeRunner{cmds: map[string]bool{
+		"jq": true, "stow": true, "code": true,
+	}})
 	if len(status.Missing) != 0 {
 		t.Fatalf("nothing should be missing, got %v", status.Missing)
+	}
+}
+
+// A GUI app puts nothing on PATH, so a tool that names its bundle must be
+// found by it. Without this, Ghostty is reported missing on a machine where
+// it is running.
+func TestInspectFindsAToolByItsApplicationBundle(t *testing.T) {
+	m, err := manifest.Parse([]byte(`{
+	  "app": "d",
+	  "tools": [{ "cmd": "ghostty", "brew": "ghostty", "app": "Ghostty" }]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	missing := Inspect(m, fakeRunner{})
+	if len(missing.Missing) != 1 {
+		t.Fatalf("with neither, it should be missing: %+v", missing)
+	}
+
+	viaApp := Inspect(m, fakeRunner{apps: map[string]bool{"Ghostty": true}})
+	if len(viaApp.Present) != 1 {
+		t.Fatalf("the bundle should count as present: %+v", viaApp)
+	}
+
+	viaPath := Inspect(m, fakeRunner{cmds: map[string]bool{"ghostty": true}})
+	if len(viaPath.Present) != 1 {
+		t.Fatalf("PATH should still count: %+v", viaPath)
+	}
+}
+
+// HasApp is macOS-only: on Linux and Windows the command *is* the
+// application, and an app-bundle path means nothing.
+func TestHasAppIsMacOnlyAndIgnoresAnEmptyName(t *testing.T) {
+	runner := ExecRunner{}
+	if runner.HasApp("") {
+		t.Error("an empty bundle name must never match")
+	}
+	got := runner.HasApp("DefinitelyNotInstalled")
+	if got {
+		t.Error("a bundle that is not there must not match")
+	}
+	if runtime.GOOS != "darwin" && runner.HasApp("Ghostty") {
+		t.Error("HasApp should be false off macOS")
+	}
+}
+
+// Captured output is what keeps the display readable, and what makes a
+// failure diagnosable after the fact. Both halves are asserted: the tail ends
+// up in the error, and it is capped.
+func TestAFailedCommandCarriesItsOutput(t *testing.T) {
+	err := ExecRunner{}.Run(context.Background(), "sh", "-c",
+		"echo something-went-wrong >&2; exit 3")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if !strings.Contains(err.Error(), "something-went-wrong") {
+		t.Fatalf("the error should carry the output: %v", err)
+	}
+	if !strings.Contains(err.Error(), "sh -c") {
+		t.Fatalf("the error should name the invocation: %v", err)
+	}
+}
+
+func TestASucceedingCommandIsSilent(t *testing.T) {
+	var out strings.Builder
+	if err := (ExecRunner{Out: &out}).Run(context.Background(), "sh", "-c", "echo hello"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "hello") {
+		t.Errorf("streamed output should reach Out, got %q", out.String())
+	}
+}
+
+// `brew bundle` on a fresh machine emits megabytes. An error message is not a
+// log file.
+func TestCapturedOutputIsCapped(t *testing.T) {
+	err := ExecRunner{}.Run(context.Background(), "sh", "-c",
+		"for i in $(seq 1 20000); do echo padding-line-$i; done; exit 1")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	// The tail plus the invocation and indentation; generous, but far below
+	// the megabytes the command produced.
+	if len(err.Error()) > 3*tailBytes {
+		t.Fatalf("error is %d bytes, want the tail only", len(err.Error()))
+	}
+	// The tail, not the head: the failure is at the end.
+	if !strings.Contains(err.Error(), "padding-line-20000") {
+		t.Error("the error should carry the end of the output")
+	}
+	if strings.Contains(err.Error(), "padding-line-1\n") {
+		t.Error("the error should not carry the start of the output")
+	}
+}
+
+func TestALookupFailureNamesTheBinary(t *testing.T) {
+	err := ExecRunner{}.Run(context.Background(), "definitely-not-a-command-xyz")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if !strings.Contains(err.Error(), "definitely-not-a-command-xyz") {
+		t.Fatalf("error = %v", err)
 	}
 }

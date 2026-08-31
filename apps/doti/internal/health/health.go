@@ -8,6 +8,7 @@
 package health
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -64,15 +65,22 @@ func (r Report) Counts() (passed, total int) {
 	return passed, len(r.Findings)
 }
 
+// Detector answers "does this machine have it". Injected so tests never
+// depend on what happens to be installed.
+type Detector interface {
+	// Look reports whether a command is on PATH.
+	Look(name string) bool
+	// HasApp reports whether an application bundle is installed.
+	HasApp(bundle string) bool
+}
+
 // Options is what Check needs to look at a machine.
 type Options struct {
 	Manifest *manifest.Manifest
 	Platform manifest.Platform
 	Repo     string
 	Home     string
-	// Look reports whether a command is on PATH. Injected so tests never
-	// depend on what happens to be installed.
-	Look func(string) bool
+	Detect   Detector
 }
 
 // Check inspects the machine and reports what it finds.
@@ -81,18 +89,37 @@ func Check(opts Options) Report {
 	m := opts.Manifest
 
 	for _, tool := range m.Tools {
-		report.Findings = append(report.Findings, checkTool(opts, tool.Cmd))
+		// A GUI app puts nothing on PATH, so a tool that names its bundle is
+		// checked for the bundle too - otherwise Ghostty is reported missing
+		// on a machine where it is running, and --strict never passes.
+		if opts.Detect.Look(tool.Cmd) || opts.Detect.HasApp(tool.App) {
+			report.Findings = append(report.Findings,
+				Finding{Kind: KindTool, Name: tool.Cmd, OK: true})
+			continue
+		}
+		report.Findings = append(report.Findings, Finding{
+			Kind: KindTool, Name: tool.Cmd, Detail: missingDetail(tool.App),
+		})
 	}
 
 	// Tools the manifest wants present but does not install through a
 	// package manager - zsh, brew itself, stow. Checked per platform because
 	// `brew` on Windows is not a gap, it is a category error.
 	if m.Health != nil {
-		for _, name := range m.Health.ExtraTools[opts.Platform] {
-			if slices.ContainsFunc(m.Tools, func(t manifest.Tool) bool { return t.Cmd == name }) {
+		for _, extra := range m.Health.ExtraTools[opts.Platform] {
+			if slices.ContainsFunc(m.Tools, func(t manifest.Tool) bool {
+				return t.Cmd == extra.Cmd
+			}) {
 				continue
 			}
-			report.Findings = append(report.Findings, checkTool(opts, name))
+			if opts.Detect.Look(extra.Cmd) || opts.Detect.HasApp(extra.App) {
+				report.Findings = append(report.Findings,
+					Finding{Kind: KindTool, Name: extra.Cmd, OK: true})
+				continue
+			}
+			report.Findings = append(report.Findings, Finding{
+				Kind: KindTool, Name: extra.Cmd, Detail: missingDetail(extra.App),
+			})
 		}
 
 		targets := make([]string, 0, len(m.Health.Links[opts.Platform]))
@@ -111,11 +138,13 @@ func Check(opts Options) Report {
 	return report
 }
 
-func checkTool(opts Options, name string) Finding {
-	if opts.Look(name) {
-		return Finding{Kind: KindTool, Name: name, OK: true}
+// missingDetail says what was looked for, so "not on PATH" does not read as
+// the whole story for something that was never going to be on PATH.
+func missingDetail(app string) string {
+	if app != "" {
+		return fmt.Sprintf("not on PATH, and no %s.app", app)
 	}
-	return Finding{Kind: KindTool, Name: name, Detail: "not on PATH"}
+	return "not on PATH"
 }
 
 // checkLink resolves a target and compares where it lands.

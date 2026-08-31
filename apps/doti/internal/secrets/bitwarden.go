@@ -31,6 +31,14 @@ const (
 	Unlocked        State = "unlocked"
 )
 
+// VaultStatus is what `bw status` reports.
+type VaultStatus struct {
+	State State
+	// ServerURL is the deployment the CLI is pointed at. Empty until one is
+	// configured - the CLI defaults to the US cloud and does not say so.
+	ServerURL string
+}
+
 // UnavailableError says the vault cannot answer yet and what the human has
 // to do about it. Returned rather than prompting, because the installer runs
 // unattended (`doti --all`) as often as it runs interactively.
@@ -53,6 +61,16 @@ func (e *UnavailableError) Error() string {
 // vault, a network or a login.
 type Runner interface {
 	Run(ctx context.Context, env []string, args ...string) ([]byte, error)
+	// RunInteractive runs bw with the terminal attached to its prompts and
+	// returns only what it wrote to stdout.
+	//
+	// The split is load-bearing and was determined by looking rather than
+	// guessing: `bw unlock --raw` writes its "Master password:" prompt to
+	// *stderr* and the session key to *stdout*. Inheriting stdin and stderr
+	// therefore lets somebody type their master password straight into bw -
+	// it never passes through doti, is never in doti's argv, and is never in
+	// doti's memory - while doti still gets the key it needs.
+	RunInteractive(ctx context.Context, env []string, args ...string) ([]byte, error)
 }
 
 // ExecRunner runs the real binary.
@@ -83,6 +101,65 @@ func (r ExecRunner) Run(ctx context.Context, env []string, args ...string) ([]by
 	}
 	return out, nil
 }
+
+func (r ExecRunner) RunInteractive(ctx context.Context, env []string, args ...string) ([]byte, error) {
+	bin := r.Bin
+	if bin == "" {
+		bin = "bw"
+	}
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Env = append(os.Environ(), env...)
+	// Inherited, so bw owns the prompt and the typing.
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+
+	var out strings.Builder
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		// Deliberately without the captured stdout: on the unlock path that
+		// is the session key, and an error carrying it would put a live
+		// vault credential into a log.
+		return nil, fmt.Errorf("bw %s: %w", strings.Join(args, " "), err)
+	}
+	return []byte(out.String()), nil
+}
+
+// Login signs the CLI in, interactively.
+//
+// Every stream is inherited: bw asks for the email, the master password and a
+// two-factor code if the account has one, and none of that should pass
+// through this process. There is nothing to capture - success is a state
+// change in bw's own data file.
+func (c *Client) Login(ctx context.Context) error {
+	if _, err := c.runner.RunInteractive(ctx, nil, "login"); err != nil {
+		return fmt.Errorf("bw login: %w", err)
+	}
+	return nil
+}
+
+// Unlock unlocks the vault and adopts the resulting session for this run.
+//
+// The session is held in memory only. It is deliberately *not* written
+// anywhere: a session key on disk is a vault with the lock left open, and
+// exporting it into the caller's shell is not something a child process can
+// do anyway.
+func (c *Client) Unlock(ctx context.Context) error {
+	out, err := c.runner.RunInteractive(ctx, nil, "unlock", "--raw")
+	if err != nil {
+		return fmt.Errorf("bw unlock: %w", err)
+	}
+	session := strings.TrimSpace(string(out))
+	if session == "" {
+		return fmt.Errorf("bw unlock returned no session key")
+	}
+	c.session = session
+	// The cache belongs to the previous session, if there was one.
+	c.items = map[string]*Item{}
+	return nil
+}
+
+// HasSession reports whether this client is holding a session key.
+func (c *Client) HasSession() bool { return c.session != "" }
 
 // Item is the subset of a Bitwarden item this package reads.
 type Item struct {
@@ -123,31 +200,85 @@ func (c *Client) env() []string {
 	return []string{"BW_SESSION=" + c.session}
 }
 
-// Status reports whether the vault can be read.
-func (c *Client) Status(ctx context.Context) (State, error) {
+// Status reports what the CLI is pointed at and whether it can be read.
+func (c *Client) Status(ctx context.Context) (VaultStatus, error) {
 	out, err := c.runner.Run(ctx, c.env(), "status")
 	if err != nil {
-		return "", err
+		return VaultStatus{}, err
 	}
 	var status struct {
-		Status State `json:"status"`
+		Status    State  `json:"status"`
+		ServerURL string `json:"serverUrl"`
 	}
 	if err := json.Unmarshal(out, &status); err != nil {
-		return "", fmt.Errorf("parsing `bw status`: %w", err)
+		return VaultStatus{}, fmt.Errorf("parsing `bw status`: %w", err)
 	}
-	return status.Status, nil
+	return VaultStatus{State: status.Status, ServerURL: status.ServerURL}, nil
 }
 
 // RequireUnlocked returns an actionable error unless the vault is readable.
 func (c *Client) RequireUnlocked(ctx context.Context) error {
-	state, err := c.Status(ctx)
+	status, err := c.Status(ctx)
 	if err != nil {
 		return err
 	}
-	if state != Unlocked {
-		return &UnavailableError{State: state}
+	if status.State != Unlocked {
+		return &UnavailableError{State: status.State}
 	}
 	return nil
+}
+
+// normaliseServer makes two deployment URLs comparable.
+func normaliseServer(url string) string {
+	return strings.TrimRight(strings.TrimSpace(strings.ToLower(url)), "/")
+}
+
+// EnsureServer points the CLI at the deployment the manifest names.
+//
+// This exists because the failure without it is actively misleading. `bw`
+// defaults to the US cloud and does not mention it, so logging in with a
+// bitwarden.eu account fails with
+//
+//	Invalid master password. Confirm your email is correct...
+//
+// which sends you looking at your password. It is a wrong-server error. The
+// region is a deployment fact rather than a secret, so it belongs in the
+// manifest, and every new machine gets it right without anyone remembering.
+//
+// Reports whether it changed anything.
+func (c *Client) EnsureServer(ctx context.Context, want string) (bool, error) {
+	if want == "" {
+		// Nothing declared: leave whatever the operator configured alone.
+		return false, nil
+	}
+	status, err := c.Status(ctx)
+	if err != nil {
+		return false, err
+	}
+	if normaliseServer(status.ServerURL) == normaliseServer(want) {
+		return false, nil
+	}
+	// `bw config server` is refused while logged in, because the session
+	// belongs to the old deployment. Say that, rather than letting bw's own
+	// error stand.
+	if status.State != Unauthenticated {
+		return false, fmt.Errorf(
+			"the CLI is signed in to %s but the manifest names %s - run `bw logout`, then re-run",
+			displayServer(status.ServerURL), want)
+	}
+	if _, err := c.runner.Run(ctx, nil, "config", "server", want); err != nil {
+		return false, fmt.Errorf("pointing bw at %s: %w", want, err)
+	}
+	return true, nil
+}
+
+// displayServer names the deployment for a human, including the one bw uses
+// when nothing has been configured.
+func displayServer(url string) string {
+	if strings.TrimSpace(url) == "" {
+		return "the default (vault.bitwarden.com)"
+	}
+	return url
 }
 
 // Sync pulls the latest vault from the server.
@@ -173,8 +304,41 @@ func (c *Client) Item(ctx context.Context, name string) (*Item, error) {
 	if err := json.Unmarshal(out, item); err != nil {
 		return nil, fmt.Errorf("parsing bitwarden item %q: %w", name, err)
 	}
+	// `bw get item` *searches*: it will happily answer a partial name match.
+	// So asking for "dotfiles/mssql-envs" can be satisfied by an item called
+	// something else that merely contains it, and the wrong credentials land
+	// in a config file with nothing anywhere saying so. An id is exempt
+	// because an id is exact by construction.
+	if !looksLikeID(name) && !strings.EqualFold(item.Name, name) {
+		return nil, fmt.Errorf(
+			"asked bitwarden for %q and it answered with %q - "+
+				"rename the item to match, or use its id",
+			name, item.Name)
+	}
 	c.items[name] = item
 	return item, nil
+}
+
+// looksLikeID reports whether a lookup string is a Bitwarden item id rather
+// than a name: 36 characters, 8-4-4-4-12 hex.
+func looksLikeID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, r := range s {
+		switch i {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return false
+			}
+		default:
+			isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+			if !isHex {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Field reads one field off an item.
