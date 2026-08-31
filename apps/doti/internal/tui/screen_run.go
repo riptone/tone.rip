@@ -7,9 +7,11 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/riptone/tone.rip/apps/doti/internal/app"
+	"github.com/riptone/tone.rip/packages/gotui"
 )
 
 // The screen an operation runs inside: its output, scrollable, with the spinner
@@ -18,9 +20,9 @@ import (
 // nowFunc is time.Now, indirected so a test can pin the elapsed counter.
 var nowFunc = time.Now
 
-// runGeometry is the run screen's card: the full height, because a log is the
-// one thing here with more than a screenful.
-func (m Model) runGeometry() geometry { return geometryFor(m.width, m.height) }
+// runGeometry is the run screen's card: the wide one, at full height, because a
+// log is the one thing here with more than a screenful in either direction.
+func (m Model) runGeometry() geometry { return wideGeometryFor(m.width, m.height) }
 
 func (m Model) runKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
@@ -138,11 +140,13 @@ func (m Model) viewRun() string {
 	rows := s.chrome.BodyRows(g, m.run.view.View(),
 		m.run.view.YOffset, m.run.view.TotalLineCount())
 
+	status, colour := m.runStatus()
 	return s.chrome.Render(g, pane{
-		Name:   m.name() + " · " + strings.ToLower(m.run.label),
-		Rows:   rows,
-		Hints:  m.runHints(),
-		Status: m.runStatus(),
+		Name:         m.name() + " · " + strings.ToLower(m.run.label),
+		Rows:         rows,
+		Hints:        m.runHints(),
+		Status:       status,
+		StatusColour: colour,
 	})
 }
 
@@ -166,24 +170,36 @@ func (m Model) runHints() []hint {
 			hint{Text: "enter menu", Keep: 2},
 			hint{Text: "q quit", Keep: 1})
 	}
+	// Advertised only once it has settled, which is also the only time it
+	// works: h during a run would take the log off screen, and the log is why
+	// the window exists.
+	if m.run.settled() {
+		hints = append(hints, hint{Text: "h help", Keep: 5})
+	}
 	return hints
 }
 
-// runStatus is the verdict, at the right of the footer.
+// runStatus is the verdict, at the right of the footer, and the colour it is
+// worth finding in.
 //
-// The whole point of the "done" the reader was asking for: while it runs this
-// counts what has happened, and when it stops it says how it ended - in one
-// word, in the place the eye already goes for a line counter.
-func (m Model) runStatus() string {
+// While it runs this counts what has happened; when it stops it says how it
+// ended - in one word, in the place the eye already goes for a line counter,
+// and in a colour that does not need reading. "done" and "failed" in the same
+// grey are two words that have to be told apart by spelling.
+//
+// Green and red rather than the accent: the accent is the cursor, and one thing
+// on screen has to stay findable instantly.
+func (m Model) runStatus() (string, lipgloss.TerminalColor) {
 	switch {
 	case !m.run.settled():
-		return fmt.Sprintf("%d %s", len(m.run.lines), plural(len(m.run.lines), "line"))
+		return fmt.Sprintf("%d %s", len(m.run.lines),
+			plural(len(m.run.lines), "line")), nil
 	case m.run.err != nil:
-		return "failed"
+		return "failed", gotui.Close
 	case m.run.updated:
-		return "updated"
+		return "updated", gotui.Zoom
 	default:
-		return "done"
+		return "done", gotui.Zoom
 	}
 }
 

@@ -27,6 +27,8 @@ type keymap struct {
 	Update key.Binding
 	// Restart relaunches after a self-update has replaced the binary.
 	Restart key.Binding
+	// Help opens the help screen, and closes it again.
+	Help key.Binding
 	// Stop cancels a running operation. Separate from Quit, because ctrl+c
 	// during an install should stop the install rather than the program.
 	Stop key.Binding
@@ -40,14 +42,20 @@ func newKeymap() keymap {
 		None:    key.NewBinding(key.WithKeys("n")),
 		Update:  key.NewBinding(key.WithKeys("u")),
 		Restart: key.NewBinding(key.WithKeys("r")),
+		Help:    key.NewBinding(key.WithKeys("h", "?")),
 		Stop:    key.NewBinding(key.WithKeys("ctrl+c")),
 	}
 	// Space belongs to Toggle on this program's lists, so the page keys give
 	// it up rather than both claiming it and letting order decide.
 	k.PageDown = key.NewBinding(key.WithKeys("pgdown", "f"))
-	// Quit is q alone here: ctrl+c is Stop, and a keypress that means "cancel
-	// this install" and "close the program" depending on timing is a keypress
-	// nobody can trust.
-	k.Quit = key.NewBinding(key.WithKeys("q"))
+	// esc quits as well as going back, which is what apps/ssh-cv does: it
+	// closes a page from inside one and closes the session from the index. Both
+	// bindings carry it and the dispatch in Model.key decides, so Back wins
+	// wherever there is somewhere to go back to.
+	//
+	// ctrl+c is deliberately absent: it is Stop here, and a keypress meaning
+	// "cancel this install" or "close the program" depending on timing is a
+	// keypress nobody can trust.
+	k.Quit = key.NewBinding(key.WithKeys("q", "esc"))
 	return k
 }

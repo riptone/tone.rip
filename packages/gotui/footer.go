@@ -33,7 +33,8 @@ const StatusRank = 4
 // "↑/↓ scroll · esc back · q quit" and loses the counter, while a 60-column one
 // keeps the counter and loses the least important hint. What it must never do
 // is show the arithmetic and no way out.
-func (c Chrome) FooterRow(g Geometry, hints []Hint, status string) string {
+func (c Chrome) FooterRow(g Geometry, p Pane) string {
+	hints, status := p.Hints, p.Status
 	join := func(kept []Hint) string {
 		parts := make([]string, 0, len(kept))
 		for _, h := range kept {
@@ -75,5 +76,18 @@ func (c Chrome) FooterRow(g Geometry, hints []Hint, status string) string {
 	if !showStatus {
 		return left
 	}
-	return c.Ends(g.Inner, left, c.Footer.Render(status))
+	return c.Ends(g.Inner, left, c.statusStyle(p.StatusColour).Render(status))
+}
+
+// statusStyle is the footer's style, or the pane's own colour on the black the
+// rest of the row carries.
+//
+// Derived from Base rather than from Footer with a foreground set on top: both
+// end up the same here, and starting from Base is the rule that keeps a style
+// from losing the background it was supposed to inherit.
+func (c Chrome) statusStyle(colour lipgloss.TerminalColor) lipgloss.Style {
+	if colour == nil {
+		return c.Footer
+	}
+	return c.Base.Foreground(colour)
 }

@@ -223,14 +223,14 @@ func TestTheScreenSettlesOnlyWhenTheWorkAndItsOutputAreBothDone(t *testing.T) {
 			if m.run.settled() {
 				t.Fatal("settled on one of the two")
 			}
-			if got := m.runStatus(); got == "done" {
+			if got, _ := m.runStatus(); got == "done" {
 				t.Errorf("status = %q before both landed", got)
 			}
 			m = send(m, order.last)
 			if !m.run.settled() {
 				t.Fatal("did not settle once both landed")
 			}
-			if got := m.runStatus(); got != "done" {
+			if got, _ := m.runStatus(); got != "done" {
 				t.Errorf("status = %q, want done", got)
 			}
 		})
@@ -241,7 +241,7 @@ func TestTheScreenSettlesOnlyWhenTheWorkAndItsOutputAreBothDone(t *testing.T) {
 func TestAFailedRunSaysSoAndSurfacesTheError(t *testing.T) {
 	boom := errors.New("brew bundle exited 1")
 	m := send(running(t), finishedMsg{err: boom}, streamDoneMsg{})
-	if got := m.runStatus(); got != "failed" {
+	if got, _ := m.runStatus(); got != "failed" {
 		t.Errorf("status = %q, want failed", got)
 	}
 	// So the shell hears what the screen said.
@@ -529,11 +529,11 @@ func TestAResultLineReplacesTheSpinnerRow(t *testing.T) {
 
 func TestTheLineCounterIsNotOneLines(t *testing.T) {
 	m := send(running(t), line(app.MarkOK, "one"))
-	if got := m.runStatus(); got != "1 line" {
+	if got, _ := m.runStatus(); got != "1 line" {
 		t.Errorf("status = %q, want %q", got, "1 line")
 	}
 	m = send(m, line(app.MarkOK, "two"))
-	if got := m.runStatus(); got != "2 lines" {
+	if got, _ := m.runStatus(); got != "2 lines" {
 		t.Errorf("status = %q, want %q", got, "2 lines")
 	}
 }
@@ -658,4 +658,100 @@ func TestAnUnknownMarkStillCarriesTheBackground(t *testing.T) {
 	if got := gotui.Unpainted(row); got != 0 {
 		t.Errorf("an unknown mark left %d cells unpainted: %q", got, row)
 	}
+}
+
+// "done" and "failed" in the same grey are two words that have to be told apart
+// by spelling. The colour is the point.
+func TestTheVerdictCarriesItsColour(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		settle []tea.Msg
+		text   string
+		colour lipgloss.TerminalColor
+	}{
+		{"done", []tea.Msg{finishedMsg{}, streamDoneMsg{}}, "done", gotui.Zoom},
+		{"failed", []tea.Msg{finishedMsg{err: errors.New("boom")}, streamDoneMsg{}},
+			"failed", gotui.Close},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := send(running(t), tc.settle...)
+			text, colour := m.runStatus()
+			if text != tc.text {
+				t.Errorf("status = %q, want %q", text, tc.text)
+			}
+			if colour != tc.colour {
+				t.Errorf("colour = %v, want %v", colour, tc.colour)
+			}
+			// And it reaches the screen, rather than being computed and
+			// dropped. Through a painting renderer: the default one resolves
+			// to Ascii against an io.Discard and strips every colour, which
+			// would make this assertion pass for the wrong reason.
+			painted := send(colourModel(), append([]tea.Msg{
+				tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")},
+				tea.KeyMsg{Type: tea.KeyEnter},
+			}, tc.settle...)...)
+			// The footer row alone, not the whole view: the three window
+			// buttons are drawn in exactly these two colours, so searching the
+			// frame would pass whatever the status did.
+			if !strings.Contains(footerOf(painted.View()), sgrParams(tc.colour)) {
+				t.Errorf("%s is not coloured in the footer:\n%q",
+					tc.name, footerOf(painted.View()))
+			}
+		})
+	}
+
+	// While it runs there is no verdict to colour: a count is not a state.
+	if _, colour := running(t).runStatus(); colour != nil {
+		t.Errorf("a running screen coloured its line count %v", colour)
+	}
+}
+
+// The one outcome with something left to do gets its own word, in the same
+// green - it worked.
+func TestAnUpdatedRunSaysUpdatedInGreen(t *testing.T) {
+	m := tap(send(model(), updateFoundMsg("v0.2.0")), "u")
+	m = send(m, finishedMsg{}, streamDoneMsg{})
+	text, colour := m.runStatus()
+	if text != "updated" || colour != gotui.Zoom {
+		t.Errorf("status = %q / %v, want updated in green", text, colour)
+	}
+}
+
+// colourModel is a model whose renderer actually paints, for asserting that a
+// colour reaches the frame.
+func colourModel() Model {
+	return New(Config{
+		Components: components(),
+		Version:    "v1.0.0",
+		Width:      100,
+		Height:     30,
+		Renderer:   gotui.OfflineRenderer(io.Discard),
+		Run:        noWork,
+	})
+}
+
+// sgrParams is a palette colour's SGR parameters without the terminator:
+// lipgloss merges the foreground and the background into one sequence, so the
+// "m" is not where gotui.FG puts it.
+func sgrParams(colour lipgloss.TerminalColor) string {
+	hex, ok := colour.(lipgloss.Color)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(gotui.FG(hex), "\x1b["), "m")
+}
+
+// footerOf is the row above the card's bottom border.
+//
+// Needed because the window buttons are painted in the same red and green the
+// verdict uses - decoration reusing the palette - so an assertion against the
+// whole view cannot tell the status from a dot.
+func footerOf(view string) string {
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		if strings.Contains(ansi.Strip(line), "╰") && i > 0 {
+			return lines[i-1]
+		}
+	}
+	return ""
 }

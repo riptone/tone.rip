@@ -45,11 +45,7 @@ func (a *App) selectedTools(missing []manifest.Tool) ([]manifest.Tool, error) {
 		byCmd[tool.Cmd] = tool
 	}
 	var out []manifest.Tool
-	for _, name := range strings.Split(a.Tools, ",") {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
+	for _, name := range SplitList(a.Tools) {
 		tool, ok := byCmd[name]
 		if !ok {
 			available := make([]string, 0, len(byCmd))
@@ -164,6 +160,12 @@ func (a *App) installMcps(ctx context.Context, packages []string) {
 	if len(packages) == 0 {
 		return
 	}
+	// The selector offers these under one label, and this is where an unticked
+	// box stops being decorative - it used to install them regardless.
+	if !a.wants(mcpLabel) {
+		a.Report.Line(MarkSkip, mcpLabel+" (not selected)")
+		return
+	}
 	if !a.Runner.Look("npm") {
 		a.Report.Line(MarkSkip, "npm is not installed, so no MCP servers")
 		return
@@ -185,4 +187,20 @@ func (a *App) installMcps(ctx context.Context, packages []string) {
 		return
 	}
 	done(MarkChange, fmt.Sprintf("%d MCP servers installed", len(packages)))
+}
+
+// SplitList reads a comma-separated flag value.
+//
+// Exported because --tools feeds two things now: which missing tools to
+// install, and which installed ones to remove. Two spellings of "split on
+// commas and trim" is two chances to disagree about " jq, fd".
+func SplitList(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

@@ -36,7 +36,9 @@ var operations = map[string]app.Operation{
 	"sync":    app.OpSync,
 	"update":  app.OpUpdate,
 	"secrets": app.OpSecrets,
-	"upgrade": app.OpSelfUpdate,
+	// Distinct from `unlink`, which removes symlinks and leaves the software.
+	"uninstall": app.OpRemovePackages,
+	"upgrade":   app.OpSelfUpdate,
 }
 
 // runWindow draws the window.
@@ -57,10 +59,11 @@ func runWindow(ctx context.Context, instance *app.App, opts options, start app.O
 			"add --term to print lines instead, or see `doti --help`")
 	}
 
-	var components []app.Component
+	scan := inventoryScanner(instance)
+	var inventory tui.Inventory
 	if instance.Cloned() {
 		var err error
-		if components, err = instance.MenuItems(); err != nil {
+		if inventory, err = scan(ctx); err != nil {
 			return err
 		}
 	}
@@ -72,7 +75,9 @@ func runWindow(ctx context.Context, instance *app.App, opts options, start app.O
 	defer gotui.PaintTerminal(os.Stdout)()
 
 	model := tui.New(tui.Config{
-		Components: components,
+		Components: inventory.Components,
+		Removable:  inventory.Removable,
+		Scan:       scan,
 		Version:    version,
 		Renderer:   renderer,
 		Run:        operationRunner(instance, opts),
@@ -114,6 +119,9 @@ func operationRunner(instance *app.App, opts options) tui.RunFunc {
 		// Preview sets DryRun - which must not still be set when the reader
 		// goes back to the menu and picks Install.
 		each := *instance
+		// A fresh read of the checkout: the operation before this one may have
+		// been a sync, and a pull can change the manifest.
+		each.Forget()
 		each.Report = run.Report
 		each.DryRun = opts.dryRun
 		// Prompting is on: the window hands the terminal back to `bw` for as
@@ -122,6 +130,14 @@ func operationRunner(instance *app.App, opts options) tui.RunFunc {
 		// actionable line - which was honest and still a dead end.
 		each.Interactive = true
 		each.Vault = run.Vault
+		// A selection supersedes --only. The selector deliberately offers every
+		// component regardless of the flag, on the grounds that picking is what
+		// it is for - but the run still honoured --only, so `doti --only zsh`
+		// let you tick ghostty and then quietly did nothing about it. Whichever
+		// question was asked last is the one that gets answered.
+		if len(chosen) > 0 {
+			each.Only = ""
+		}
 		return each.Do(ctx, app.Operation(action), chosen, version)
 	}
 }
@@ -188,4 +204,32 @@ func wantsWindow(opts options, interactive bool) bool {
 		return false
 	}
 	return interactive
+}
+
+// inventoryScanner reads the machine for the selectors.
+//
+// The same function the window opens with and re-runs after every operation, so
+// what a selector shows after a removal is the state the removal left behind
+// rather than the state it started from. It used to be called once and the
+// result kept for the life of the window.
+func inventoryScanner(instance *app.App) tui.ScanFunc {
+	return func(context.Context) (tui.Inventory, error) {
+		// A copy, and a fresh manifest read: this runs after an operation that
+		// may have set DryRun or narrowed Include on its own copy, and neither
+		// belongs in a description of the machine.
+		each := *instance
+		each.DryRun = false
+		each.Include = nil
+		each.Forget()
+
+		components, err := each.MenuItems()
+		if err != nil {
+			return tui.Inventory{}, err
+		}
+		removable, err := each.Removable()
+		if err != nil {
+			return tui.Inventory{}, err
+		}
+		return tui.Inventory{Components: components, Removable: removable}, nil
+	}
 }

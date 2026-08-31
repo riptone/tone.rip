@@ -6,6 +6,10 @@
   "scripts": {
     "build": "go build -o bin/doti ./cmd/doti",
     "check-types": "test -z \"$(gofmt -l .)\" || { gofmt -l .; echo \"^ run gofmt -w .\"; exit 1; }; go vet ./...",
-    "test": "go test ./..."
+    "test": "go test ./...",
+    "fmt": "gofmt -w . && go mod tidy",
+    "run": "go run ./cmd/doti",
+    "release": "scripts/build-release.sh",
+    "install-local": "go build -trimpath -ldflags \"-s -w -X main.version=$(git describe --tags --match 'doti/v*' --abbrev=0 | sed 's|^doti/||')+dev.$(git rev-parse --short HEAD)\" -o \"${DOTI_BIN_DIR:-$HOME/.local/bin}/doti\" ./cmd/doti && \"${DOTI_BIN_DIR:-$HOME/.local/bin}/doti\" version"
   }
 }

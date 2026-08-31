@@ -307,14 +307,14 @@ func TestFooterDropsByRankNotByPosition(t *testing.T) {
 		{Text: "q quit", Keep: 1},
 	}
 
-	wide := ansi.Strip(c.FooterRow(c.Geometry(200, 60), hints, "3 of 9"))
+	wide := ansi.Strip(c.FooterRow(c.Geometry(200, 60), Pane{Hints: hints, Status: "3 of 9"}))
 	for _, want := range []string{"scroll", "section", "back", "quit", "3 of 9"} {
 		if !strings.Contains(wide, want) {
 			t.Errorf("a wide footer dropped %q: %q", want, wide)
 		}
 	}
 
-	narrow := ansi.Strip(c.FooterRow(c.Geometry(46, 20), hints, "3 of 9"))
+	narrow := ansi.Strip(c.FooterRow(c.Geometry(46, 20), Pane{Hints: hints, Status: "3 of 9"}))
 	if !strings.Contains(narrow, "quit") {
 		t.Errorf("the way out was dropped: %q", narrow)
 	}
@@ -331,7 +331,7 @@ func TestTheStatusIsDroppedAtItsOwnRank(t *testing.T) {
 		{Text: "q quit", Keep: 1},
 		{Text: "l lang", Keep: 5},
 	}
-	got := ansi.Strip(c.FooterRow(c.Geometry(34, 20), hints, "counter"))
+	got := ansi.Strip(c.FooterRow(c.Geometry(34, 20), Pane{Hints: hints, Status: "counter"}))
 	if strings.Contains(got, "lang") {
 		t.Errorf("a hint ranked below the status survived it: %q", got)
 	}
@@ -343,10 +343,13 @@ func TestTheStatusIsDroppedAtItsOwnRank(t *testing.T) {
 // What it must never do is show the arithmetic and no way out.
 func TestAnImpossiblyNarrowFooterStillSaysHowToLeave(t *testing.T) {
 	c := testChrome()
-	got := ansi.Strip(c.FooterRow(c.Geometry(24, 8), []Hint{
-		{Text: "↑/↓ move", Keep: 3},
-		{Text: "q quit", Keep: 1},
-	}, "999 of 999"))
+	got := ansi.Strip(c.FooterRow(c.Geometry(24, 8), Pane{
+		Hints: []Hint{
+			{Text: "↑/↓ move", Keep: 3},
+			{Text: "q quit", Keep: 1},
+		},
+		Status: "999 of 999",
+	}))
 	if !strings.Contains(got, "quit") {
 		t.Errorf("no way out in %q", got)
 	}
@@ -354,7 +357,7 @@ func TestAnImpossiblyNarrowFooterStillSaysHowToLeave(t *testing.T) {
 
 func TestFooterWithNothingToSayIsEmpty(t *testing.T) {
 	c := testChrome()
-	if got := ansi.Strip(c.FooterRow(c.Geometry(80, 24), nil, "")); strings.TrimSpace(got) != "" {
+	if got := ansi.Strip(c.FooterRow(c.Geometry(80, 24), Pane{})); strings.TrimSpace(got) != "" {
 		t.Errorf("an empty footer rendered %q", got)
 	}
 }
@@ -416,5 +419,61 @@ func TestLocalRendererAppliesTheFloor(t *testing.T) {
 	t.Setenv("TERM", "dumb")
 	if got := LocalRenderer(os.Stdout).ColorProfile(); got != termenv.Ascii {
 		t.Errorf("profile = %v for a dumb terminal, want Ascii", got)
+	}
+}
+
+// The one thing a status says that is worth finding without reading: how a run
+// ended. "done" and "failed" in the same grey are two words that have to be
+// told apart by spelling.
+func TestTheStatusCanCarryItsOwnColour(t *testing.T) {
+	c := testChrome()
+	g := c.Geometry(80, 24)
+	hints := []Hint{{Text: "q quit", Keep: 1}}
+
+	faint := c.FooterRow(g, Pane{Hints: hints, Status: "done"})
+	green := c.FooterRow(g, Pane{Hints: hints, Status: "done", StatusColour: Zoom})
+	red := c.FooterRow(g, Pane{Hints: hints, Status: "failed", StatusColour: Close})
+
+	if faint == green {
+		t.Error("a colour was asked for and the row is unchanged")
+	}
+	// The parameters without the terminator: lipgloss merges the foreground
+	// and the background into one sequence, so the "m" is not where FG puts it.
+	params := func(c lipgloss.Color) string {
+		return strings.TrimSuffix(strings.TrimPrefix(FG(c), "\x1b["), "m")
+	}
+	if !strings.Contains(green, params(Zoom)) {
+		t.Errorf("the green (%s) is not in the row: %q", params(Zoom), green)
+	}
+	if !strings.Contains(red, params(Close)) {
+		t.Errorf("the red (%s) is not in the row: %q", params(Close), red)
+	}
+
+	// Whatever the colour, the row is still the full width and still painted -
+	// a foreground set on a style that forgot the background is a hole.
+	for name, row := range map[string]string{"faint": faint, "green": green, "red": red} {
+		if got := lipgloss.Width(row); got != g.Inner {
+			t.Errorf("%s row is %d columns, want %d", name, got, g.Inner)
+		}
+		if n := Unpainted(row); n > 0 {
+			t.Errorf("%s row leaves %d cells unpainted: %q", name, n, row)
+		}
+	}
+}
+
+// The status is dropped at its own rank when the row is too narrow, colour or
+// no colour: a status overlapping the hints beside it is worse than no status.
+func TestAColouredStatusIsStillDroppedWhenItWillNotFit(t *testing.T) {
+	c := testChrome()
+	got := ansi.Strip(c.FooterRow(c.Geometry(24, 8), Pane{
+		Hints:        []Hint{{Text: "↑/↓ scroll", Keep: 3}, {Text: "q quit", Keep: 1}},
+		Status:       "failed",
+		StatusColour: Close,
+	}))
+	if !strings.Contains(got, "quit") {
+		t.Errorf("no way out in %q", got)
+	}
+	if strings.Contains(got, "failed") {
+		t.Errorf("the status survived a row it does not fit: %q", got)
 	}
 }

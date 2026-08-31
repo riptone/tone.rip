@@ -15,6 +15,15 @@ import (
 // the installer checking another is a checkbox that silently does nothing.
 const packagesLabel = "brew packages"
 
+// mcpLabel names the manifest's global npm packages as one selectable
+// component.
+//
+// They were the one thing an install did that the selector never offered:
+// untick every box and seven MCP servers were still installed, because the
+// phase that installs them was never asked. Matched against Include like the
+// rest, so the constant is shared for the same reason packagesLabel is.
+const mcpLabel = "mcp servers"
+
 // Component is one thing on the machine a selector can include or leave out.
 //
 // It lives here rather than in internal/tui because this package must not
@@ -67,6 +76,17 @@ func (a *App) MenuItems() ([]Component, error) {
 			})
 		}
 	}
+	if len(m.Mcps) > 0 {
+		// "declared" rather than a present/missing count: asking npm what is
+		// installed globally means `npm ls -g`, which is slow enough to be felt
+		// on a screen somebody is waiting for.
+		items = append(items, Component{
+			Group:    "Packages",
+			Label:    mcpLabel,
+			Status:   fmt.Sprintf("%d declared", len(m.Mcps)),
+			Selected: true,
+		})
+	}
 
 	// Only is deliberately ignored here: the selector is how you choose, so
 	// narrowing the list it offers would be answering the question twice.
@@ -90,6 +110,17 @@ func (a *App) MenuItems() ([]Component, error) {
 		}
 		items = append(items, Component{
 			Group: "Configs", Label: pkg.Name, Status: state, Done: done, Selected: true,
+		})
+	}
+
+	// The links whose targets live outside $HOME. A manifest list like the
+	// extras, so it is offered like them - on Windows, where they exist.
+	for _, component := range m.SystemComponents {
+		if len(component.Platforms) > 0 && !slices.Contains(component.Platforms, a.Platform) {
+			continue
+		}
+		items = append(items, Component{
+			Group: "Configs", Label: component.Name, Status: "system link", Selected: true,
 		})
 	}
 

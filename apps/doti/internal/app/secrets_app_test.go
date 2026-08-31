@@ -198,29 +198,88 @@ func TestANonInteractiveRunNeverPrompts(t *testing.T) {
 	}
 }
 
-// -n reports; it does not prompt, and it does not write the CLI's own state.
-func TestADryRunNeitherPromptsNorWrites(t *testing.T) {
+// A dry run may unlock, because unlocking is a read: the session is held in
+// memory and written nowhere. The earlier rule refused it along with signing in,
+// which left Preview able to report only "the vault is locked" - not a preview
+// of anything.
+func TestADryRunMayUnlockAndStillWritesNothing(t *testing.T) {
 	a, _, rec := fixture(t, "brew", "jq", "ghostty", "zsh")
 	withSecrets(t, a, oneSecret)
 
-	vault := newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"locked"}`)
+	vault := newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"locked"}`).
+		answer("unlock --raw", "a-session-key").
+		answer("get item dotfiles/creds", noteBody)
 	a.Vault = vault
 	a.Interactive = true
 	a.DryRun = true
 
-	if err := a.Secrets(context.Background()); err == nil {
-		t.Fatal("a dry run cannot read a locked vault, and should say so")
+	if err := a.Secrets(context.Background()); err != nil {
+		t.Fatalf("Secrets: %v", err)
 	}
-	if got := vault.asked("interactive"); len(got) != 0 {
-		t.Errorf("a dry run prompted: %v", got)
+	if !vault.sawInteractive("unlock --raw") {
+		t.Errorf("it did not unlock, so it cannot have read anything: %v",
+			vault.asked("interactive"))
+	}
+	// The point of a preview: it says what would land.
+	if !rec.Contains("would write creds -> ") {
+		t.Errorf("it did not report what would change: %v", rec.Texts())
+	}
+	// And nothing did.
+	if _, err := os.Stat(filepath.Join(a.Home, ".doti", "creds.json")); err == nil {
+		t.Error("a dry run wrote the secret")
 	}
 	for _, call := range vault.asked("plain") {
 		if strings.HasPrefix(call, "config") {
 			t.Errorf("a dry run wrote the CLI's own state: bw %s", call)
 		}
 	}
-	if !rec.Contains("bw is pointed at https://vault.bitwarden.eu") {
-		t.Errorf("it should still report what it found: %v", rec.Texts())
+}
+
+// Signing in *is* a change: `bw login` writes credentials into the CLI's own
+// data file, and those outlive the run.
+func TestADryRunWillNotSignIn(t *testing.T) {
+	a, _, rec := fixture(t, "brew", "jq", "ghostty", "zsh")
+	withSecrets(t, a, oneSecret)
+
+	vault := newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"unauthenticated"}`).
+		answer("login", "You are logged in!").
+		answer("unlock --raw", "a-session-key")
+	a.Vault = vault
+	a.Interactive = true
+	a.DryRun = true
+
+	if err := a.Secrets(context.Background()); err == nil {
+		t.Fatal("a signed-out vault cannot be read on a dry run, and should say so")
+	}
+	if vault.sawInteractive("login") {
+		t.Errorf("a dry run signed in: %v", vault.asked("interactive"))
+	}
+	if !rec.Contains("would sign in to https://vault.bitwarden.eu") {
+		t.Errorf("it should say what it would have done: %v", rec.Texts())
+	}
+}
+
+// Pointing the CLI at another deployment is a change too, and reading through
+// the one it is pointed at now would answer about the wrong account.
+func TestADryRunWillNotMoveTheDeployment(t *testing.T) {
+	a, _, rec := fixture(t, "brew", "jq", "ghostty", "zsh")
+	withSecrets(t, a, oneSecret)
+
+	vault := newVault(`{"serverUrl":"https://vault.bitwarden.com","status":"unauthenticated"}`)
+	a.Vault = vault
+	a.Interactive = true
+	a.DryRun = true
+
+	if err := a.Secrets(context.Background()); err == nil {
+		t.Fatal("want an error rather than an answer about the wrong account")
+	}
+	if !rec.Contains("would point bw at https://vault.bitwarden.eu") {
+		t.Errorf("%v", rec.Texts())
+	}
+	for _, call := range vault.asked("plain") {
+		if strings.HasPrefix(call, "config") {
+			t.Errorf("a dry run wrote the CLI's own state: bw %s", call)
+		}
 	}
 }
 

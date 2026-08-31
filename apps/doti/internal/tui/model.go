@@ -41,6 +41,8 @@ const (
 	ScreenSelect
 	// ScreenRun is an operation's live output.
 	ScreenRun
+	// ScreenHelp is the keys and what the operations do.
+	ScreenHelp
 )
 
 // RunFunc performs one operation, reporting progress into r.
@@ -70,8 +72,11 @@ type CheckFunc func(ctx context.Context) (string, error)
 
 // Config builds a model.
 type Config struct {
-	// Components is what the selector offers.
+	// Components is what the selector offers for an install.
 	Components []app.Component
+	// Removable is what it offers for a removal: only the tools this repository
+	// installed, only the ones still present, and none of them ticked.
+	Removable []app.Component
 	// Version is shown in the title bar, like ssh-cv shows the language.
 	Version string
 	// Width and Height seed the layout before the first resize arrives.
@@ -83,6 +88,9 @@ type Config struct {
 
 	Run   RunFunc
 	Check CheckFunc
+	// Scan re-reads the machine after a run has changed it. Nil leaves the
+	// lists as they were.
+	Scan ScanFunc
 
 	// Start is an operation to run immediately instead of showing the menu.
 	//
@@ -105,6 +113,11 @@ type Model struct {
 	height int
 
 	menuAt int
+	// components and removable are what the selectors are built from, and are
+	// replaced by a re-scan after every run.
+	components []app.Component
+	removable  []app.Component
+	// items is the working copy the open selector is toggling.
 	items  []app.Component
 	itemAt int
 	rows   []row
@@ -112,8 +125,15 @@ type Model struct {
 	// update is the newest release once the check has answered, and "" until
 	// then or if it never does.
 	update string
+	// replaced is the version a self-update put on disk.
+	//
+	// Separate from update, and it replaces it: once the binary has been
+	// swapped, offering to install that version again is an offer to re-run
+	// the whole installer for nothing. What is left to do is restart.
+	replaced string
 
-	run runState
+	run  runState
+	help helpState
 
 	// launched is true when the window was opened on one operation rather
 	// than on the menu. Finishing that operation leaves.
@@ -132,12 +152,14 @@ type Model struct {
 // New builds the model.
 func New(cfg Config) Model {
 	m := Model{
-		styles: newStyles(cfg.Renderer),
-		keys:   newKeymap(),
-		cfg:    cfg,
-		items:  append([]app.Component(nil), cfg.Components...),
-		width:  cfg.Width,
-		height: cfg.Height,
+		styles:     newStyles(cfg.Renderer),
+		keys:       newKeymap(),
+		cfg:        cfg,
+		components: cfg.Components,
+		removable:  cfg.Removable,
+		items:      append([]app.Component(nil), cfg.Components...),
+		width:      cfg.Width,
+		height:     cfg.Height,
 	}
 	m.rows = flatten(m.items)
 	m.run.spin = newSpinner(m.styles)
@@ -228,6 +250,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateFoundMsg:
 		m.update = string(msg)
 		return m, nil
+	case inventoryMsg:
+		return m.adopt(Inventory(msg)), nil
 	case eventMsg:
 		return m.event(app.Record(msg))
 	case borrowMsg:
@@ -236,7 +260,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitBorrow(m.run.job)
 	case streamDoneMsg:
 		m.run.drained = true
-		return m.afterRun(), nil
+		return m.afterRun()
 	case finishedMsg:
 		m.run.finished = true
 		if msg.err != nil {
@@ -247,7 +271,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// reader is already looking.
 			m = m.appendLine(app.MarkWarn, msg.err.Error())
 		}
-		return m.afterRun(), nil
+		return m.afterRun()
 	case spinner.TickMsg:
 		// Only while something is actually running: a spinner ticking behind a
 		// settled screen is a redraw of the whole card, eight times a second,
@@ -273,12 +297,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 //
 
 func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// esc is bound to both Back and Quit, and which one it means depends on
+	// whether there is anywhere to go back to - the rule apps/ssh-cv follows.
+	// Checked first for that reason: losing the program because somebody wanted
+	// to close a screen would be rude, and on the menu there is nothing behind
+	// it to close.
+	goingBack := m.screen != ScreenMenu && key.Matches(msg, m.keys.Back)
+
 	// Quit is not offered while an operation is running: stopping half way
 	// through a link pass is a decision, and ctrl+c is how it is made.
-	if key.Matches(msg, m.keys.Quit) && !m.spinning() {
+	if !goingBack && key.Matches(msg, m.keys.Quit) && !m.spinning() {
 		m.quit = true
 		m.run.job.stop()
 		return m, tea.Quit
+	}
+
+	// Help is a detour from anywhere nothing is running, and returns to where
+	// it was asked for.
+	if key.Matches(msg, m.keys.Help) && m.screen != ScreenHelp && !m.spinning() {
+		return m.openHelp(), nil
 	}
 
 	switch m.screen {
@@ -286,6 +323,8 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.menuKey(msg)
 	case ScreenSelect:
 		return m.selectKey(msg)
+	case ScreenHelp:
+		return m.helpKey(msg)
 	default:
 		return m.runKey(msg)
 	}
@@ -308,6 +347,8 @@ func (m Model) View() string {
 		out = m.viewMenu()
 	case ScreenSelect:
 		out = m.viewSelect()
+	case ScreenHelp:
+		out = m.viewHelp()
 	default:
 		out = m.viewRun()
 	}
@@ -318,6 +359,8 @@ func (m Model) View() string {
 	// fields. Before the first WindowSizeMsg both are zero - the geometry
 	// substitutes the terminal every terminal claims to be, and clamping to
 	// max(0,1) instead crushed the entire card into one cell for that frame.
+	// The terminal is the terminal whichever card is drawn in it; either spec
+	// resolves the same fallback when the size is not known yet.
 	g := geometryFor(m.width, m.height)
 	return gotui.Clamp(out, g.TermWidth, g.TermHeight)
 }

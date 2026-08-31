@@ -112,20 +112,31 @@ func (a *App) openVault(ctx context.Context, client *secrets.Client) error {
 	if status.State == secrets.Unlocked {
 		return nil
 	}
-	// Both of the ways out of a locked vault are changes a dry run must not
-	// make: `bw login` writes credentials to the CLI's data file, and even
-	// `bw unlock` stops to ask for a master password. -n reports; it does not
-	// prompt.
-	if !a.Interactive || a.DryRun {
+	if !a.Interactive {
 		return &secrets.UnavailableError{State: status.State}
 	}
 
 	if status.State == secrets.Unauthenticated {
+		// Signing in is a change: `bw login` writes credentials into the CLI's
+		// own data file, and those outlive the run.
+		if a.DryRun {
+			a.Report.Line(MarkSkip, "would sign in to "+status.ServerURL)
+			return &secrets.UnavailableError{State: status.State}
+		}
 		a.Report.Line(MarkNone, "signing in to "+status.ServerURL)
 		if err := client.Login(ctx); err != nil {
 			return err
 		}
 	}
+
+	// Unlocking is *not* a change, and the earlier rule that lumped it in with
+	// signing in was wrong in a way that mattered: it left Preview unable to
+	// answer the one question it exists to answer. The session is held in
+	// memory and deliberately written nowhere, so unlocking is a read that
+	// happens to need a person - and a dry run that refuses it can only ever
+	// report "the vault is locked", which is not a preview of anything.
+	//
+	// Still gated on somebody watching, so a script is unaffected.
 	if err := client.Unlock(ctx); err != nil {
 		return err
 	}

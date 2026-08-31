@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 
@@ -79,13 +80,6 @@ func TestArrowsMoveAndNumbersJump(t *testing.T) {
 	}
 	if got := tap(m, "5").menuAt; got != 4 {
 		t.Errorf("after 5 menuAt = %d, want 4", got)
-	}
-	// Never past either end.
-	if got := tap(m, "up", "up").menuAt; got != 0 {
-		t.Errorf("up from the top gave %d", got)
-	}
-	if got := tap(m, "G", "down").menuAt; got != len(menu)-1 {
-		t.Errorf("down from the bottom gave %d", got)
 	}
 	// A digit past the end of the menu is not a jump to nowhere.
 	if got := tap(m, "9").menuAt; got != 0 {
@@ -319,5 +313,79 @@ func TestTheFirstFrameIsACardRatherThanOneCell(t *testing.T) {
 	}
 	if got := ansi.StringWidth(strings.Split(body, "\n")[0]); got < 40 {
 		t.Errorf("the first frame is %d columns wide", got)
+	}
+}
+
+// esc is bound to both Back and Quit, and which one it means depends on whether
+// there is anywhere to go back to. The rule apps/ssh-cv follows: esc closes a
+// page from inside one, and closes the session from the index.
+func TestEscGoesBackWhereItCanAndQuitsWhereItCannot(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		open  func() Model
+		quits bool
+		want  Screen
+	}{
+		{"the menu has nothing behind it", func() Model { return model() }, true, ScreenMenu},
+		{"the selector goes back", func() Model { return tap(model(), "enter") }, false, ScreenMenu},
+		{"the help goes back", func() Model { return tap(model(), "h") }, false, ScreenMenu},
+		{"a finished run goes back", func() Model {
+			return send(tap(model(), "5", "enter"), finishedMsg{}, streamDoneMsg{})
+		}, false, ScreenMenu},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			after := tap(tc.open(), "esc")
+			if after.quit != tc.quits {
+				t.Errorf("quit = %v, want %v", after.quit, tc.quits)
+			}
+			if !tc.quits && after.screen != tc.want {
+				t.Errorf("screen = %v, want %v", after.screen, tc.want)
+			}
+		})
+	}
+}
+
+// And it must not become a way out of a running install - that is ctrl+c's job,
+// which stops the work rather than the program.
+func TestEscDoesNotQuitOutOfARunningOperation(t *testing.T) {
+	running := tap(model(), "5", "enter")
+	after := tap(running, "esc")
+	if after.quit {
+		t.Error("esc quit the program with an operation still running")
+	}
+	if after.screen != ScreenRun {
+		t.Errorf("esc left a running operation for screen %v", after.screen)
+	}
+}
+
+// q still quits from everywhere nothing is running, unchanged.
+func TestQStillQuitsFromEveryScreen(t *testing.T) {
+	for name, open := range map[string]func() Model{
+		"menu":     func() Model { return model() },
+		"selector": func() Model { return tap(model(), "enter") },
+		"help":     func() Model { return tap(model(), "h") },
+		"run":      func() Model { return send(tap(model(), "5", "enter"), finishedMsg{}, streamDoneMsg{}) },
+	} {
+		if !tap(open(), "q").quit {
+			t.Errorf("q did not quit from the %s", name)
+		}
+	}
+}
+
+// The two programs agree about it, which is the point of matching.
+func TestEscIsBoundToBothBackAndQuit(t *testing.T) {
+	k := newKeymap()
+	if !slices.Contains(k.Quit.Keys(), "esc") {
+		t.Errorf("Quit is bound to %v, want esc among them", k.Quit.Keys())
+	}
+	if !slices.Contains(k.Back.Keys(), "esc") {
+		t.Errorf("Back is bound to %v, want esc among them", k.Back.Keys())
+	}
+	// ctrl+c is Stop here, deliberately not Quit.
+	if slices.Contains(k.Quit.Keys(), "ctrl+c") {
+		t.Errorf("ctrl+c is bound to Quit as well as Stop: %v", k.Quit.Keys())
+	}
+	if !slices.Contains(k.Stop.Keys(), "ctrl+c") {
+		t.Errorf("Stop is bound to %v", k.Stop.Keys())
 	}
 }

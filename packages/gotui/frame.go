@@ -142,6 +142,12 @@ type Pane struct {
 	// text, like the hints - the frame styles both, so neither has to know
 	// what a footer looks like.
 	Status string
+	// StatusColour overrides the faint the status is drawn in.
+	//
+	// For the one thing a status says that is worth finding without reading:
+	// how a run ended. "done" and "failed" in the same grey are two words that
+	// have to be told apart by spelling. Nil keeps the faint.
+	StatusColour lipgloss.TerminalColor
 }
 
 // Chrome is the frame's own styles and the primitives that depend on them.
@@ -212,7 +218,7 @@ func (c Chrome) Render(g Geometry, p Pane) string {
 	if g.Spaced {
 		rows = append(rows, "")
 	}
-	rows = append(rows, c.FooterRow(g, p.Hints, p.Status))
+	rows = append(rows, c.FooterRow(g, p))
 
 	card := c.Card.
 		Width(g.Width - 2).

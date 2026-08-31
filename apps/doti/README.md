@@ -63,6 +63,8 @@ $ doti adopt            # scan first, then act only on the gaps
 $ doti check --strict   # read-only; non-zero exit when something is missing
 $ doti link --only zsh  # one component
 $ doti unlink --restore # remove links, put the newest backups back
+$ doti uninstall        # what it would remove; nothing, until you name them
+$ doti uninstall --tools jq,fd   # remove exactly those
 $ doti sync             # git pull --ff-only, then re-link
 $ doti update           # upgrade installed packages
 $ doti secrets          # render secret files from Bitwarden
@@ -183,6 +185,16 @@ Non-interactively - a pipe, CI, `doti install` from a script - it stays an
 actionable error instead, because a script that stops to ask for a password
 is a script that hangs.
 
+**A dry run may unlock, and may not sign in.** That distinction had been missed:
+`-n` refused both, on the grounds that neither should change anything - which
+left Preview able to report only "the vault is locked", not a preview of
+anything. Unlocking is a *read* that happens to need a person; the session is
+held in memory and written nowhere. Signing in is a change, because `bw login`
+writes credentials into the CLI's own data file, and so is `bw config server`.
+So `-n` prompts once, reads, and reports `would write creds -> ~/.doti/…`
+without writing it. Still gated on somebody watching, so a script is
+unaffected.
+
 That check reads **both** streams, and the first release shipped it reading
 one. `stdout` being a terminal decides how to *render*; `stdin` being one
 decides whether anything can be *asked*. Piped into bash - which is how this
@@ -208,6 +220,44 @@ answers from a local cache and skipping it renders a *rotated* credential as
 the old value with nothing saying so. A missing field lists the item's field
 *names* and never their values, and every fetched value is registered with a
 scrubber so an error path cannot leak one.
+
+**`internal/app/remove.go`** is the one operation here that deletes software,
+and the rules are the feature:
+
+- **It removes exactly what it was named.** `Include` is the list, and an empty
+  one removes nothing — there is no spelling of this that means *all* unless
+  somebody typed one. `doti uninstall` on its own prints what it would be
+  willing to remove and hands you the `--tools` line that would do it.
+- **It refuses anything the manifest does not list.** A tool this repository
+  never installed is not this repository's to remove — and a typo is reported
+  rather than silently removing nothing, which reads as "it was already gone".
+- **It refuses the tools the manifest calls required.** `health.extra_tools` is
+  exactly the set that gets a machine back to a working state, so `brew`, `git`,
+  `stow` and `zsh` are not removable; a command that can remove its own package
+  manager is a foot-gun with a name.
+- **It does not pass `--ignore-dependencies`.** Homebrew refusing because
+  something depends on a formula is the correct answer, reported rather than
+  overridden — the whole point of asking a package manager instead of deleting
+  files is that it knows what else would break.
+
+**The lists are re-read after every run.** They used to be read once, before
+the program started, and never again - so a removal that worked left the tools
+it had just uninstalled still saying "installed", and an install left the
+configs it had just linked still saying "not linked". Every selector was a
+description of the machine as it had been when the window opened. Settling a run
+now fires a background re-scan, and it replaces the *sources* only: `m.items` is
+the working copy an open selector is toggling, and replacing that would throw
+away ticks somebody had just made. A failed re-scan is silence, because the
+lists it would have replaced were right a moment ago.
+
+The re-scan also calls `App.Forget`, which drops the cached manifest: `sync`
+pulls, and a pull can change `manifest.jsonc`. Each operation gets the same
+treatment on its own copy, so no run inherits a stale read of the checkout.
+
+In the window it is the one selector that **starts with nothing ticked**, so the
+safe action — press enter without thinking — is the one that does nothing, and
+the count in the footer turns red the moment it is not zero. The ticking *is*
+the confirmation, which beats a yes/no prompt because it is per item.
 
 **`internal/health`** also verifies the links whose targets are *outside*
 `$HOME` - the Windows Terminal settings and the PowerShell profile. The
@@ -259,7 +309,38 @@ the TUI disappear. Now the same `app.Install` runs on a goroutine reporting
 into an `app.StreamReporter`, whose channel the run screen reads as Bubble Tea
 messages: the log scrolls, the spinner sits on whatever is slow, `ctrl+c`
 cancels the context, and the footer says `done` or `failed` when it is over.
-`enter` goes back to the menu.
+`enter` goes back to the menu. The verdict is coloured — green for `done`, red
+for `failed` — because two words in the same grey have to be told apart by
+spelling.
+
+**The run screen and the help get a bigger card** than the menu does. A menu is
+seven short rows and looks abandoned in a wide frame; a run's log is the
+opposite — `git pull` explains a missing upstream in a paragraph, and 58 columns
+turn that into a column of fragments. The wide spec is derived from the narrow
+one rather than written out, so the padding and the gutter cannot drift from the
+ones the card was built with, and it is still a card: margin goes first and it
+never exceeds the terminal.
+
+**The cursor wraps, and esc knows where it is.** Up from the first entry is the
+last one and down from the last is the first, which is the arithmetic
+`apps/ssh-cv` uses - a list you can only leave by pressing the other arrow eight
+times is a list that ignores you. `g`/`G` and home/end clamp instead, because
+those mean "the first" and "the last". `esc` is bound to both Back and Quit and
+the dispatch decides: it closes a screen from inside one and closes the program
+from the menu, which is again what the CV does.
+
+**Both lists scroll with the cursor.** They used to hand every row to the frame,
+which draws as many as the body has and drops the rest - so on a 24-row terminal
+a 30-component selector showed twelve, `G` moved the cursor onto an item nobody
+could see, and space then toggled it. The window is scrolled by the smallest
+amount that keeps the cursor visible, and the scrollbar is drawn from the same
+offset so the two cannot disagree about where in the list you are.
+
+**`h` (or `?`) opens the help**, from anywhere nothing is running — it would
+take the log off screen mid-install, and the log is why the window exists — and
+`esc` returns to whatever asked for it. Its text is built from the same menu
+table and keymap the program acts on, so a help screen cannot describe a key
+that no longer exists.
 
 Nothing about the operations changed to make that work, which is what the
 Reporter seam was for. `internal/app` imports no UI at all - it used to return
@@ -288,6 +369,36 @@ only if there is one. A failure is silence: nothing downstream depends on the
 answer, and a menu that shouts about DNS is worse than one that never mentions
 updates. A finished self-update offers `r restart`, which `execve`s the
 replacement in place rather than spawning a second process behind this one.
+
+## Tasks, and why there is no Makefile
+
+```console
+$ bun run test           # go test ./...
+$ bun run check-types    # gofmt -l + go vet
+$ bun run fmt            # gofmt -w + go mod tidy
+$ bun run run            # the window, from source
+$ bun run install-local  # build onto $PATH, stamped as a dev build
+$ bun run release        # cross-compile all six, with SHA256SUMS
+```
+
+A Makefile would be a second entry point for tasks that already have one, and
+`bun run ci` at the repository root is *the* gate - the one CI runs. Two runners
+for one set of tasks means the moment they disagree, one of them is lying about
+whether the build passes. Turborepo also caches and orders across packages, which
+Make would have to reimplement; and `make` is not on Windows by default, which
+for a cross-platform tool is an odd dependency to add to its own development.
+
+The principle a Makefile is usually reached for here - *don't use it to hide
+platform differences the program can eliminate* - is the one this app already
+applied: 2,815 lines of `.sh` and `.ps1` became one Go binary, and what is left
+is 192 lines of `install.sh` and 190 of `install.ps1` whose entire job is
+download, verify, exec. There is no parallel implementation left for a Makefile
+to stand in front of.
+
+`bun run release` and the release workflow call the same
+`scripts/build-release.sh`, so the six targets and the build flags are one list
+rather than two, a tag produces what a local run produces, and shellcheck lints
+it alongside the installers.
 
 ## Checks
 
@@ -343,7 +454,3 @@ check it. Verified both ways in both scripts.
 - **The Windows font install stops one step short.** The faces are extracted
   into the per-user font directory, but Windows only lists *registered* fonts
   — so it reports what is left to do rather than doing it.
-- **No `doti uninstall` for packages.** Removing links is one command;
-  removing the tools they configure is still `brew uninstall` by hand, on
-  purpose — deleting somebody's `node` because a manifest changed would be a
-  bad surprise.

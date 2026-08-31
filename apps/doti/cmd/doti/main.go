@@ -41,6 +41,7 @@ usage:
   doti check                verify tools and symlinks; changes nothing
   doti link                 link configs into $HOME
   doti unlink               remove the links this repo owns
+  doti uninstall            remove installed tools - names only, never all
   doti sync                 git pull --ff-only, then re-link
   doti update               upgrade installed packages
   doti secrets              render secret files from Bitwarden
@@ -54,7 +55,7 @@ flags:
   --repo DIR    dotfiles checkout (default $DOTFILES_DIR, else ~/dotfiles)
   --url URL     install: clone from here (default $DOTFILES_REPO_URL)
   --only PKG    link/unlink: act on this stow package alone
-  --tools LIST  install: only these missing tools (comma separated)
+  --tools LIST  install: only these missing tools; uninstall: these to remove
   --term        print lines instead of drawing the window
   --restore     unlink: move the newest backup back afterwards
   --strict      check: exit non-zero when something is missing
@@ -104,6 +105,19 @@ type options struct {
 // Both spellings of the flag anywhere in the arguments, plus the bare word:
 // `doti help`, `doti --help`, `doti install -h`. A person reaching for any of
 // them wants the same paragraph.
+// include is the component list an operation acts on, taken from the flags.
+//
+// Only a removal takes one. Everywhere else an empty Include means everything,
+// which is what a command line wants; for `uninstall` an empty one means
+// nothing, and --tools is the only way to name something. There is deliberately
+// no flag that means "all of them".
+func (o options) include(op app.Operation) []string {
+	if op != app.OpRemovePackages {
+		return nil
+	}
+	return app.SplitList(o.tools)
+}
+
 func wantsHelp(args []string) bool {
 	for _, arg := range args {
 		switch arg {
@@ -191,7 +205,7 @@ func run(args []string) error {
 		if window {
 			return runWindow(ctx, instance, opts, op)
 		}
-		return instance.Do(ctx, op, nil, version)
+		return instance.Do(ctx, op, opts.include(op), version)
 	}
 
 	switch command {
@@ -319,6 +333,13 @@ func defaultRepo() string {
 
 func preview(ctx context.Context, instance *app.App, opts options) error {
 	if opts.frames == "" {
+		// No directory to write to, so this is "show me what would change".
+		// With --term, or with nothing watching, that is a dry-run install
+		// printed as lines - which is exactly what the window's Preview runs.
+		// It used to demand a window either way and refuse when there was none.
+		if !wantsWindow(opts, instance.Interactive) {
+			return instance.Do(ctx, app.OpPreview, nil, version)
+		}
 		return runWindow(ctx, instance, opts, "")
 	}
 	components, err := instance.MenuItems()

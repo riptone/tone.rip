@@ -18,15 +18,18 @@ import "context"
 type Operation string
 
 const (
-	OpInstall    Operation = "install"
-	OpUnlink     Operation = "unlink"
-	OpAdopt      Operation = "adopt"
-	OpPreview    Operation = "preview"
-	OpCheck      Operation = "check"
-	OpSync       Operation = "sync"
-	OpUpdate     Operation = "update"
-	OpSecrets    Operation = "secrets"
-	OpSelfUpdate Operation = "self-update"
+	OpInstall Operation = "install"
+	OpUnlink  Operation = "unlink"
+	OpAdopt   Operation = "adopt"
+	OpPreview Operation = "preview"
+	OpCheck   Operation = "check"
+	OpSync    Operation = "sync"
+	OpUpdate  Operation = "update"
+	OpSecrets Operation = "secrets"
+	// OpRemovePackages uninstalls tools. The only operation here that deletes
+	// software, and the only one that refuses to act on an empty selection.
+	OpRemovePackages Operation = "uninstall"
+	OpSelfUpdate     Operation = "self-update"
 )
 
 // Do performs one operation.
@@ -62,6 +65,9 @@ func (a *App) Do(ctx context.Context, op Operation, include []string, version st
 	case OpSecrets:
 		a.Report.Phase("secrets")
 		return a.Secrets(ctx)
+	case OpRemovePackages:
+		a.Report.Phase("packages")
+		return a.RemovePackages(ctx)
 	case OpSelfUpdate:
 		return a.SelfUpdate(ctx, version)
 	}

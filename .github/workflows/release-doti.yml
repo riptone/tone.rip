@@ -53,26 +53,12 @@ jobs:
         working-directory: apps/doti
         run: go test ./...
 
-      # Six binaries, because a dotfiles installer that only covers the
-      # machine its author happens to own is the problem it exists to solve.
-      #
-      # CGO_ENABLED=0 is explicit rather than implied: doti shells out to git,
-      # brew, winget and bw and links nothing, so a static binary runs on any
-      # libc - which matters for the Linux boxes it will be curl-installed on.
+      # The target list, the build flags and the checksums live in the script,
+      # so they are one thing rather than two: `bun run release` produces
+      # exactly what a tag produces, and shellcheck lints it like the installers.
       - name: Build
         working-directory: apps/doti
-        run: |
-          mkdir -p dist
-          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
-            os="${target%/*}"; arch="${target#*/}"
-            ext=""; [ "${os}" = windows ] && ext=".exe"
-            CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build \
-              -trimpath \
-              -ldflags "-s -w -X main.version=${VERSION}" \
-              -o "dist/doti_${os}_${arch}${ext}" ./cmd/doti
-          done
-          cd dist && sha256sum doti_* > SHA256SUMS
-          cat SHA256SUMS
+        run: scripts/build-release.sh "${VERSION}"
 
       # The installer asks the downloaded binary its own version before it
       # goes near PATH. If the stamp did not land, every install would report

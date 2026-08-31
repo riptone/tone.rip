@@ -272,3 +272,33 @@ func TestAnUnknownCommandSaysWhatIsAvailable(t *testing.T) {
 		t.Errorf("the error does not quote what was typed: %v", err)
 	}
 }
+
+// `doti preview` with nowhere to write frames means "show me what would
+// change". It demanded a window either way and refused when there was none,
+// which made --term on it an error rather than an answer.
+func TestPreviewWithoutAWindowRunsADryRunInstall(t *testing.T) {
+	dir := t.TempDir()
+	repo := filepath.Join(dir, "dotfiles")
+	if err := os.MkdirAll(filepath.Join(repo, "zsh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"app":"dotfiles","version":"1.0.0",` +
+		`"stow_packages":[{"name":"zsh"}],"stow_ignore":[],"tools":[],"health":{}}`
+	if err := os.WriteFile(filepath.Join(repo, "manifest.jsonc"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "zsh", ".zshrc"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Under `go test` neither stream is a terminal, so this is the plain path
+	// without needing the flag - and it must not be the "needs a terminal"
+	// refusal.
+	if err := run([]string{"preview", "--repo", repo}); err != nil {
+		t.Fatalf("preview = %v, want a dry-run install", err)
+	}
+	// Explicitly too.
+	if err := run([]string{"preview", "--term", "--repo", repo}); err != nil {
+		t.Fatalf("preview --term = %v", err)
+	}
+}

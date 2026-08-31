@@ -126,6 +126,14 @@ func (a *App) Install(ctx context.Context) error {
 	}
 	// After the configs, because the tracked .gitconfig is what includes it -
 	// writing it first would leave a file nothing reads yet.
+	//
+	// Not selectable, unlike everything else this phase does, and that is the
+	// line: the selector offers manifest *lists* - packages, extras, MCP
+	// servers, stow packages, system components, secrets - because each entry
+	// is a thing somebody chose to declare. This is one derived line of
+	// credential-helper config, computed from the platform, and it yields
+	// entirely to a secret that declares the same file. There is no decision in
+	// it to offer.
 	if err := a.writeGitLocal(); err != nil {
 		return err
 	}

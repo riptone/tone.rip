@@ -191,3 +191,165 @@ func TestScanAddsNoSystemLinksOffWindows(t *testing.T) {
 		}
 	}
 }
+
+// The one thing an install did that the selector never offered: untick every
+// box and seven MCP servers were still installed, because the phase that
+// installs them was never asked.
+func TestIncludeGatesTheMcpServers(t *testing.T) {
+	mcps := `"mcps": ["@modelcontextprotocol/server-a"],`
+
+	t.Run("offered as a component", func(t *testing.T) {
+		a, _, _ := fixture(t, "brew", "jq", "ghostty", "zsh", "npm")
+		write(t, filepath.Join(a.Repo, "manifest.jsonc"),
+			strings.Replace(fixtureManifest, `"health"`, mcps+`
+			 "health"`, 1))
+
+		items, err := a.MenuItems()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found bool
+		for _, item := range items {
+			if item.Label == mcpLabel {
+				found = true
+				if item.Group != "Packages" {
+					t.Errorf("grouped under %q", item.Group)
+				}
+				if !strings.Contains(item.Status, "declared") {
+					t.Errorf("status = %q", item.Status)
+				}
+				if !item.Selected {
+					t.Error("arrived unticked")
+				}
+			}
+		}
+		if !found {
+			t.Errorf("no %q component: %v", mcpLabel, items)
+		}
+	})
+
+	t.Run("unticked installs nothing", func(t *testing.T) {
+		a, runner, rec := fixture(t, "brew", "jq", "ghostty", "zsh", "npm")
+		write(t, filepath.Join(a.Repo, "manifest.jsonc"),
+			strings.Replace(fixtureManifest, `"health"`, mcps+`
+			 "health"`, 1))
+		a.Include = []string{"zsh"}
+
+		if err := a.Install(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if !rec.Contains(mcpLabel + " (not selected)") {
+			t.Errorf("the skip was not reported: %v", rec.Texts())
+		}
+		for _, ran := range runner.ran {
+			if strings.HasPrefix(ran, "npm install") {
+				t.Errorf("an unticked component installed %s", ran)
+			}
+		}
+	})
+
+	t.Run("ticked installs them", func(t *testing.T) {
+		a, runner, _ := fixture(t, "brew", "jq", "ghostty", "zsh", "npm")
+		write(t, filepath.Join(a.Repo, "manifest.jsonc"),
+			strings.Replace(fixtureManifest, `"health"`, mcps+`
+			 "health"`, 1))
+		a.Include = []string{mcpLabel}
+
+		if err := a.Install(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if !runner.didRun("npm install -g @modelcontextprotocol/server-a") {
+			t.Fatalf("ran: %v", runner.ran)
+		}
+	})
+
+	// And a manifest with none offers no component rather than an empty one.
+	t.Run("none declared offers nothing", func(t *testing.T) {
+		a, _, _ := fixture(t, "brew", "jq", "ghostty", "zsh")
+		items, err := a.MenuItems()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range items {
+			if item.Label == mcpLabel {
+				t.Errorf("offered %q with none declared", mcpLabel)
+			}
+		}
+	})
+}
+
+// system_components is a manifest list exactly like extras, and extras honoured
+// the selector while these did not - so unticking the Windows Terminal settings
+// still replaced them.
+func TestIncludeGatesTheSystemLinks(t *testing.T) {
+	const declared = `"system_components": [
+	   {"name":"windows-terminal","platforms":["windows"]},
+	   {"name":"powershell-profile","platforms":["windows"]}
+	 ],`
+
+	setup := func(t *testing.T) (*App, *Recorder) {
+		t.Helper()
+		a, _, rec := fixture(t)
+		a.Platform = manifest.Windows
+		t.Setenv("LOCALAPPDATA", filepath.Join(t.TempDir(), "Local"))
+		t.Setenv("USERPROFILE", filepath.Join(t.TempDir(), "User"))
+		write(t, filepath.Join(a.Repo, "manifest.jsonc"),
+			strings.Replace(fixtureManifest, `"health"`, declared+`
+			 "health"`, 1))
+		for _, rel := range []string{
+			filepath.Join("win", "terminal", "settings.json"),
+			filepath.Join("win", "powershell", "profile.ps1"),
+		} {
+			write(t, filepath.Join(a.Repo, rel), "{}\n")
+		}
+		return a, rec
+	}
+
+	t.Run("offered as components", func(t *testing.T) {
+		a, _ := setup(t)
+		items, err := a.MenuItems()
+		if err != nil {
+			t.Fatal(err)
+		}
+		offered := map[string]bool{}
+		for _, item := range items {
+			offered[item.Label] = true
+		}
+		for _, want := range []string{"windows-terminal", "powershell-profile"} {
+			if !offered[want] {
+				t.Errorf("%q is installed but not offered: %v", want, labels(items))
+			}
+		}
+	})
+
+	t.Run("unticked links nothing", func(t *testing.T) {
+		a, rec := setup(t)
+		a.Include = []string{"powershell-profile"}
+
+		if err := a.installSystemLinks(); err != nil {
+			t.Fatal(err)
+		}
+		joined := strings.Join(rec.Texts(), "\n")
+		if !strings.Contains(joined, "powershell-profile") {
+			t.Errorf("the ticked link was skipped: %v", rec.Texts())
+		}
+		if strings.Contains(joined, "windows-terminal") {
+			t.Errorf("an unticked link was installed anyway: %v", rec.Texts())
+		}
+	})
+
+	// Off Windows there are none to offer, so the selector does not grow a
+	// group of things nobody can act on.
+	t.Run("none offered off windows", func(t *testing.T) {
+		a, _, _ := fixture(t)
+		items, err := a.MenuItems()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range items {
+			if item.Label == "windows-terminal" {
+				t.Errorf("a Windows link was offered on %s", a.Platform)
+			}
+		}
+	})
+}

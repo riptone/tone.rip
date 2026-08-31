@@ -215,7 +215,13 @@ func newSpinner(s styles) spinner.Model {
 func (m Model) resize() Model {
 	g := m.runGeometry()
 	m.run.view.Width, m.run.view.Height = g.Text, g.Body
-	return m.rewrap()
+	m = m.rewrap()
+	if m.screen == ScreenHelp {
+		// Prose has to re-wrap too, and the help screen is the one place a
+		// resize is the only thing that ever changes its content.
+		m = m.reflowHelp()
+	}
+	return m
 }
 
 // The expensive path, and the only one that needs to be: a resize is the one
@@ -328,16 +334,25 @@ func (m Model) appendLine(mark app.Mark, text string) Model {
 
 // afterRun is the bookkeeping that only makes sense once both the work and its
 // output are complete.
-func (m Model) afterRun() Model {
+func (m Model) afterRun() (tea.Model, tea.Cmd) {
 	if !m.run.settled() {
-		return m
+		return m, nil
 	}
 	m.run.working = ""
 	if m.run.action == ActionSelfUpdate && m.run.err == nil {
 		m.run.updated = true
+		// The offer is spent. Leaving it up meant the menu still advertised
+		// the version that had just been installed, and pressing u again
+		// re-ran the installer to fetch what was already on disk.
+		m.replaced, m.update = m.update, ""
 	}
+	// The run may have changed what the selectors describe - a removal that
+	// worked, an install that linked something - so read the machine again.
+	// In the background: nobody is in a selector at this moment, and by the
+	// time they navigate to one it has landed.
+	//
 	// Through flow, so the spinner row that was the last line goes away.
-	return m.flow()
+	return m.flow(), rescan(m.cfg.Scan)
 }
 
 // spinning reports whether there is unfinished work to animate.

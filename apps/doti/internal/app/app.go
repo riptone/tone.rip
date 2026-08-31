@@ -65,6 +65,21 @@ type App struct {
 	ignorer  *stow.Ignorer
 }
 
+// Forget drops the cached manifest and ignore rules.
+//
+// For a run or a re-scan that follows something which may have changed the
+// repository itself: `sync` pulls, and a pull can change manifest.jsonc. Called
+// on a *copy* of the App, so the caches this clears are the copy's own and no
+// other goroutine can be reading them.
+//
+// Everything else these two hold is re-read from the machine on every call
+// anyway - a PATH lookup, a stow plan, an os.Stat - so this is only about the
+// files in the checkout.
+func (a *App) Forget() {
+	a.manifest = nil
+	a.ignorer = nil
+}
+
 // New builds an App for this machine.
 func New(repo string, report Reporter, runner pkgs.Runner) (*App, error) {
 	// Absolute, and resolved here rather than trusted from the caller: the

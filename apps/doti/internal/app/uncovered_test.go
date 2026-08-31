@@ -421,3 +421,39 @@ func TestAFailedWingetImportIsReportedAndReturned(t *testing.T) {
 		t.Errorf("not reported: %v", rec.Texts())
 	}
 }
+
+// A re-scan after a sync has to see the manifest the sync pulled.
+func TestForgetMakesTheNextReadSeeTheFileOnDisk(t *testing.T) {
+	a, _, _ := fixture(t)
+
+	first, err := a.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.StowPackages) != 2 {
+		t.Fatalf("the fixture should carry two packages, got %d", len(first.StowPackages))
+	}
+
+	// What a `git pull` does.
+	write(t, filepath.Join(a.Repo, "manifest.jsonc"),
+		strings.Replace(fixtureManifest,
+			`{ "name": "ghostty", "platforms": ["macos", "linux"] }`, "", 1))
+
+	// Cached, so the change is invisible - which is right for one run.
+	cached, err := a.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cached.StowPackages) != 2 {
+		t.Errorf("the cache was bypassed: %d packages", len(cached.StowPackages))
+	}
+
+	a.Forget()
+	fresh, err := a.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fresh.StowPackages) != 1 {
+		t.Errorf("after Forget the manifest still has %d packages", len(fresh.StowPackages))
+	}
+}

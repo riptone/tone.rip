@@ -12,10 +12,7 @@ var spec = gotui.Spec{
 	// Narrower than the CV's 78: that is a document and wants a page, this is
 	// a list of seven things and looks abandoned in one. Width is a ceiling
 	// rather than a size - Fit shrinks the card to what it holds.
-	WidthMax: 64,
-	// Taller than the menu will ever need, for the one screen that has more
-	// than a screenful: a run's log. The menu is unaffected, because Fit
-	// takes the height back down to its content.
+	WidthMax:  64,
 	HeightMax: 28,
 	PadX:      2,
 	// The scrollbar column plus a space, reserved on every screen so opening
@@ -35,7 +32,27 @@ type (
 	hint     = gotui.Hint
 )
 
+// wideSpec is the same card, bigger, for the screens that hold something long.
+//
+// A menu is seven short rows and looks abandoned in a wide frame. A run's log
+// is the opposite: `git pull` explains a missing upstream in a paragraph, and
+// 58 columns turn that into a column of fragments - which is what it did. The
+// help text has the same problem for the same reason.
+//
+// Derived from spec rather than written out, so the padding and the gutter
+// cannot drift from the ones the Chrome's card was built with.
+var wideSpec = func() gotui.Spec {
+	wide := spec
+	wide.WidthMax, wide.HeightMax = 96, 40
+	return wide
+}()
+
 func geometryFor(width, height int) geometry { return spec.For(width, height) }
+
+// wideGeometryFor sizes the bigger card. Still a card: Spec.For gives up margin
+// before width and never exceeds the terminal, so a 60-column window gets a
+// 54-column frame rather than a broken one.
+func wideGeometryFor(width, height int) geometry { return wideSpec.For(width, height) }
 
 // fit shrinks the card to what it is holding, never below the spec's floor.
 func fit(g geometry, lines int) geometry { return g.Fit(lines, spec.MinBody) }

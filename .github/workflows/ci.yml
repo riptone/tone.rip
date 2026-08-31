@@ -227,7 +227,8 @@ jobs:
         run: |
           shellcheck --enable=all --exclude=SC2310,SC2312 \
             apps/ssh-cv/scripts/install.sh \
-            apps/doti/scripts/install.sh
+            apps/doti/scripts/install.sh \
+            apps/doti/scripts/build-release.sh
 
       # Go dependency vulnerabilities, filtered by whether this code can
       # actually reach them. That reachability analysis is the reason to run it

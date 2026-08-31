@@ -141,11 +141,19 @@ func (a *App) installSystemLinks() error {
 	if err != nil {
 		return err
 	}
+	// Declared for this platform *and* selected. system_components is a
+	// manifest list exactly like extras, and extras honoured the selector while
+	// these did not - so unticking the Windows Terminal settings still replaced
+	// them.
 	declared := map[string]bool{}
 	for _, component := range m.SystemComponents {
-		if len(component.Platforms) == 0 || slices.Contains(component.Platforms, a.Platform) {
-			declared[component.Name] = true
+		if len(component.Platforms) > 0 && !slices.Contains(component.Platforms, a.Platform) {
+			continue
 		}
+		if !a.wants(component.Name) {
+			continue
+		}
+		declared[component.Name] = true
 	}
 
 	for _, link := range a.SystemLinks() {

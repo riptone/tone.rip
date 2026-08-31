@@ -48,7 +48,7 @@ func TestAFinishedSelfUpdateOffersARestart(t *testing.T) {
 	if !m.run.updated {
 		t.Fatal("a clean self-update was not recorded as one")
 	}
-	if got := m.runStatus(); got != "updated" {
+	if got, _ := m.runStatus(); got != "updated" {
 		t.Errorf("status = %q, want updated", got)
 	}
 	if !strings.Contains(plain(m), "r restart") {
@@ -185,5 +185,66 @@ func TestTheLaunchedOperationIsOnScreenAndKeepsItsStream(t *testing.T) {
 	drain(t, m.Init())
 	if ran != app.OpInstall {
 		t.Errorf("the launched operation was %q, want install", ran)
+	}
+}
+
+// The offer is spent once the binary has been swapped. Leaving it up meant the
+// menu still advertised the version that had just been installed, and pressing
+// u again re-ran the installer to fetch what was already on disk.
+func TestASucceededSelfUpdateRetiresTheOffer(t *testing.T) {
+	m := send(model(), updateFoundMsg("v0.2.0"))
+	if !strings.Contains(plain(m), "u update to v0.2.0") {
+		t.Fatal("the fixture has no offer")
+	}
+
+	m = send(tap(m, "u"), finishedMsg{}, streamDoneMsg{})
+	back := tap(m, "enter")
+	if back.screen != ScreenMenu {
+		t.Fatalf("screen %v", back.screen)
+	}
+
+	body := plain(back)
+	if strings.Contains(body, "u update to") {
+		t.Errorf("the menu still offers the version it just installed:\n%s", body)
+	}
+	// And pressing u again does nothing rather than re-running the installer.
+	if again := tap(back, "u"); again.screen != ScreenMenu {
+		t.Errorf("u started something again: screen %v", again.screen)
+	}
+
+	// What is left to do is restart, and the menu says so.
+	if !strings.Contains(body, "r restart to run v0.2.0") {
+		t.Errorf("the menu does not offer a restart:\n%s", body)
+	}
+	if !tap(back, "r").Restart() {
+		t.Error("r from the menu did not ask for a restart")
+	}
+}
+
+// A failed self-update replaced nothing, so the offer stands and there is
+// nothing to restart into.
+func TestAFailedSelfUpdateKeepsTheOffer(t *testing.T) {
+	m := send(model(), updateFoundMsg("v0.2.0"))
+	m = send(tap(m, "u"),
+		finishedMsg{err: errors.New("curl: (6) could not resolve host")}, streamDoneMsg{})
+	back := tap(m, "enter")
+
+	body := plain(back)
+	if !strings.Contains(body, "u update to v0.2.0") {
+		t.Errorf("a failed update retired the offer:\n%s", body)
+	}
+	if strings.Contains(body, "r restart") {
+		t.Errorf("a failed update offered a restart:\n%s", body)
+	}
+	if tap(back, "r").Restart() {
+		t.Error("r asked for a restart after a failed update")
+	}
+}
+
+// r is inert until there is something to restart into: a keypress that silently
+// relaunches the same binary is worse than one that is not there.
+func TestRIsInertUntilSomethingHasBeenReplaced(t *testing.T) {
+	if tap(model(), "r").Restart() {
+		t.Error("r asked for a restart with nothing replaced")
 	}
 }

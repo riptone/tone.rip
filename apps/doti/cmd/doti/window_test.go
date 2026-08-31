@@ -286,3 +286,157 @@ func (v *promptingVault) RunInteractive(_ context.Context, _ []string, args ...s
 	v.unlocked = true
 	return []byte("a-session-key"), nil
 }
+
+// Only a removal takes an include list. Everywhere else an empty one means
+// everything, which is what a command line wants; for a removal an empty one
+// means nothing, and --tools is the only way to name something.
+func TestOnlyARemovalTakesAnIncludeListFromTheFlags(t *testing.T) {
+	opts := options{tools: "jq, fd"}
+
+	got := opts.include(app.OpRemovePackages)
+	if strings.Join(got, ",") != "jq,fd" {
+		t.Errorf("a removal got %v, want jq and fd", got)
+	}
+
+	// Install narrows through App.Tools, and its Include is matched against
+	// component labels - handing it tool names would match nothing at all.
+	for _, op := range []app.Operation{app.OpInstall, app.OpAdopt, app.OpSync, app.OpCheck} {
+		if got := opts.include(op); got != nil {
+			t.Errorf("%s got an include list %v", op, got)
+		}
+	}
+
+	// And there is deliberately no flag that means "all of them".
+	if got := (options{}).include(app.OpRemovePackages); len(got) != 0 {
+		t.Errorf("a removal with no --tools got %v", got)
+	}
+}
+
+// `doti uninstall` is dispatchable and distinct from `doti unlink`, which
+// removes symlinks and leaves the software.
+func TestUninstallAndUnlinkAreDifferentOperations(t *testing.T) {
+	uninstall, ok := operations["uninstall"]
+	if !ok {
+		t.Fatal("uninstall is not dispatchable")
+	}
+	if uninstall != app.OpRemovePackages {
+		t.Errorf("uninstall maps to %q", uninstall)
+	}
+	if _, ok := operations["unlink"]; ok {
+		t.Error("unlink is in the table; its --restore flag would be dropped")
+	}
+	for _, want := range []string{"doti unlink", "doti uninstall"} {
+		if !strings.Contains(usage, want) {
+			t.Errorf("the usage text does not list %q", want)
+		}
+	}
+}
+
+// The scanner runs after operations that set DryRun or narrowed Include on
+// their own copy, and neither belongs in a description of the machine - so it
+// works on a copy too, and the shared App comes out untouched.
+func TestTheInventoryScannerLeavesTheSharedAppAlone(t *testing.T) {
+	home := t.TempDir()
+	repo := filepath.Join(home, "dotfiles")
+	if err := os.MkdirAll(filepath.Join(repo, "zsh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"app":"dotfiles","version":"1.0.0",` +
+		`"stow_packages":[{"name":"zsh"}],"stow_ignore":[],"tools":[],"health":{}}`
+	if err := os.WriteFile(filepath.Join(repo, "manifest.jsonc"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "zsh", ".zshrc"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	platform, err := app.CurrentPlatform()
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := &app.App{
+		Repo: repo, Home: home, Platform: platform,
+		Report: &app.Recorder{}, Runner: nothingInstalled{},
+		DryRun: true, Include: []string{"zsh"},
+	}
+
+	inventory, err := inventoryScanner(instance)(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inventory.Components) == 0 {
+		t.Error("the scan described nothing")
+	}
+
+	// The copy is the point: an operation running next must not inherit a
+	// scan's settings, and a scan must not inherit an operation's.
+	if !instance.DryRun {
+		t.Error("the scan cleared DryRun on the shared App")
+	}
+	if len(instance.Include) != 1 {
+		t.Errorf("the scan changed Include to %v", instance.Include)
+	}
+}
+
+// nothingInstalled is a package detector that finds no tools, so these tests
+// are about the scan rather than about this machine.
+type nothingInstalled struct{}
+
+func (nothingInstalled) Run(context.Context, string, ...string) error { return nil }
+func (nothingInstalled) Look(string) bool                             { return false }
+func (nothingInstalled) HasApp(string) bool                           { return false }
+
+// Asserted through a real operation, because the interesting part is what the
+// App the operation runs with actually holds.
+func TestOnlyIsClearedForASelectionAndKeptWithout(t *testing.T) {
+	home := t.TempDir()
+	repo := filepath.Join(home, "dotfiles")
+	for _, dir := range []string{"zsh", "ghostty"} {
+		if err := os.MkdirAll(filepath.Join(repo, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repo, dir, "."+dir+"rc"), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest := `{"app":"dotfiles","version":"1.0.0","stow_packages":` +
+		`[{"name":"zsh"},{"name":"ghostty"}],"stow_ignore":[],"tools":[],"health":{}}`
+	if err := os.WriteFile(filepath.Join(repo, "manifest.jsonc"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	platform, err := app.CurrentPlatform()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(chosen []string) []string {
+		recorder := &app.Recorder{}
+		instance := &app.App{
+			Repo: repo, Home: t.TempDir(), Platform: platform,
+			Report: recorder, Runner: nothingInstalled{}, Only: "zsh", DryRun: true,
+		}
+		if err := operationRunner(instance, options{})(context.Background(),
+			tui.Action(app.OpUnlink), chosen, tui.RunOptions{Report: recorder}); err != nil {
+			t.Fatal(err)
+		}
+		return recorder.Texts()
+	}
+
+	// Ticked ghostty: --only zsh must not silently win.
+	withSelection := strings.Join(run([]string{"ghostty"}), "\n")
+	if !strings.Contains(withSelection, "ghostty") {
+		t.Errorf("the ticked component was skipped: %s", withSelection)
+	}
+	if strings.Contains(withSelection, "zsh ") {
+		t.Errorf("--only overrode the selection: %s", withSelection)
+	}
+
+	// No selection: --only is the only answer there is, so it stands.
+	withoutSelection := strings.Join(run(nil), "\n")
+	if !strings.Contains(withoutSelection, "zsh") {
+		t.Errorf("--only was dropped with nothing to supersede it: %s", withoutSelection)
+	}
+	if strings.Contains(withoutSelection, "ghostty") {
+		t.Errorf("--only did not narrow anything: %s", withoutSelection)
+	}
+}
