@@ -543,3 +543,98 @@ func TestPlanRefusesARelativePackagePath(t *testing.T) {
 		t.Fatalf("the error should explain why, got: %v", err)
 	}
 }
+
+// GNU Stow writes relative symlinks. Every machine that ran the shell
+// installer this binary replaced therefore has a home full of them, and each
+// one is already pointing exactly where doti wants it to point. Reading the
+// link text literally made all of them look wrong: the first run on such a
+// machine backed up and replaced every single link. Nothing was lost, but a
+// migration that reports 30 changes it did not need to make is a migration
+// nobody can read.
+//
+// Every other test here builds its links through Apply, which writes them
+// absolute - which is why the whole suite passed while this was broken.
+func TestAStowStyleRelativeLinkIsRecognisedAsAlreadyCorrect(t *testing.T) {
+	pkg, home := buildPackage(t, map[string]string{".zshrc": "ours\n"})
+	rel, err := filepath.Rel(home, filepath.Join(pkg, ".zshrc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.IsAbs(rel) {
+		t.Fatalf("the fixture needs a relative link, got %q", rel)
+	}
+	if err := os.Symlink(rel, filepath.Join(home, ".zshrc")); err != nil {
+		t.Fatal(err)
+	}
+
+	op := planFor(t, pkg, home, nil)[".zshrc"]
+	if op.Kind != Skip {
+		t.Fatalf("a relative link at the right file should skip, got %+v", op)
+	}
+}
+
+// The sharper half of the same bug. A relative destination handed to os.Stat
+// is resolved against the *process's* working directory, not the link's - so
+// whether a shared directory was unfolded or silently replaced depended on
+// where doti was started from. It happened to work when run from $HOME, and
+// only from $HOME, which is where anyone would test it by hand.
+func TestTheUnfoldDecisionDoesNotDependOnTheWorkingDirectory(t *testing.T) {
+	for _, cwd := range []string{"home", "elsewhere"} {
+		t.Run(cwd, func(t *testing.T) {
+			ghostty, starship, home := buildTwo(t)
+
+			// Exactly what stow leaves behind for the first package: one
+			// relative link folding the whole of ~/.config.
+			rel, err := filepath.Rel(home, filepath.Join(starship, ".config"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(rel, filepath.Join(home, ".config")); err != nil {
+				t.Fatal(err)
+			}
+
+			if cwd == "home" {
+				t.Chdir(home)
+			} else {
+				t.Chdir(t.TempDir())
+			}
+
+			op := planFor(t, ghostty, home, nil)[".config"]
+			if op.Kind != Unfold {
+				t.Fatalf("want Unfold regardless of cwd, got %+v", op)
+			}
+			if !filepath.IsAbs(op.Source) {
+				t.Errorf("Unfold source must be absolute to be usable, got %q", op.Source)
+			}
+		})
+	}
+}
+
+// And the consequence that matters to a person: adopting the second package
+// over stow's relative fold keeps the first package's files reachable.
+func TestSharingAStowRelativeFoldKeepsBothPackages(t *testing.T) {
+	ghostty, starship, home := buildTwo(t)
+	rel, err := filepath.Rel(home, filepath.Join(starship, ".config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(rel, filepath.Join(home, ".config")); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+
+	linkPkg(t, ghostty, home)
+
+	for _, want := range []string{
+		filepath.Join(".config", "ghostty", "config"),
+		filepath.Join(".config", "starship.toml"),
+	} {
+		if _, err := os.Stat(filepath.Join(home, want)); err != nil {
+			t.Errorf("%s went missing: %v", want, err)
+		}
+	}
+	entries, err := os.ReadDir(filepath.Join(home, ".backups"))
+	if err == nil && len(entries) > 0 {
+		t.Errorf("adopting stow's own fold backed up %d path(s); it displaces nothing", len(entries))
+	}
+}

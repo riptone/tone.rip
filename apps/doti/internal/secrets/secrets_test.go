@@ -518,7 +518,7 @@ func TestEnsureServerPointsTheCLIAtTheRightDeployment(t *testing.T) {
 	runner.responses["status"] = `{"serverUrl":null,"lastSync":null,"status":"unauthenticated"}`
 	runner.responses["config server https://vault.bitwarden.eu"] = "Saved setting `config`."
 
-	changed, err := New(runner, "").EnsureServer(context.Background(), "https://vault.bitwarden.eu")
+	changed, err := New(runner, "").EnsureServer(context.Background(), "https://vault.bitwarden.eu", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -542,7 +542,7 @@ func TestEnsureServerIsANoOpWhenAlreadyCorrect(t *testing.T) {
 	runner.responses["status"] =
 		`{"serverUrl":"https://Vault.Bitwarden.EU/","lastSync":null,"status":"locked"}`
 
-	changed, err := New(runner, "").EnsureServer(context.Background(), "https://vault.bitwarden.eu")
+	changed, err := New(runner, "").EnsureServer(context.Background(), "https://vault.bitwarden.eu", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -563,7 +563,7 @@ func TestSwitchingDeploymentWhileSignedInSaysToLogOut(t *testing.T) {
 	runner.responses["status"] =
 		`{"serverUrl":"https://vault.bitwarden.com","lastSync":null,"status":"unlocked"}`
 
-	_, err := New(runner, "s").EnsureServer(context.Background(), "https://vault.bitwarden.eu")
+	_, err := New(runner, "s").EnsureServer(context.Background(), "https://vault.bitwarden.eu", false)
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -578,7 +578,7 @@ func TestSwitchingDeploymentWhileSignedInSaysToLogOut(t *testing.T) {
 // Nothing declared means "leave whatever the operator configured alone".
 func TestEnsureServerLeavesAnUndeclaredServerAlone(t *testing.T) {
 	runner := newFake()
-	changed, err := New(runner, "").EnsureServer(context.Background(), "")
+	changed, err := New(runner, "").EnsureServer(context.Background(), "", false)
 	if err != nil || changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
@@ -735,6 +735,29 @@ func TestLooksLikeID(t *testing.T) {
 	} {
 		if got := looksLikeID(input); got != want {
 			t.Errorf("looksLikeID(%q) = %v, want %v", input, got, want)
+		}
+	}
+}
+
+// -n must not write the CLI's data.json. It did: a dry-run install against a
+// fresh HOME left `bw` pointed at the manifest's deployment, which is state
+// that outlives the run.
+func TestEnsureServerWritesNothingOnADryRun(t *testing.T) {
+	runner := newFake()
+	runner.responses["status"] =
+		`{"serverUrl":"https://vault.bitwarden.com","lastSync":null,"status":"unauthenticated"}`
+
+	changed, err := New(runner, "").EnsureServer(
+		context.Background(), "https://vault.bitwarden.eu", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Error("changed = false; a dry run still has to report that it would move")
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(call, "config") {
+			t.Errorf("a dry run called `bw %s`", call)
 		}
 	}
 }

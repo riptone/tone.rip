@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/term"
 
 	"github.com/riptone/tone.rip/apps/doti/internal/app"
 	"github.com/riptone/tone.rip/apps/doti/internal/pkgs"
@@ -169,7 +170,7 @@ func run(args []string) error {
 // build assembles the App, including the two decisions that belong here and
 // nowhere else: how to render, and where subprocess output goes.
 func build(opts options) (*app.App, error) {
-	interactive := isTerminal(os.Stdout)
+	interactive := canPrompt(os.Stdout, os.Stdin)
 	report := reporter(os.Stdout)
 	runner := pkgs.ExecRunner{}
 	if opts.verbose {
@@ -190,17 +191,36 @@ func build(opts options) (*app.App, error) {
 	return instance, nil
 }
 
+// isTerminal asks the kernel, via the same predicate Bubble Tea uses to
+// decide whether it can drive a screen.
+//
+// The cheap version of this check - Stat().Mode()&os.ModeCharDevice - has a
+// hole worth naming, because it is the version that shipped: /dev/null is a
+// character device. `doti install </dev/null`, the shape every CI job takes,
+// read as "a person is watching" and went looking for a password prompt.
+// Matching Bubble Tea's own call also means canPrompt cannot disagree with
+// whether the menu will actually run.
+func isTerminal(f *os.File) bool {
+	return f != nil && term.IsTerminal(f.Fd())
+}
+
+// canPrompt reports whether doti may stop and ask a question.
+//
+// Two streams, because they answer two different questions and conflating
+// them is the bug this exists for: stdout being a terminal decides how to
+// *render*, stdin being one decides whether anything can be *asked*. Piped
+// into bash - `curl ... | bash` - stdout is still the terminal while stdin is
+// the exhausted download, so the old one-stream test sent an unattended
+// install into `bw unlock` and the prompt read from a closed pipe.
+func canPrompt(stdout, stdin *os.File) bool {
+	return isTerminal(stdout) && isTerminal(stdin)
+}
+
 // reporter picks the rendering from whether anything is watching.
 //
 // A terminal gets colour and a spinner. A pipe, a file or CI gets plain
 // lines, because cursor movement in a log is noise and a spinner is thousands
 // of wasted rows. Same events either way, so there is no second code path.
-// isTerminal reports whether anything is watching.
-func isTerminal(out *os.File) bool {
-	info, err := out.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
-}
-
 func reporter(out *os.File) app.Reporter {
 	if !isTerminal(out) {
 		return app.PlainReporter{Out: out}
@@ -231,6 +251,12 @@ func runMenu(ctx context.Context, instance *app.App, opts options) error {
 		// There is nothing to show a selector about yet. Offering an empty
 		// menu would be worse than doing the obvious thing.
 		return instance.Install(ctx)
+	}
+	if !instance.Interactive {
+		// Bubble Tea would take the alt screen and then wait for keys that
+		// cannot arrive. Naming the commands is the only useful thing to say.
+		return fmt.Errorf("the menu needs a terminal to drive it; " +
+			"run `doti install`, `doti check` or `doti --help` instead")
 	}
 	items, err := instance.MenuItems()
 	if err != nil {

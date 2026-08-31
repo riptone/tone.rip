@@ -171,4 +171,19 @@ if ! ${RUN_INSTALL}; then
   exit 0
 fi
 say "running doti install"
+
+# Piped into bash, stdin is the exhausted download rather than the terminal,
+# so anything doti wants to ask - the vault password above all - has nothing
+# to read from: that is how the first release reached `bw unlock` and had it
+# crash on a closed pipe. Hand doti the terminal when there is one. When there
+# is not (CI, a container), it sees a non-interactive stdin and defers the
+# prompt rather than hanging on it.
+#
+# The open is attempted rather than tested with -r, because a session with no
+# controlling terminal has a /dev/tty that passes -r and still fails open()
+# with ENXIO - and learning that from a failed exec would kill the installer
+# after it had already put the binary in place.
+if (: </dev/tty) 2>/dev/null; then
+  exec "${bindir}/doti" install </dev/tty
+fi
 exec "${bindir}/doti" install

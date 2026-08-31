@@ -245,8 +245,9 @@ func normaliseServer(url string) string {
 // region is a deployment fact rather than a secret, so it belongs in the
 // manifest, and every new machine gets it right without anyone remembering.
 //
-// Reports whether it changed anything.
-func (c *Client) EnsureServer(ctx context.Context, want string) (bool, error) {
+// Reports whether it changed anything - or, under dryRun, whether it would
+// have.
+func (c *Client) EnsureServer(ctx context.Context, want string, dryRun bool) (bool, error) {
 	if want == "" {
 		// Nothing declared: leave whatever the operator configured alone.
 		return false, nil
@@ -265,6 +266,12 @@ func (c *Client) EnsureServer(ctx context.Context, want string) (bool, error) {
 		return false, fmt.Errorf(
 			"the CLI is signed in to %s but the manifest names %s - run `bw logout`, then re-run",
 			displayServer(status.ServerURL), want)
+	}
+	if dryRun {
+		// `bw config server` writes the CLI's own data.json, which outlives
+		// the run - so it is a change, and -n does not make changes. Reported
+		// as one, in the "would" tense the caller picks.
+		return true, nil
 	}
 	if _, err := c.runner.Run(ctx, nil, "config", "server", want); err != nil {
 		return false, fmt.Errorf("pointing bw at %s: %w", want, err)

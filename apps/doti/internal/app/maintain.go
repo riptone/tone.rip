@@ -31,13 +31,21 @@ func (a *App) Secrets(ctx context.Context) error {
 	// deployment fails as "Invalid master password" - an error that sends you
 	// looking at your password rather than at the region.
 	if m.Vault != nil {
-		changed, err := client.EnsureServer(ctx, m.Vault.Server)
+		changed, err := client.EnsureServer(ctx, m.Vault.Server, a.DryRun)
 		if err != nil {
 			return err
 		}
-		if changed {
+		switch {
+		case changed && a.DryRun:
+			a.Report.Line(MarkChange, "would point bw at "+m.Vault.Server)
+			// And then stop: reading the vault through the deployment it is
+			// pointed at now would answer about the wrong account, and
+			// pointing it at the right one is the change -n declined to make.
+			return fmt.Errorf("bw is pointed at another deployment - re-run without -n to move it to %s",
+				m.Vault.Server)
+		case changed:
 			a.Report.Line(MarkChange, "pointed bw at "+m.Vault.Server)
-		} else if m.Vault.Server != "" {
+		case m.Vault.Server != "":
 			a.Report.Line(MarkOK, "bw is pointed at "+m.Vault.Server)
 		}
 	}
@@ -91,7 +99,11 @@ func (a *App) openVault(ctx context.Context, client *secrets.Client) error {
 	if status.State == secrets.Unlocked {
 		return nil
 	}
-	if !a.Interactive {
+	// Both of the ways out of a locked vault are changes a dry run must not
+	// make: `bw login` writes credentials to the CLI's data file, and even
+	// `bw unlock` stops to ask for a master password. -n reports; it does not
+	// prompt.
+	if !a.Interactive || a.DryRun {
 		return &secrets.UnavailableError{State: status.State}
 	}
 

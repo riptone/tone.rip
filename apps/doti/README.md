@@ -71,7 +71,10 @@ $ doti packages         # print the generated package lists
 $ doti validate         # parse and check manifest.jsonc
 ```
 
-`-n` is the dry run on everything that writes. `--repo DIR` overrides
+`-n` is the dry run on everything that writes - including `bw`'s own state,
+which it did not used to be: `bw config server` writes a data file that
+outlives the run, so a dry run against a fresh `$HOME` left the CLI pointed at
+a deployment it had only been asked about. `--repo DIR` overrides
 `$DOTFILES_DIR` (default `~/dotfiles`); `--url` and `$DOTFILES_REPO_URL`
 override where a clone comes from. `--verbose` streams subprocess output
 instead of capturing it.
@@ -107,6 +110,20 @@ verbatim and a relative one resolves against `$HOME` - `--repo dotfiles`
 produced `~/.zshrc -> dotfiles/zsh/.zshrc`, which points at nothing and
 reports success.
 
+Reading the *other* direction was wrong for a release: GNU Stow writes
+**relative** links, so `os.Readlink` returns `../dotfiles/ghostty/.config/ghostty`
+where the plan holds an absolute source. Compared literally, every link on a
+machine that had ever run `stow` looked foreign - the first `doti install`
+backed up and replaced all thirteen of them. Nothing was lost, but a
+migration reporting thirty changes it did not need to make is one nobody can
+read. Worse, that same text reached `os.Stat`, which resolves a relative path
+against the *process's* working directory - so whether a shared `~/.config`
+was unfolded or silently replaced depended on where doti was started from, and
+it happened to work from `$HOME`, which is where anyone would try it by hand.
+Destinations are now resolved against the link's own directory, the way the
+kernel reads them. Checked against the tool rather than a fixture: `stow` lays
+down all seven packages, then `doti install -n` reports zero changes.
+
 **`internal/secrets`** renders credentials from Bitwarden through the `bw`
 CLI, and points that CLI at the right deployment first. `bw` defaults to the
 US cloud without saying so, so an EU account fails to log in with *"Invalid
@@ -127,7 +144,20 @@ on that path stdout *is* the session key.
 
 Non-interactively - a pipe, CI, `doti install` from a script - it stays an
 actionable error instead, because a script that stops to ask for a password
-is a script that hangs. Same TTY check that picks the renderer. A whole-file secret whose target ends in `.json` is parsed before it is
+is a script that hangs.
+
+That check reads **both** streams, and the first release shipped it reading
+one. `stdout` being a terminal decides how to *render*; `stdin` being one
+decides whether anything can be *asked*. Piped into bash - which is how this
+is installed - stdout is still the terminal while stdin is the exhausted
+download, so a one-stream test called an unattended install interactive and
+`bw unlock` prompted into a closed pipe (`ERR_USE_AFTER_CLOSE`, from inside
+node). `install.sh` now hands the binary `/dev/tty` when one can be *opened* -
+attempted rather than tested with `-r`, because a session with no controlling
+terminal has a `/dev/tty` that passes `-r` and still fails `open()` with
+ENXIO. The check itself is `term.IsTerminal`, the same call Bubble Tea makes,
+rather than `Mode()&os.ModeCharDevice`: `/dev/null` is a character device, so
+the cheap version called `doti install </dev/null` a person too. A whole-file secret whose target ends in `.json` is parsed before it is
 written, because those notes are pasted in by hand and a truncated copy still
 renders - failing later, somewhere that looks unrelated. It also refuses to write a target that resolves *into the repository*. That
 guard is not theoretical: the dotfiles repo declared

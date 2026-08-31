@@ -169,7 +169,7 @@ func plan(root, dir, home string, ignore *Ignorer, ops *[]Op, unfoldedFrom strin
 		}
 
 		if linkDest != "" {
-			if linkDest == source {
+			if linkDest == source || sameFile(linkDest, source) {
 				*ops = append(*ops, Op{Kind: Skip, Target: target, Source: source})
 				continue
 			}
@@ -241,12 +241,44 @@ func inspect(target, unfoldedFrom, name string) (fs.FileInfo, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("reading link %s: %w", target, err)
 	}
-	return info, dest, nil
+	return info, resolveLink(target, dest), nil
+}
+
+// resolveLink makes a symlink's destination absolute, read the way the kernel
+// reads it: relative to the directory holding the link.
+//
+// Readlink returns the link's literal text, and GNU Stow writes *relative*
+// links - `../dotfiles/ghostty/.config/ghostty`. Two things go wrong if that
+// text is used as-is. It never equals the absolute source, so a link that is
+// already correct is planned as a Relink and its backup churns on every run.
+// Worse, it reaches isDir as a relative path, which os.Stat resolves against
+// this process's working directory - making the fold-or-unfold decision
+// depend on where doti happened to be started from.
+func resolveLink(target, dest string) string {
+	if filepath.IsAbs(dest) {
+		return filepath.Clean(dest)
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(target), dest))
 }
 
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// sameFile is the second chance for the equality above: a repository reached
+// through a symlinked ancestor (/tmp -> /private/tmp on macOS is the one
+// everybody meets) resolves to a different string for the same file.
+func sameFile(a, b string) bool {
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+	if err != nil {
+		return false
+	}
+	return os.SameFile(ai, bi)
 }
 
 func describe(info fs.FileInfo) string {
