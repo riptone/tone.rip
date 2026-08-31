@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/riptone/tone.rip/packages/gotui"
 )
 
 // doc builds the body of one section.
@@ -209,15 +211,5 @@ func wrapText(text string, limit int) []string {
 // cutting a sentence loses information, while cutting an index row only
 // delays it until the page it points at.
 func truncate(text string, limit int) string {
-	if limit < 1 {
-		return ""
-	}
-	if lipgloss.Width(text) <= limit {
-		return text
-	}
-	runes := []rune(text)
-	for len(runes) > 0 && lipgloss.Width(string(runes))+1 > limit {
-		runes = runes[:len(runes)-1]
-	}
-	return strings.TrimRight(string(runes), " ") + "…"
+	return gotui.Truncate(text, limit)
 }

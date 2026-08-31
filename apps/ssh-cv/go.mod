@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/wish v1.4.7
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/muesli/termenv v0.16.0
+	github.com/riptone/tone.rip/packages/gotui v0.0.0
 	golang.org/x/crypto v0.55.0
 )
 
@@ -43,3 +44,8 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 )
+
+// The shared window chrome lives in this repository rather than on a proxy:
+// it is one module in one monorepo, versioned by the commit both apps are
+// built from.
+replace github.com/riptone/tone.rip/packages/gotui => ../../packages/gotui

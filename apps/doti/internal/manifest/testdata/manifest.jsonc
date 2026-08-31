@@ -1,0 +1,75 @@
+{
+  "$schema": "./manifest.schema.json",
+  // ═══════════════════════════════════════════════════════════
+  //  Fixture mirroring the real manifest's shape.
+  // ═══════════════════════════════════════════════════════════
+  "app": "dotfiles",
+  "version": "9.0.0",
+
+  "stow_packages": [
+    { "name": "stow", "platforms": ["macos", "linux", "windows"] },
+    { "name": "zsh", "platforms": ["macos", "linux"] }
+  ],
+
+  "stow_ignore": ["\\.DS_Store", "node_modules"],
+
+  "tools": [
+    { "cmd": "jq", "brew": "jq", "winget": "jqlang.jq" },
+    { "cmd": "stow", "brew": "stow" }
+  ],
+
+  "zsh_plugins": [{ "brew": "zsh-autosuggestions" }],
+
+  "brew_casks": [{ "brew": "ghostty", "platforms": ["macos"] }],
+
+  "extras": [
+    {
+      "name": "nerd-font",
+      "description": "JetBrainsMono",
+      "platforms": ["linux"]
+    }
+  ],
+
+  "winget_extras": ["Microsoft.PowerShell"],
+  "mcps": ["mcp-fetch-server"],
+
+  "system_components": [
+    { "name": "gitconfig-local", "platforms": ["linux", "macos", "windows"] }
+  ],
+
+  "secrets": [
+    {
+      "name": "mssql-envs",
+      "mode": "file",
+      "item": "dotfiles/mssql-envs",
+      "field": "notes",
+      "target": "~/.config/opencode/mssql-envs.json",
+      "platforms": ["macos", "linux", "windows"]
+    },
+    {
+      "name": "gitconfig-local",
+      "mode": "template",
+      "template": "git/.gitconfig.local.tmpl",
+      "target": "~/.gitconfig.local",
+      "values": {
+        "email": { "item": "dotfiles/git-identity", "field": "username" },
+        "signingkey": {
+          "item": "dotfiles/git-identity",
+          "field": "signing-key"
+        }
+      }
+    }
+  ],
+
+  "health": {
+    "extra_tools": { "macos": ["zsh", "brew"] },
+    "links": { "macos": { "~/.zshrc": "zsh/.zshrc" } }
+  },
+
+  "cli": {
+    "description": "cross-platform dotfile installer (stow-based)",
+    "options": [{ "flag": "--all / -a", "desc": "Everything, no prompts" }],
+    // The hazard this parser exists for: a `//` inside a string value.
+    "fresh_machine": "git clone https://github.com/riptone/dotfiles.git ~/dotfiles && cd ~/dotfiles && doti --all"
+  }
+}

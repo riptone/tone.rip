@@ -71,7 +71,7 @@ jobs:
       - name: Lint, type-check, unit tests, knip, cycles
         run: >
           bunx turbo run //#lint //#knip //#check-cycles
-          check-types test --filter='!@repo/ssh-cv'
+          check-types test --filter='!@repo/ssh-cv' --filter='!@repo/doti' --filter='!@repo/gotui'
 
   e2e:
     name: Build, bundle size, end-to-end
@@ -116,7 +116,7 @@ jobs:
       - name: Build the Workers and check their bundle sizes
         run: >
           bunx turbo run build //#check-bundle-size
-          --filter='!@repo/ssh-cv'
+          --filter='!@repo/ssh-cv' --filter='!@repo/doti' --filter='!@repo/gotui'
 
       # Each app's e2e:server script builds and boots its own `wrangler dev`
       # - see docs/engineering.md's "Per-request nonces and soft navigation"
@@ -179,7 +179,10 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
-          cache-dependency-path: apps/ssh-cv/go.sum
+          cache-dependency-path: |
+            apps/ssh-cv/go.sum
+            apps/doti/go.sum
+            packages/gotui/go.sum
 
       # apps/ssh-cv's build regenerates its embedded CV from packages/content,
       # so the workspace has to be installed even though the binary is Go.
@@ -195,8 +198,8 @@ jobs:
 
       # gofmt + go vet, go test, go build - the three tasks apps/ssh-cv
       # declares, which are the reason this job installs Go at all.
-      - name: Build, vet and test apps/ssh-cv
-        run: bunx turbo run check-types test build --filter=@repo/ssh-cv
+      - name: Build, vet and test the Go apps
+        run: bunx turbo run check-types test build --filter=@repo/ssh-cv --filter=@repo/doti --filter=@repo/gotui
 
       # apps/ssh-cv embeds a CV generated from packages/content. The build
       # above regenerates it, so a diff here means the committed copy drifted

@@ -26,6 +26,10 @@
       "dependsOn": ["^build"],
       "outputs": ["bin/**", "internal/cv/cv.json"]
     },
+    "@repo/doti#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["bin/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

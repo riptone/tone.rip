@@ -1,0 +1,10 @@
+{
+  "name": "@repo/gotui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "test -z \"$(gofmt -l .)\" || { gofmt -l .; echo \"^ run gofmt -w .\"; exit 1; }; go vet ./...",
+    "test": "go test ./..."
+  }
+}

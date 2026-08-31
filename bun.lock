@@ -59,6 +59,10 @@
         "wrangler": "catalog:",
       },
     },
+    "apps/doti": {
+      "name": "@repo/doti",
+      "version": "0.0.0",
+    },
     "apps/ssh-cv": {
       "name": "@repo/ssh-cv",
       "version": "0.0.0",
@@ -146,6 +150,10 @@
         "typescript": "catalog:",
         "vitest": "catalog:",
       },
+    },
+    "packages/gotui": {
+      "name": "@repo/gotui",
+      "version": "0.0.0",
     },
     "packages/hono-middleware": {
       "name": "@repo/hono-middleware",
@@ -649,6 +657,10 @@
     "@puppeteer/browsers": ["@puppeteer/browsers@3.2.1", "", { "dependencies": { "modern-tar": "^0.8.0", "yargs": "^18.0.0" }, "peerDependencies": { "proxy-agent": ">=8.0.1", "yauzl": "^2.10.0 || ^3.4.0" }, "optionalPeers": ["proxy-agent", "yauzl"], "bin": { "browsers": "lib/main-cli.js" } }, "sha512-KDz+3qDRdBAlRlMjmKyj6dEs33YHTk/xRHEENSXq6TNnhgoU15ruSHtEBeVF6OZ9tBDY55Se4P0nFMNsipzU9A=="],
 
     "@repo/content": ["@repo/content@workspace:packages/content"],
+
+    "@repo/doti": ["@repo/doti@workspace:apps/doti"],
+
+    "@repo/gotui": ["@repo/gotui@workspace:packages/gotui"],
 
     "@repo/hono-middleware": ["@repo/hono-middleware@workspace:packages/hono-middleware"],
 

@@ -174,22 +174,7 @@ func (s styles) render(g geometry, p pane) string {
 // *default* renderer - the same trap sessionRenderer exists to avoid, and one
 // that used to matter here when the surround was painted.
 func (s styles) centre(g geometry, card string) string {
-	left := max((g.termWidth-g.width)/2, 0)
-	right := max(g.termWidth-g.width-left, 0)
-	top := max((g.termHeight-g.height)/2, 0)
-
-	blank := s.pad(g.termWidth)
-	out := make([]string, 0, g.termHeight)
-	for range top {
-		out = append(out, blank)
-	}
-	for _, row := range strings.Split(card, "\n") {
-		out = append(out, s.pad(left)+row+s.pad(right))
-	}
-	for len(out) < g.termHeight {
-		out = append(out, blank)
-	}
-	return strings.Join(out, "\n")
+	return s.chrome.Centre(g.termWidth, g.termHeight, g.width, card)
 }
 
 // titleBar is the buttons, then the window's name at the far right.
@@ -325,14 +310,7 @@ func footerRow(g geometry, s styles, hints []hint, status string) string {
 // entirely when there is no room for both - a status overlapping the hints
 // beside it is worse than no status.
 func (s styles) ends(width int, left, right string) string {
-	if right == "" {
-		return left
-	}
-	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		return left
-	}
-	return left + s.pad(gap) + right
+	return s.chrome.Ends(width, left, right)
 }
 
 // stripANSI is how a row is asked whether it has any text left in it, rather

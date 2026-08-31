@@ -18,7 +18,11 @@
     "packages/hono-middleware": {},
     "packages/net": {},
     "packages/ui": {},
-    "packages/validation": {}
+    "packages/validation": {},
+    "packages/gotui": {
+      "entry": [],
+      "project": []
+    }
   },
   "ignoreBinaries": ["go", "gofmt"]
 }

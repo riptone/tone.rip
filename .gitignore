@@ -24,6 +24,14 @@ test-results
 playwright-report
 blob-report
 
+# The dotfiles repository, cloned here for convenience while apps/doti is
+# built against it. It is a separate repo with its own history and its own
+# remote, and it holds credential files - so committing it into this one
+# would both duplicate a repo and copy secrets into a second history. It is
+# also why `biome check` is not to descend into it: it carries a Biome 1.x
+# config that this repo's Biome 2.x cannot deserialize.
+dotfiles/
+
 # Turbo
 .turbo
 

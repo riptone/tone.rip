@@ -1,13 +1,18 @@
 package tui
 
 import (
-	"strings"
-
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/riptone/tone.rip/packages/gotui"
 )
 
 // The palette, and the rules that make it survive the trip to a terminal that
 // is not this one.
+//
+// The values and the primitives that depend on them live in
+// packages/gotui, shared with apps/doti, which draws the same card. The
+// reasoning below is why they are what they are; the tests that hold them
+// to it live beside them.
 //
 // **Everything is painted, and everything is black.** Every cell the session
 // occupies carries an explicit `#000000` background - the card, the space
@@ -40,34 +45,37 @@ import (
 // dark grey with any tint in it can land on a *cube* colour instead - the
 // border was once #2a2b31 and arrived as navy. theme_test asserts both.
 var (
-	// Black. Not "near black" - the reader asked for the real thing, and a
-	// #0f0f12 that reads as black beside a white page reads as grey beside a
-	// terminal that is actually black.
-	colBlack = lipgloss.Color("#000000") // 16
+	colBlack = gotui.Black
 
-	colText  = lipgloss.Color("#ffffff") // 231 - content, headings, the cursor row
-	colMuted = lipgloss.Color("#b4b4b4") // 250 - rows not under the cursor
-	colFaint = lipgloss.Color("#8a8a8a") // 102 - dates, key hints, asides
-	colRule  = lipgloss.Color("#3a3a3a") // 59  - the border and the rules
-	colTrack = lipgloss.Color("#3a3a3a") // 59  - the scrollbar's own line
-	colBar   = lipgloss.Color("#ffffff") // 231 - the part of it that moves
+	colText  = gotui.Text  // content, headings, the cursor row
+	colMuted = gotui.Muted // rows not under the cursor
+	colFaint = gotui.Faint // dates, key hints, asides
+	colRule  = gotui.Rule  // the border and the rules
 
-	// The cursor, and the only place the site's signature accent appears. One
-	// thing in the session has to be findable instantly; everything else is
-	// white or grey on purpose.
-	colAccent = lipgloss.Color("#ff5c00") // 202
+	// The scrollbar's two parts are the rule and the text colours by another
+	// name. They keep their own identifiers because the scrollbar is this
+	// program's alone - apps/doti has no document to scroll - and naming
+	// them for their job is what makes the palette test's "these two must
+	// stay distinguishable" pairs readable.
+	colTrack = gotui.Rule
+	colBar   = gotui.Text
 
-	// The window buttons. macOS keeps these three in both appearances, and so
-	// does every terminal recording of it.
-	colClose    = lipgloss.Color("#ff5f57") // 203
-	colMinimise = lipgloss.Color("#febc2e") // 214
-	colZoom     = lipgloss.Color("#28c840") // 41
+	// The cursor, and the only place the site's signature accent appears.
+	colAccent = gotui.Accent
+
+	colClose    = gotui.Close
+	colMinimise = gotui.Minimise
+	colZoom     = gotui.Zoom
 )
 
 // styles is the whole vocabulary. Anything that renders text uses one of
 // these; nothing builds a style inline, which is what keeps nine pages looking
 // like one document.
 type styles struct {
+	// chrome is the shared surface: the black base, and the primitives
+	// that must not be reimplemented (pad, buttons, ends, centre).
+	chrome gotui.Surface
+
 	// Window chrome.
 	card    lipgloss.Style
 	surface lipgloss.Style
@@ -105,9 +113,11 @@ func newStyles(r *lipgloss.Renderer) styles {
 	if r == nil {
 		r = lipgloss.DefaultRenderer()
 	}
-	base := r.NewStyle().Background(colBlack)
+	chrome := gotui.NewSurface(r)
+	base := chrome.Base
 
 	return styles{
+		chrome: chrome,
 		card: base.
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colRule).
@@ -137,22 +147,7 @@ func newStyles(r *lipgloss.Renderer) styles {
 }
 
 // pad is n columns of black, and the only way to write a gap.
-//
-// Raw spaces would show the terminal's own background through the window for
-// the rest of that line - see the note on the palette above.
-func (s styles) pad(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	return s.surface.Render(strings.Repeat(" ", n))
-}
+func (s styles) pad(n int) string { return s.chrome.Pad(n) }
 
-// buttons renders the three window buttons. Decoration, and the only place in
-// the session where colour is not doing work - a terminal window drawn inside
-// a terminal window is a joke that stops being funny if it is subtle.
-func (s styles) buttons() string {
-	const dot = "●"
-	return s.button.Foreground(colClose).Render(dot) + s.pad(1) +
-		s.button.Foreground(colMinimise).Render(dot) + s.pad(1) +
-		s.button.Foreground(colZoom).Render(dot)
-}
+// buttons renders the three window buttons.
+func (s styles) buttons() string { return s.chrome.Buttons() }
