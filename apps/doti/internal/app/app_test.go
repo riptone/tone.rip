@@ -142,10 +142,16 @@ func TestInstallRunsEveryPhaseInOrder(t *testing.T) {
 	}
 }
 
-// The question this refactor exists to answer: `doti install` and the menu's
-// Install must be the same thing, not two things that agree. They call the
-// same method with the same reporter, so the event streams are identical -
-// and this is the test that keeps it that way.
+// The question this refactor exists to answer: `doti install`, `doti install
+// --tui` and the window's Install must be one thing, not three that agree.
+//
+// They differ only in which Reporter they carry, because all three arrive at
+// Do - so the event streams have to be identical. This compares the method to
+// the dispatch table; TestAnOperationReportsTheSameThingIntoAChannel compares
+// the two Reporters. Between them there is nowhere for a second path to hide.
+//
+// It used to call Install twice and compare, which asserted that Go is
+// deterministic.
 func TestTheMenuPathAndTheCommandPathReportIdentically(t *testing.T) {
 	direct, _, directRec := fixture(t, "brew", "jq", "ghostty", "zsh")
 	viaMenu, _, menuRec := fixture(t, "brew", "jq", "ghostty", "zsh")
@@ -153,8 +159,8 @@ func TestTheMenuPathAndTheCommandPathReportIdentically(t *testing.T) {
 	if err := direct.Install(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	// What runMenu does once Install is chosen and confirmed.
-	if err := viaMenu.Install(context.Background()); err != nil {
+	// What the window does once Install is chosen and confirmed.
+	if err := viaMenu.Do(context.Background(), OpInstall, nil, "v1.0.0"); err != nil {
 		t.Fatal(err)
 	}
 

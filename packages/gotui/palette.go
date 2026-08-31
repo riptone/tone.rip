@@ -1,6 +1,17 @@
-// Package gotui holds what apps/ssh-cv and apps/doti draw with: the palette,
-// and the primitives for painting a window into a terminal that is not this
-// one.
+// Package gotui is the terminal window apps/ssh-cv and apps/doti both draw.
+//
+// It owns the frame and nothing inside it. The palette, the surface, the card,
+// the geometry, the scrollbar, the footer's drop order, the colour-profile
+// policy and the request that makes the emulator itself go black all live here;
+// each program keeps only the styles for its own content - its headings, its
+// rows, its cursor. That line is what separates "the two look like one
+// application" from "the two are one application".
+//
+//	palette.go  the colours, and the surface every style derives from
+//	frame.go    the card: spec, geometry, pane, render, title bar
+//	scroll.go   the scrollbar, and the body rows it hangs off
+//	footer.go   key hints and a status competing for one row
+//	render.go   which colours are allowed, and asking the terminal to go black
 //
 // It exists because both programs draw the same card - three buttons, a dim
 // name, a rule, a body, a line of key hints - and the rules that make it
@@ -28,6 +39,8 @@
 package gotui
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -83,6 +96,19 @@ func (s Surface) Pad(n int) string {
 		return ""
 	}
 	return s.Base.Render(strings.Repeat(" ", n))
+}
+
+// Fill pads a rendered row out to width with black.
+//
+// The one rule for anything that feeds a bubbles/viewport: the viewport pads
+// short lines itself, with plain spaces that carry no background, which shows
+// as a ragged hole down the right of every short line. Padding first means it
+// never has to.
+func (s Surface) Fill(row string, width int) string {
+	if pad := width - lipgloss.Width(row); pad > 0 {
+		return row + s.Pad(pad)
+	}
+	return row
 }
 
 // Buttons renders the three window buttons.
@@ -157,3 +183,57 @@ func Truncate(text string, limit int) string {
 	}
 	return strings.TrimRight(string(runes), " ") + "…"
 }
+
+// Raw SGR sequences for the one place a program writes escape codes by hand
+// instead of rendering a style: a reporter that interleaves lines with cursor
+// control, where a lipgloss style would end the background mid-line.
+//
+// Sourced from the palette above rather than written out, because they were
+// written out - apps/doti's plain reporter carried "\x1b[38;2;255;92;0m" and
+// two more like it, which are these values spelled differently and free to
+// drift from them.
+const (
+	// SGRReset ends every sequence below.
+	SGRReset = "\x1b[0m"
+	// SGRBold is the phase headings.
+	SGRBold = "\x1b[1m"
+)
+
+// FG is the raw SGR foreground sequence for one palette colour.
+//
+// Truecolor, like the styles: a terminal with fewer colours clamps it to the
+// nearest it has, which is the same thing termenv's quantiser would do and one
+// fewer thing to keep in step. An unparseable colour returns the empty string,
+// so a typo is colourless rather than a stray escape in the middle of a line.
+func FG(c lipgloss.Color) string {
+	r, g, b, ok := rgb(string(c))
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("\x1b[38;2;%d;%d;%dm", r, g, b)
+}
+
+// rgb parses the "#rrggbb" the palette is written in.
+func rgb(hex string) (r, g, b int, ok bool) {
+	if len(hex) != 7 || hex[0] != '#' {
+		return 0, 0, 0, false
+	}
+	var v [3]int
+	for i := range v {
+		n, err := strconv.ParseUint(hex[1+i*2:3+i*2], 16, 8)
+		if err != nil {
+			return 0, 0, 0, false
+		}
+		v[i] = int(n)
+	}
+	return v[0], v[1], v[2], true
+}
+
+// SpinnerFrames is what a slow step animates with, in the window and in the
+// plain reporter both.
+//
+// Braille: one cell wide in every font that has them, so the line does not
+// change width as it turns. Shared because the two renderings of the same run
+// spinning differently is the kind of detail that makes two programs look like
+// three.
+var SpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}

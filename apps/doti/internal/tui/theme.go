@@ -3,65 +3,24 @@ package tui
 import (
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/riptone/tone.rip/apps/doti/internal/app"
 	"github.com/riptone/tone.rip/packages/gotui"
 )
 
-// The palette.
+// The styles for this program's *content* - menu rows, checkboxes, a run's log.
 //
-// The values and the primitives that depend on them live in packages/gotui,
-// shared with apps/ssh-cv, which draws the same card. They started duplicated
-// here on purpose - an abstraction cannot be factored correctly out of one
-// example - and moved once this UI existed to factor them against.
-//
-// The rules they obey, and why:
-//
-//   - Everything is painted, and the black is #000000. A near-black reads as
-//     grey next to a terminal that is actually black.
-//   - Nothing resolves against the reader's terminal. Fixed hex, never
-//     AdaptiveColor, so the same screen looks the same for everybody.
-//   - Every style carries the background. An inner style's reset ends the
-//     background an outer one started, so a nested foreground punches a hole
-//     in the black for the rest of that line. Every gap goes through pad.
-//   - The hex survives 256-colour quantisation. Greys below #303030 collapse
-//     onto one index and tinted darks can land on a cube colour - the comment
-//     numbers are where each value actually lands.
-var (
-	colBlack = gotui.Black
-
-	colText  = gotui.Text  // the row under the cursor
-	colMuted = gotui.Muted // rows that are not
-	colFaint = gotui.Faint // key hints, asides, status
-	colRule  = gotui.Rule  // the border and the rules
-
-	// The cursor, and the only place the site's accent appears.
-	colAccent = gotui.Accent
-
-	// A selected checkbox: the same green as the zoom button, under its own
-	// name because "chosen" and "a window control" are different jobs that
-	// happen to share a hue. Green rather than the accent so "chosen" and
-	// "where I am" never have to be told apart by position.
-	colOn = gotui.Zoom
-	// Something already installed or already linked - present, but not a
-	// thing this run will do.
-	colDone = gotui.Faint
-
-	colClose    = gotui.Close
-	colMinimise = gotui.Minimise
-	colZoom     = gotui.Zoom
-)
+// The frame around them and the palette they draw from are gotui's, shared with
+// apps/ssh-cv. What is worth repeating here is the one rule the body has to
+// obey: every style carries the background, because an inner style's reset ends
+// the background an outer one started - so a nested foreground punches a hole
+// in the black for the rest of that line. Every gap goes through pad.
 
 // styles is the whole vocabulary. Nothing builds a style inline.
 type styles struct {
-	// chrome is the shared surface: the black base and the primitives that
-	// must not be reimplemented (pad, buttons, ends, centre).
-	chrome gotui.Surface
-
-	card    lipgloss.Style
-	surface lipgloss.Style
-	button  lipgloss.Style
-	winName lipgloss.Style
-	rule    lipgloss.Style
-	footer  lipgloss.Style
+	// chrome is the frame: the black surface, the card, the rule, the
+	// scrollbar, the footer, and the primitives that must not be
+	// reimplemented (pad, buttons, ends, centre).
+	chrome gotui.Chrome
 
 	group  lipgloss.Style
 	cursor lipgloss.Style
@@ -69,47 +28,71 @@ type styles struct {
 	rowOff lipgloss.Style
 	rowKey lipgloss.Style
 
+	// check is a ticked box: the same green as the zoom button, under its own
+	// name because "chosen" and "a window control" are different jobs that
+	// happen to share a hue. Green rather than the accent so "chosen" and
+	// "where I am" never have to be told apart by position.
 	check lipgloss.Style
+	// done is something the machine already has - present, but not a thing
+	// this run will do.
 	done  lipgloss.Style
 	body  lipgloss.Style
 	faint lipgloss.Style
+
+	// The report marks, one style per Mark, so a line in the window and the
+	// same line on stdout carry the same colour.
+	marks map[app.Mark]lipgloss.Style
+	// phase is a run's section headings: "packages", "configs", "secrets".
+	phase lipgloss.Style
 }
 
 func newStyles(r *lipgloss.Renderer) styles {
 	if r == nil {
 		r = lipgloss.DefaultRenderer()
 	}
-	chrome := gotui.NewSurface(r)
+	chrome := gotui.NewChrome(r, spec)
 	base := chrome.Base
 
 	return styles{
 		chrome: chrome,
-		card: base.
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colRule).
-			BorderBackground(colBlack).
-			Padding(0, cardPadX),
-		surface: base,
-		button:  base,
-		winName: base.Foreground(colFaint),
-		rule:    base.Foreground(colRule),
-		footer:  base.Foreground(colFaint),
 
-		group:  base.Foreground(colText).Bold(true),
-		cursor: base.Foreground(colAccent).Bold(true),
-		rowOn:  base.Foreground(colText).Bold(true),
-		rowOff: base.Foreground(colMuted),
-		rowKey: base.Foreground(colFaint),
+		group:  base.Foreground(gotui.Text).Bold(true),
+		cursor: base.Foreground(gotui.Accent).Bold(true),
+		rowOn:  base.Foreground(gotui.Text).Bold(true),
+		rowOff: base.Foreground(gotui.Muted),
+		rowKey: base.Foreground(gotui.Faint),
 
-		check: base.Foreground(colOn).Bold(true),
-		done:  base.Foreground(colDone),
-		body:  base.Foreground(colText),
-		faint: base.Foreground(colFaint),
+		check: base.Foreground(gotui.Zoom).Bold(true),
+		done:  base.Foreground(gotui.Faint),
+		body:  base.Foreground(gotui.Text),
+		faint: base.Foreground(gotui.Faint),
+
+		// The same three colours the live reporter writes as raw sequences,
+		// from the same palette - so `doti install` and the window's Install
+		// do not merely agree about what happened, they agree about how it
+		// looked.
+		marks: map[app.Mark]lipgloss.Style{
+			app.MarkNone:   base.Foreground(gotui.Muted),
+			app.MarkOK:     base.Foreground(gotui.Faint),
+			app.MarkChange: base.Foreground(gotui.Zoom),
+			app.MarkSkip:   base.Foreground(gotui.Faint),
+			app.MarkWarn:   base.Foreground(gotui.Accent),
+		},
+		phase: base.Foreground(gotui.Text).Bold(true),
 	}
 }
 
 // pad is n columns of black, and the only way to write a gap.
 func (s styles) pad(n int) string { return s.chrome.Pad(n) }
 
-// buttons renders the three window buttons.
-func (s styles) buttons() string { return s.chrome.Buttons() }
+func (s styles) ends(width int, left, right string) string {
+	return s.chrome.Ends(width, left, right)
+}
+
+// mark is the style for one report mark, defaulting to plain body text.
+func (s styles) mark(m app.Mark) lipgloss.Style {
+	if style, ok := s.marks[m]; ok {
+		return style
+	}
+	return s.body
+}

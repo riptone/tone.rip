@@ -154,14 +154,14 @@ func (m *Model) resize(width, height int) {
 	m.geoMax = geometryFor(width, height)
 	m.geo = m.geoMax
 	if !m.ready {
-		m.view = viewport.New(m.geoMax.text, m.geoMax.body)
+		m.view = viewport.New(m.geoMax.Text, m.geoMax.Body)
 		m.ready = true
 	}
 	// The index sets the session's resting height, so that stepping between
 	// two short pages does not make the window twitch - it only grows for a
 	// page that genuinely needs the room.
-	index, _ := m.renderIndex(m.geoMax.text)
-	m.baseBody = min(lineCount(index), m.geoMax.body)
+	index, _ := m.renderIndex(m.geoMax.Text)
+	m.baseBody = min(lineCount(index), m.geoMax.Body)
 	m.refresh()
 }
 
@@ -174,14 +174,14 @@ func (m *Model) refresh() {
 
 	body, cursorLine := "", -1
 	if m.reading() {
-		body = m.renderSection(m.items[m.open], m.geoMax.text)
+		body = m.renderSection(m.items[m.open], m.geoMax.Text)
 	} else {
-		body, cursorLine = m.renderIndex(m.geoMax.text)
+		body, cursorLine = m.renderIndex(m.geoMax.Text)
 	}
 
-	m.geo = m.geoMax.fit(max(lineCount(body), m.baseBody))
-	m.view.Width = m.geo.text
-	m.view.Height = m.geo.body
+	m.geo = fit(m.geoMax, max(lineCount(body), m.baseBody))
+	m.view.Width = m.geo.Text
+	m.view.Height = m.geo.Body
 	m.view.SetContent(body)
 	// Re-clamping the offset is the whole fix for a real bug: scroll down in a
 	// short terminal, then make it taller, and the viewport keeps the offset
@@ -382,11 +382,11 @@ func (m Model) View() string {
 		m.view.YOffset, m.view.TotalLineCount())
 
 	return clamp(m.styles.render(m.geo, pane{
-		name:   m.windowName(),
-		rows:   rows,
-		hints:  m.hints(),
-		status: m.status(),
-	}), m.geo.termWidth, m.geo.termHeight)
+		Name:   m.windowName(),
+		Rows:   rows,
+		Hints:  m.hints(),
+		Status: m.status(),
+	}), m.geo.TermWidth, m.geo.TermHeight)
 }
 
 // windowName is the title-bar text: whose CV, and which language it is being
@@ -405,20 +405,20 @@ func (m Model) hints() []hint {
 	if m.reading() {
 		hints := make([]hint, 0, 5)
 		if m.scrollable() {
-			hints = append(hints, hint{"↑/↓ " + l.scroll, 0})
+			hints = append(hints, hint{Text: "↑/↓ " + l.scroll, Keep: 0})
 		}
 		return append(hints,
-			hint{"←/→ " + l.section, 3},
-			hint{"esc " + l.back, 2},
-			hint{"q " + l.quit, 1},
-			hint{"l " + l.language, 5},
+			hint{Text: "←/→ " + l.section, Keep: 3},
+			hint{Text: "esc " + l.back, Keep: 2},
+			hint{Text: "q " + l.quit, Keep: 1},
+			hint{Text: "l " + l.language, Keep: 5},
 		)
 	}
 	return []hint{
-		{"↑/↓ " + l.move, 0},
-		{"enter " + l.open, 2},
-		{"q " + l.quit, 1},
-		{"l " + l.language, 5},
+		{Text: "↑/↓ " + l.move, Keep: 0},
+		{Text: "enter " + l.open, Keep: 2},
+		{Text: "q " + l.quit, Keep: 1},
+		{Text: "l " + l.language, Keep: 5},
 	}
 }
 

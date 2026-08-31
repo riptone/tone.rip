@@ -201,8 +201,8 @@ one server and every session gets the same CV.
 main.go                       wish server, flags, session wiring
 internal/cv/                  the CV, generated from packages/content and embedded
 internal/authz/               fingerprint → label and scopes, via apps/api
-internal/tui/theme.go         the palette, every style in it, and why the hex is what it is
-internal/tui/window.go        geometry, the card, the scrollbar, the footer
+internal/tui/theme.go         the styles for this program's content
+internal/tui/window.go        how big the card gets - the frame itself is packages/gotui
 internal/tui/doc.go           the typographic vocabulary each page composes
 internal/tui/index.go         the section list
 internal/tui/sections.go      one page per section

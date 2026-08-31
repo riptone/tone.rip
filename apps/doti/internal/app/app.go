@@ -10,6 +10,7 @@ import (
 
 	"github.com/riptone/tone.rip/apps/doti/internal/manifest"
 	"github.com/riptone/tone.rip/apps/doti/internal/pkgs"
+	"github.com/riptone/tone.rip/apps/doti/internal/secrets"
 	"github.com/riptone/tone.rip/apps/doti/internal/stow"
 )
 
@@ -33,6 +34,13 @@ type App struct {
 	Only string
 	// Tools narrows package installation to a comma-separated subset.
 	Tools string
+	// Include narrows a run to the components the selector ticked, by the
+	// labels MenuItems produced. Empty means everything, which is what every
+	// command-line invocation wants.
+	//
+	// It exists because the window's checkboxes did nothing: the menu returned
+	// what had been ticked and the handler that ran the operation never asked.
+	Include []string
 	// Interactive is true when a person is watching and can answer a prompt.
 	//
 	// Set from the same check that picks the Reporter. It gates the vault
@@ -44,6 +52,13 @@ type App struct {
 	FontBaseURL string
 	Report      Reporter
 	Runner      pkgs.Runner
+	// Vault runs the `bw` CLI. Nil is the real binary with this process's
+	// terminal, which is right for a command and wrong inside a window: the
+	// alt screen has taken the terminal `bw` needs for its own password
+	// prompt, so internal/tui supplies one that borrows it back.
+	//
+	// It is also what makes the secrets phase reachable from a test at all.
+	Vault secrets.Runner
 
 	// manifest is loaded once per invocation, on first use.
 	manifest *manifest.Manifest
@@ -131,6 +146,14 @@ func (a *App) Expand(path string) string {
 	return filepath.Join(a.Home, filepath.FromSlash(strings.TrimPrefix(path, "~/")))
 }
 
+// wants reports whether a named component is part of this run.
+//
+// An empty Include is "everything", which is what every command-line
+// invocation wants and what the window means before anything is unticked.
+func (a *App) wants(label string) bool {
+	return len(a.Include) == 0 || slices.Contains(a.Include, label)
+}
+
 // Packages is the manifest's stow packages for this platform, in manifest
 // order - which is load-bearing: the `stow` package carries
 // ~/.stow-global-ignore and is listed first so it is in place before anything
@@ -142,9 +165,15 @@ func (a *App) Packages() ([]manifest.StowPackage, error) {
 	}
 	var out []manifest.StowPackage
 	for _, pkg := range m.StowPackages {
-		if len(pkg.Platforms) == 0 || slices.Contains(pkg.Platforms, a.Platform) {
-			out = append(out, pkg)
+		if len(pkg.Platforms) > 0 && !slices.Contains(pkg.Platforms, a.Platform) {
+			continue
 		}
+		// The selector's Configs group is these names, so this is where a
+		// unticked box stops being decorative.
+		if !a.wants(pkg.Name) {
+			continue
+		}
+		out = append(out, pkg)
 	}
 	if a.Only == "" {
 		return out, nil

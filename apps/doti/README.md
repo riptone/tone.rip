@@ -57,7 +57,7 @@ manifest is parsed in-process.
 ## Commands
 
 ```console
-$ doti                  # interactive menu
+$ doti                  # the window
 $ doti install          # clone if needed, then packages, configs, secrets
 $ doti adopt            # scan first, then act only on the gaps
 $ doti check --strict   # read-only; non-zero exit when something is missing
@@ -71,6 +71,22 @@ $ doti packages         # print the generated package lists
 $ doti validate         # parse and check manifest.jsonc
 ```
 
+**The window is what a command draws** when somebody is watching, because it is
+strictly more informative than lines: the log scrolls, the spinner says a slow
+step is not a hang, and the footer says how it ended. A pipe, a file and CI get
+lines instead, decided from the streams rather than asked for - an alt screen in
+a log is thousands of cursor movements and no output.
+
+`--term` is the escape hatch, for output that has to land in the scrollback as
+it happens. It replaced `--tui`, which had this the other way round for one
+reason: the window could not own the vault's password prompt. It can now.
+
+A command that draws a window **replays its run to stdout on the way out**, so
+the log survives the alt screen being discarded - `doti install --term` and
+`doti install` leave the same thing behind. Through the same `PlainReporter`
+rather than a second renderer that agrees with it. Only for a command: quitting
+a menu you were browsing does not fill the terminal.
+
 `-n` is the dry run on everything that writes - including `bw`'s own state,
 which it did not used to be: `bw config server` writes a data file that
 outlives the run, so a dry run against a fresh `$HOME` left the CLI pointed at
@@ -79,10 +95,13 @@ a deployment it had only been asked about. `--repo DIR` overrides
 override where a clone comes from. `--verbose` streams subprocess output
 instead of capturing it.
 
-**`doti install` and the menu's Install are the same thing**, not two things
-that agree. Both call `app.Install` with the same Reporter, so there is no
-second path to keep in step - and `TestTheMenuPathAndTheCommandPathReportIdentically`
-compares the two event streams to keep it that way.
+**`doti install`, `doti install --term` and the window's Install are one
+thing**, not three that agree. All of them reach `App.Do`, which is the single
+place an operation's name becomes a call; the only difference is which Reporter
+they carry. There used to be two switches - one over the command name, one over
+what the window had chosen - and they *did* agree, which is not the same thing:
+only one of the two had anywhere to put the components the selector had ticked,
+so ticking a box quietly did nothing.
 
 ## The parts worth knowing
 
@@ -142,6 +161,24 @@ password is typed into `bw`, and is never in doti's argv, memory or errors. A
 failed unlock deliberately drops the captured stdout from its error, because
 on that path stdout *is* the session key.
 
+**Inside the window it borrows the terminal back.** The alt screen has the
+terminal `bw` needs for its own prompt, so the secrets phase used to defer there
+with a line saying to run it from a shell - honest, and still a dead end. Now
+the operation sends a request and blocks, the model answers it with `tea.Exec`
+(which suspends the program and restores the terminal to the state `bw`
+expects), and the reply comes back down the same channel.
+
+The detail that rules out `tea.ExecProcess`: it points all three streams at the
+terminal, and `bw unlock --raw` writes its prompt to **stderr** and the session
+key to **stdout**. A custom `tea.ExecCommand` hands over stdin and stderr and
+keeps stdout captured, or the key is printed to the screen and lost. Every wait
+is released by both the window closing and the run being cancelled, because this
+blocks a goroutine that is holding up an install.
+
+`App.Vault` is the seam that made it possible, and it made the whole secrets
+phase reachable from a test at the same time - it used to build its own runner,
+so asserting any of it meant a real vault and a real password.
+
 Non-interactively - a pipe, CI, `doti install` from a script - it stays an
 actionable error instead, because a script that stops to ask for a password
 is a script that hangs.
@@ -172,6 +209,15 @@ the old value with nothing saying so. A missing field lists the item's field
 *names* and never their values, and every fetched value is registered with a
 scrubber so an error path cannot leak one.
 
+**`internal/health`** also verifies the links whose targets are *outside*
+`$HOME` - the Windows Terminal settings and the PowerShell profile. The
+manifest's `health.links` cannot name those, because their targets are a
+`%LOCALAPPDATA%` expansion that moves with the machine rather than a path
+written down, so they were installed and then never checked: `doti check`
+passed on a machine whose terminal settings had been replaced. `Scan` supplies
+them as `health.Link`s, and they go through the same `checkLink` as everything
+else - missing, a copy rather than a link, broken, or pointing somewhere else.
+
 **`internal/health`** is the read-only half, and separate on purpose: `doti
 check` has to be safe from a login shell, and the way to guarantee that is for
 it to contain no writing code. It resolves links rather than reading them, so
@@ -187,10 +233,10 @@ where the path is used. A scanner cannot see that invariant, and neither can
 the next person to touch the loop.
 
 **`internal/app`** is what the commands do, and none of it prints - it
-reports. `cmd/doti` is flags and dispatch only (287 lines, down from 773),
-which is what makes the whole surface reachable from a test: a fake Runner
-and a Recorder let `install` be asserted without a package manager, a vault,
-a terminal or a `$HOME`.
+reports. `cmd/doti` is flags, a dispatch table and the window's entry point -
+no file over 300 lines, down from one of 773 - which is what makes the whole
+surface reachable from a test: a fake Runner and a Recorder let `install` be
+asserted without a package manager, a vault, a terminal or a `$HOME`.
 
 The rendering is chosen once, from whether anything is watching. A terminal
 gets colour and a spinner with an elapsed counter; a pipe, a file or CI gets
@@ -200,15 +246,55 @@ reasons: twenty lines of brew pour progress under every step buries the six
 that say what doti did, and captured output goes into the error, where
 streamed output has already scrolled past by the time one surfaces.
 
-**`internal/tui`** is Bubble Tea, sharing its window with `apps/ssh-cv`
-through `packages/gotui`.
+**`internal/tui`** is Bubble Tea. It shares its whole frame with
+`apps/ssh-cv` through `packages/gotui` - the palette, the card, the geometry,
+the scrollbar, the footer's drop order, the colour-profile policy and the
+keymap - and keeps only the styles for its own content. Its own files are one
+screen each: `screen_menu.go`, `screen_select.go`, `screen_run.go`.
+
+**Operations run inside the window.** Choosing Install used to quit the
+program, hand an Action back to `main`, and let `main` print onto the terminal
+the window had just given up - so picking something from a TUI meant watching
+the TUI disappear. Now the same `app.Install` runs on a goroutine reporting
+into an `app.StreamReporter`, whose channel the run screen reads as Bubble Tea
+messages: the log scrolls, the spinner sits on whatever is slow, `ctrl+c`
+cancels the context, and the footer says `done` or `failed` when it is over.
+`enter` goes back to the menu.
+
+Nothing about the operations changed to make that work, which is what the
+Reporter seam was for. `internal/app` imports no UI at all - it used to return
+the window's own item type, which had the domain depending on the thing that
+draws it and made a Reporter that sends Bubble Tea messages impossible to write
+without an import cycle.
+
+Three details that are not obvious:
+
+- **The screen settles only when the work *and* its output are both finished.**
+  They arrive as two messages from two command goroutines with no ordering
+  between them, and settling on the operation's return alone dropped the
+  closing lines of every run.
+- **The tail stops chasing you.** Scrolling up turns following off, and
+  returning to the bottom turns it back on. Yanking a reader back to the bottom
+  is the worst thing a log view can do.
+- **Rows are wrapped once, not once per line.** Folding one reported line used
+  to re-wrap the whole log, which is quadratic in a run's length and threw away
+  an identical answer every time. At 400 lines, folding one line costs 112µs
+  where a full re-wrap costs 2.0ms; a resize is the one thing that still does
+  the expensive version, because it is the one thing that invalidates it.
+
+**The window checks for a newer release** when it opens, in the background, on
+a three-second deadline, and offers it in the footer - `u update to v0.2.0` -
+only if there is one. A failure is silence: nothing downstream depends on the
+answer, and a menu that shouts about DNS is worse than one that never mentions
+updates. A finished self-update offers `r restart`, which `execve`s the
+replacement in place rather than spawning a second process behind this one.
 
 ## Checks
 
 ```console
 $ go test ./...          # or: bun run test
 $ bun run check-types    # gofmt -l + go vet
-$ go run ./cmd/doti menu # look at it
+$ go run ./cmd/doti      # look at it
 $ go run ./cmd/doti preview --frames /tmp/f   # dump the screens as ANSI
 ```
 
@@ -254,9 +340,6 @@ check it. Verified both ways in both scripts.
 
 ## Not done yet
 
-- **`doti check` does not verify the system links.** The Windows Terminal and
-  PowerShell profile links are installed but not in `health.links`, so drift
-  in them is invisible to `check`.
 - **The Windows font install stops one step short.** The faces are extracted
   into the per-user font directory, but Windows only lists *registered* fonts
   — so it reports what is left to do rather than doing it.

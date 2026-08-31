@@ -1,10 +1,34 @@
+// Package tui is doti's window: the menu, the component selector, and the
+// screen an operation runs inside.
+//
+// It depends on internal/app and internal/app does not depend on it. That
+// direction is what makes running an operation *in* the window possible at all:
+// the app reports into a channel and this package turns the channel into a
+// screen, where before the window quit and handed an Action back to main to
+// print with.
+//
+//	model.go         state, routing, and which key goes where
+//	screen_menu.go   the list of operations
+//	screen_select.go the per-component toggles
+//	screen_run.go    an operation's live output, as a screen
+//	run.go           the job behind it, and the model's side of one
+//	update.go        the release check and what the footer does with it
+//	theme.go         the content styles
+//	window.go        how big the card gets - the frame itself is gotui's
+//	keys.go          the bindings, navigation shared with apps/ssh-cv
 package tui
 
 import (
-	"fmt"
+	"context"
 
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/riptone/tone.rip/apps/doti/internal/app"
+	"github.com/riptone/tone.rip/apps/doti/internal/secrets"
+	"github.com/riptone/tone.rip/packages/gotui"
 )
 
 // Screen is which view is on top.
@@ -15,105 +39,130 @@ const (
 	ScreenMenu Screen = iota
 	// ScreenSelect is the per-component toggle list reached from Install.
 	ScreenSelect
+	// ScreenRun is an operation's live output.
+	ScreenRun
 )
 
-// Action is what the user chose, read by main once the program exits.
-type Action string
+// RunFunc performs one operation, reporting progress into r.
+//
+// Called on a goroutine Bubble Tea owns, so it must not touch the model:
+// reporting is the only channel back, which is exactly the constraint the
+// Reporter interface already imposed on every command. main wires this to
+// internal/app; a test wires a fake and drives the whole screen without a
+// machine to install onto.
+type RunFunc func(ctx context.Context, action Action, chosen []string, opts RunOptions) error
 
-const (
-	ActionNone    Action = ""
-	ActionInstall Action = "install"
-	ActionUnlink  Action = "unlink"
-	ActionAdopt   Action = "adopt"
-	ActionPreview Action = "preview"
-	ActionCheck   Action = "check"
-	ActionSync    Action = "sync"
-	ActionUpdate  Action = "update"
-)
-
-type menuEntry struct {
-	action Action
-	label  string
-	desc   string
+// RunOptions is what the window hands an operation: where to report, and the
+// `bw` runner that borrows the terminal back when the vault needs a person.
+//
+// A struct rather than more parameters, because a fifth positional argument is
+// where signatures stop being readable - and because the vault runner is
+// optional in a way the reporter is not.
+type RunOptions struct {
+	Report app.Reporter
+	// Vault runs the `bw` CLI. Nil means the caller does not want the window
+	// involved, which is the shape a test uses.
+	Vault secrets.Runner
 }
 
-// The same operations the shell installer's menu offered, in the same order.
-// Changing what the tool does should not silently change what people's hands
-// already know.
-var menu = []menuEntry{
-	{ActionInstall, "Install", "packages and configs"},
-	{ActionUnlink, "Uninstall", "remove symlinks (packages stay)"},
-	{ActionAdopt, "Adopt", "install only what is missing"},
-	{ActionPreview, "Preview", "show what would change"},
-	{ActionCheck, "Health check", "verify symlinks and tools"},
-	{ActionSync, "Sync", "git pull, then re-link"},
-	{ActionUpdate, "Update", "upgrade installed packages"},
-}
-
-// Item is one toggleable component on the select screen.
-type Item struct {
-	// Group is the heading it sits under: "Packages", "Configs", "Secrets".
-	Group string
-	Label string
-	// Status is the machine's current state for this item - "installed",
-	// "linked", "not linked". Shown dim on the right.
-	Status string
-	// Done means the machine already has it. It stays selectable, because
-	// re-linking is how drift gets repaired.
-	Done bool
-	// Selected is the checkbox. Defaults on.
-	Selected bool
-}
+// CheckFunc asks whether there is a release newer than the one running.
+type CheckFunc func(ctx context.Context) (string, error)
 
 // Config builds a model.
 type Config struct {
-	Items []Item
+	// Components is what the selector offers.
+	Components []app.Component
 	// Version is shown in the title bar, like ssh-cv shows the language.
-	Version  string
-	Width    int
-	Height   int
+	Version string
+	// Width and Height seed the layout before the first resize arrives.
+	Width  int
+	Height int
+	// Renderer decides what colour is allowed. Nil means lipgloss's default,
+	// which is right only in a test - see gotui.LocalRenderer.
 	Renderer *lipgloss.Renderer
+
+	Run   RunFunc
+	Check CheckFunc
+
+	// Start is an operation to run immediately instead of showing the menu.
+	//
+	// This is `doti install` in a terminal: the window opens on the run
+	// screen, and finishing leaves rather than going back to a menu the
+	// reader never asked for.
+	Start Action
+	// StartChosen narrows Start the way the selector would have.
+	StartChosen []string
 }
 
 // Model is the whole UI.
 type Model struct {
-	styles  styles
-	version string
+	styles styles
+	keys   keymap
+	cfg    Config
 
 	screen Screen
+	width  int
+	height int
+
 	menuAt int
+	items  []app.Component
+	itemAt int
+	rows   []row
 
-	items   []Item
-	itemAt  int
-	rows    []row
-	width   int
-	height  int
-	action  Action
-	confirm bool
-	quit    bool
-}
+	// update is the newest release once the check has answered, and "" until
+	// then or if it never does.
+	update string
 
-// row is one rendered line of the select screen: either a group heading or
-// an item. Flattened once so the cursor moves over items only.
-type row struct {
-	heading string
-	item    int
+	run runState
+
+	// launched is true when the window was opened on one operation rather
+	// than on the menu. Finishing that operation leaves.
+	launched bool
+
+	// startCmd is the launched operation's command, held from New until Init
+	// is asked for it.
+	startCmd tea.Cmd
+
+	quit bool
+	// restart asks main to exec the replacement binary, which is the only
+	// useful thing to do after a self-update.
+	restart bool
 }
 
 // New builds the model.
 func New(cfg Config) Model {
 	m := Model{
-		styles:  newStyles(cfg.Renderer),
-		version: cfg.Version,
-		items:   append([]Item(nil), cfg.Items...),
-		width:   cfg.Width,
-		height:  cfg.Height,
+		styles: newStyles(cfg.Renderer),
+		keys:   newKeymap(),
+		cfg:    cfg,
+		items:  append([]app.Component(nil), cfg.Components...),
+		width:  cfg.Width,
+		height: cfg.Height,
 	}
 	m.rows = flatten(m.items)
+	m.run.spin = newSpinner(m.styles)
+
+	// The launch happens here rather than in Init, which was a bug worth
+	// naming: Init returns commands, not a model, so a launch performed there
+	// built the run screen and threw it away. Bubble Tea went on rendering the
+	// menu, and the events arrived at a model whose job was nil - so the
+	// stream stopped after the first line.
+	if cfg.Start != "" {
+		started, cmd := m.begin(cfg.Start, cfg.StartChosen)
+		started.startCmd = cmd
+		return started
+	}
 	return m
 }
 
-func flatten(items []Item) []row {
+// row is one rendered line of the select screen: either a group heading or an
+// item. Flattened once so the cursor moves over items only.
+type row struct {
+	heading string
+	item    int
+}
+
+func flatten(items []app.Component) []row {
 	var rows []row
 	group := ""
 	for i, item := range items {
@@ -126,10 +175,7 @@ func flatten(items []Item) []row {
 	return rows
 }
 
-// Action is what the user chose; empty when they quit.
-func (m Model) Action() Action { return m.action }
-
-// Chosen is the labels left ticked, valid once Action is Install.
+// Chosen is the labels left ticked.
 func (m Model) Chosen() []string {
 	var out []string
 	for _, item := range m.items {
@@ -140,189 +186,145 @@ func (m Model) Chosen() []string {
 	return out
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+// Restart reports whether the reader asked to relaunch after a self-update.
+func (m Model) Restart() bool { return m.restart }
+
+// Launched reports whether the window opened on one operation rather than on
+// the menu - which is `doti install` in a terminal, and the case where the run's
+// output belongs in the scrollback after the alt screen is gone.
+func (m Model) Launched() bool { return m.launched }
+
+// Transcript is the last run's events, in order.
+//
+// For replaying into a plain reporter once the window has closed: the alt screen
+// is discarded on exit, and an install that vanishes the moment it finishes is
+// one nobody can scroll back through. Records rather than rendered rows, so what
+// lands in the scrollback is what the plain path would have printed rather than
+// a screenshot of a card.
+func (m Model) Transcript() []app.Record {
+	out := make([]app.Record, 0, len(m.run.lines))
+	for _, line := range m.run.lines {
+		out = append(out, app.Record{Kind: line.kind, Mark: line.mark, Text: line.text})
+	}
+	return out
+}
+
+// Err is the failure of the last operation, if it failed.
+//
+// Read by main so the process exit code says what the screen said. A window
+// that showed a red line and exited 0 lies to the shell it was started from.
+func (m Model) Err() error { return m.run.err }
+
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(m.startCmd, checkUpdate(m.cfg.Check))
+}
 
 // Update handles one message.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		return m.resize(), nil
+	case updateFoundMsg:
+		m.update = string(msg)
 		return m, nil
+	case eventMsg:
+		return m.event(app.Record(msg))
+	case borrowMsg:
+		return m.borrow(msg.req)
+	case borrowDoneMsg:
+		return m, waitBorrow(m.run.job)
+	case streamDoneMsg:
+		m.run.drained = true
+		return m.afterRun(), nil
+	case finishedMsg:
+		m.run.finished = true
+		if msg.err != nil {
+			m.run.err = msg.err
+			// The footer said "failed" and nothing said why. An operation that
+			// returns an error has usually not reported it as a line - the
+			// error *is* how it reports - so it goes into the log, where the
+			// reader is already looking.
+			m = m.appendLine(app.MarkWarn, msg.err.Error())
+		}
+		return m.afterRun(), nil
+	case spinner.TickMsg:
+		// Only while something is actually running: a spinner ticking behind a
+		// settled screen is a redraw of the whole card, eight times a second,
+		// for nothing.
+		if !m.spinning() {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.run.spin, cmd = m.run.spin.Update(msg)
+		// And the new frame has to reach the viewport, or the spinner advances
+		// in a model nothing renders and the line on screen sits still.
+		if m.run.working != "" {
+			m = m.flow()
+		}
+		return m, cmd
 	case tea.KeyMsg:
 		return m.key(msg)
 	}
 	return m, nil
 }
 
+// rewrap rebuilds every rendered row at the current width.
+//
+
 func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c", "q":
+	// Quit is not offered while an operation is running: stopping half way
+	// through a link pass is a decision, and ctrl+c is how it is made.
+	if key.Matches(msg, m.keys.Quit) && !m.spinning() {
 		m.quit = true
+		m.run.job.stop()
 		return m, tea.Quit
 	}
 
-	if m.screen == ScreenMenu {
+	switch m.screen {
+	case ScreenMenu:
 		return m.menuKey(msg)
-	}
-	return m.selectKey(msg)
-}
-
-func (m Model) menuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "up", "k":
-		m.menuAt = max(m.menuAt-1, 0)
-	case "down", "j":
-		m.menuAt = min(m.menuAt+1, len(menu)-1)
-	case "enter", "right", "l":
-		chosen := menu[m.menuAt].action
-		// Install is the only operation that asks what to include; the rest
-		// act on everything or on nothing, so a selector would be a keypress
-		// that never changes the outcome.
-		if chosen == ActionInstall || chosen == ActionAdopt {
-			m.action = chosen
-			m.screen = ScreenSelect
-			return m, nil
-		}
-		m.action = chosen
-		return m, tea.Quit
-	}
-	if n := digit(msg.String()); n >= 1 && n <= len(menu) {
-		m.menuAt = n - 1
-	}
-	return m, nil
-}
-
-func (m Model) selectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "left", "h":
-		m.screen = ScreenMenu
-		m.action = ActionNone
-		return m, nil
-	case "up", "k":
-		m.itemAt = max(m.itemAt-1, 0)
-	case "down", "j":
-		m.itemAt = min(m.itemAt+1, len(m.items)-1)
-	case " ", "x":
-		if len(m.items) > 0 {
-			m.items[m.itemAt].Selected = !m.items[m.itemAt].Selected
-		}
-	case "a":
-		m.setAll(true)
-	case "n":
-		m.setAll(false)
-	case "enter":
-		m.confirm = true
-		return m, tea.Quit
-	}
-	return m, nil
-}
-
-func (m *Model) setAll(on bool) {
-	for i := range m.items {
-		m.items[i].Selected = on
+	case ScreenSelect:
+		return m.selectKey(msg)
+	default:
+		return m.runKey(msg)
 	}
 }
 
-func digit(key string) int {
-	if len(key) != 1 || key[0] < '1' || key[0] > '9' {
-		return 0
-	}
-	return int(key[0] - '0')
-}
+// event folds one reported record into the log.
+//
+
+// appendLine puts one line into the log without going through the stream.
+//
 
 // View renders the current screen.
 func (m Model) View() string {
 	if m.quit {
 		return ""
 	}
-	if m.screen == ScreenMenu {
-		return m.viewMenu()
+	var out string
+	switch m.screen {
+	case ScreenMenu:
+		out = m.viewMenu()
+	case ScreenSelect:
+		out = m.viewSelect()
+	default:
+		out = m.viewRun()
 	}
-	return m.viewSelect()
+	// The backstop under the arithmetic: a card one row too tall scrolls its
+	// own title away, which is the most visible way a TUI can look broken.
+	//
+	// Clamped against the size the geometry resolved rather than the raw
+	// fields. Before the first WindowSizeMsg both are zero - the geometry
+	// substitutes the terminal every terminal claims to be, and clamping to
+	// max(0,1) instead crushed the entire card into one cell for that frame.
+	g := geometryFor(m.width, m.height)
+	return gotui.Clamp(out, g.TermWidth, g.TermHeight)
 }
 
 func (m Model) name() string {
-	if m.version == "" {
+	if m.cfg.Version == "" {
 		return "doti"
 	}
-	return "doti · " + m.version
+	return "doti · " + m.cfg.Version
 }
-
-func (m Model) viewMenu() string {
-	// heading + blank + one row per entry.
-	g := geometryFor(m.width, m.height, len(menu)+2)
-	s := m.styles
-
-	rows := make([]string, 0, len(menu)+1)
-	rows = append(rows, s.group.Render("What would you like to do?"), s.pad(g.inner))
-	for i, entry := range menu {
-		marker, label := s.pad(2), s.rowOff.Render(entry.label)
-		if i == m.menuAt {
-			marker, label = s.cursor.Render("› ")+"", s.rowOn.Render(entry.label)
-		}
-		left := marker + s.rowKey.Render(fmt.Sprintf("%d  ", i+1)) + label
-		right := s.faint.Render(entry.desc)
-		rows = append(rows, s.ends(g.inner, left, right))
-	}
-
-	return s.render(g, pane{
-		name:   m.name(),
-		rows:   rows,
-		hints:  "↑/↓ move · enter open · q quit",
-		status: "menu",
-	})
-}
-
-func (m Model) viewSelect() string {
-	// hint line + blank + one row per group heading and item.
-	g := geometryFor(m.width, m.height, len(m.rows)+2)
-	s := m.styles
-
-	rows := make([]string, 0, len(m.rows)+1)
-	rows = append(rows,
-		s.faint.Render("space toggles · a all · n none · enter confirm"),
-		s.pad(g.inner))
-
-	for _, r := range m.rows {
-		if r.item < 0 {
-			rows = append(rows, s.group.Render(r.heading))
-			continue
-		}
-		item := m.items[r.item]
-
-		box := s.rowKey.Render("[ ]")
-		if item.Selected {
-			box = s.rowKey.Render("[") + s.check.Render("x") + s.rowKey.Render("]")
-		}
-
-		marker, label := s.pad(2), s.rowOff.Render(item.Label)
-		if r.item == m.itemAt {
-			marker, label = s.cursor.Render("› "), s.rowOn.Render(item.Label)
-		}
-
-		status := s.faint.Render(item.Status)
-		if item.Done {
-			status = s.done.Render(item.Status)
-		}
-		left := marker + box + s.pad(1) + label
-		rows = append(rows, s.ends(g.inner, left, status))
-	}
-
-	selected := 0
-	for _, item := range m.items {
-		if item.Selected {
-			selected++
-		}
-	}
-
-	return s.render(g, pane{
-		name:   m.name(),
-		rows:   rows,
-		hints:  "space toggle · enter confirm · esc back",
-		status: fmt.Sprintf("%d of %d", selected, len(m.items)),
-	})
-}
-
-// Confirmed reports whether the user pressed enter on the select screen
-// rather than backing out or quitting.
-func (m Model) Confirmed() bool { return m.confirm }

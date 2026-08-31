@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
 
 	"github.com/riptone/tone.rip/apps/doti/internal/app"
@@ -35,7 +35,7 @@ var version = "dev"
 const usage = `doti - dotfiles installer
 
 usage:
-  doti                      interactive menu
+  doti                      the window: pick an operation and watch it run
   doti install              clone if needed, then packages, configs, secrets
   doti adopt                scan first, then act only on the gaps
   doti check                verify tools and symlinks; changes nothing
@@ -47,7 +47,7 @@ usage:
   doti upgrade              replace this binary with the newest release
   doti packages             print the generated package lists
   doti validate             parse and check manifest.jsonc
-  doti preview              run the menu, or --frames DIR to dump screens
+  doti preview              open the window, or --frames DIR to dump screens
   doti version
 
 flags:
@@ -55,6 +55,7 @@ flags:
   --url URL     install: clone from here (default $DOTFILES_REPO_URL)
   --only PKG    link/unlink: act on this stow package alone
   --tools LIST  install: only these missing tools (comma separated)
+  --term        print lines instead of drawing the window
   --restore     unlink: move the newest backup back afterwards
   --strict      check: exit non-zero when something is missing
   --brew        packages: Brewfile only
@@ -83,28 +84,82 @@ type options struct {
 	winget  bool
 	verbose bool
 	dryRun  bool
+	// term prints lines instead of drawing the window.
+	//
+	// The window is the default, because when somebody is watching it is
+	// strictly more informative. This is the escape hatch for when lines are
+	// the right answer: output that has to land in the scrollback as it
+	// happens, or a terminal doing something the alt screen does not survive.
+	//
+	// A pipe, a file and CI do not need it - wantsWindow works that out from
+	// the streams, the same way the reporter always has.
+	//
+	// It replaced --tui, which had this the other way round because the window
+	// could not own the vault's password prompt yet. It can.
+	term bool
+}
+
+// wantsHelp reports whether this invocation is a request for the usage text.
+//
+// Both spellings of the flag anywhere in the arguments, plus the bare word:
+// `doti help`, `doti --help`, `doti install -h`. A person reaching for any of
+// them wants the same paragraph.
+func wantsHelp(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "-h", "--help", "help":
+			return true
+		}
+	}
+	return false
+}
+
+// wantsVersion is the same for the version, which is the other thing that has
+// to answer before a repository is looked for: `doti --version` on a machine
+// with no dotfiles checkout should still say what it is.
+func wantsVersion(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "-v", "--version", "version":
+			return true
+		}
+	}
+	return false
 }
 
 func run(args []string) error {
 	// No arguments is the menu. That is the shape the shell installer had and
 	// the one people's hands know.
-	command := "menu"
-	if len(args) > 0 {
-		command = args[0]
-		args = args[1:]
-	}
-	if command == "-h" || command == "--help" || command == "help" {
+	//
+	// A leading flag is a flag, not a command: `doti --repo ~/dotfiles` used to
+	// take "--repo" as the command name, fail to match anything, and print the
+	// usage - which reads as "that flag does not exist" rather than "name a
+	// command first".
+	// Asked before anything else, because both spellings have to work and one
+	// of them is a flag: after the leading-flag rule below, `doti --help` is
+	// not a command at all, and the flag package answered it with its own
+	// usage and a non-zero exit.
+	if wantsHelp(args) {
 		fmt.Print(usage)
 		return nil
 	}
-	if command == "version" {
+	if wantsVersion(args) {
 		fmt.Println(version)
 		return nil
+	}
+
+	command := "menu"
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		command = args[0]
+		args = args[1:]
 	}
 
 	var opts options
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
+	// One usage text, so `doti --help` and a mistyped flag both print the one
+	// that names the commands rather than the one that lists only flags.
+	flags.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	flags.StringVar(&opts.repo, "repo", defaultRepo(), "dotfiles checkout")
 	flags.StringVar(&opts.url, "url", "", "clone from here")
 	flags.StringVar(&opts.only, "only", "", "act on this stow package alone")
@@ -116,6 +171,7 @@ func run(args []string) error {
 	flags.BoolVar(&opts.winget, "winget", false, "winget list only")
 	flags.BoolVar(&opts.verbose, "verbose", false, "stream subprocess output")
 	flags.BoolVar(&opts.dryRun, "n", false, "report what would change, write nothing")
+	flags.BoolVar(&opts.term, "term", false, "print lines instead of drawing the window")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -126,30 +182,41 @@ func run(args []string) error {
 	}
 
 	ctx := context.Background()
+
+	// The operations, which are one table rather than a switch: package app
+	// owns what each one does, this owns only the two names it answers to.
+	// `doti install` and the window's Install reach the same App.Do.
+	window := wantsWindow(opts, instance.Interactive)
+	if op, ok := operations[command]; ok {
+		if window {
+			return runWindow(ctx, instance, opts, op)
+		}
+		return instance.Do(ctx, op, nil, version)
+	}
+
 	switch command {
 	case "menu":
-		return runMenu(ctx, instance, opts)
-	case "install":
-		return instance.Install(ctx)
-	case "adopt":
-		return instance.Adopt(ctx)
+		return runWindow(ctx, instance, opts, "")
 	case "check":
+		// Not in the table: --strict is this command's alone, and folding it
+		// in would mean Do carrying a flag only one caller sets.
+		if window && !opts.strict {
+			return runWindow(ctx, instance, opts, app.OpCheck)
+		}
 		return instance.Check(opts.strict)
 	case "link":
 		instance.Report.Phase("configs")
 		return instance.Link()
 	case "unlink":
-		instance.Report.Phase("configs")
-		return instance.Unlink(opts.restore)
-	case "sync":
-		return instance.Sync(ctx)
-	case "update":
-		return instance.Update(ctx)
-	case "secrets":
-		instance.Report.Phase("secrets")
-		return instance.Secrets(ctx)
-	case "upgrade":
-		return instance.SelfUpdate(ctx, version)
+		// Same: --restore belongs to the command.
+		if opts.restore {
+			instance.Report.Phase("configs")
+			return instance.Unlink(true)
+		}
+		if window {
+			return runWindow(ctx, instance, opts, app.OpUnlink)
+		}
+		return instance.Do(ctx, app.OpUnlink, nil, version)
 	case "validate":
 		return instance.Validate()
 	case "packages":
@@ -221,8 +288,14 @@ func canPrompt(stdout, stdin *os.File) bool {
 // A terminal gets colour and a spinner. A pipe, a file or CI gets plain
 // lines, because cursor movement in a log is noise and a spinner is thousands
 // of wasted rows. Same events either way, so there is no second code path.
-func reporter(out *os.File) app.Reporter {
-	if !isTerminal(out) {
+func reporter(out *os.File) app.Reporter { return reporterFor(out, isTerminal(out)) }
+
+// reporterFor is the rule, with the terminal question asked rather than
+// answered - so both branches are reachable from a test. Making os.Stdout a
+// terminal from inside `go test` is not a thing; deciding what to do when it is
+// one is.
+func reporterFor(out *os.File, terminal bool) app.Reporter {
+	if !terminal {
 		return app.PlainReporter{Out: out}
 	}
 	// Honour the convention rather than inventing one: NO_COLOR is set by
@@ -244,76 +317,18 @@ func defaultRepo() string {
 	return filepath.Join(home, "dotfiles")
 }
 
-// runMenu shows the menu, then runs whatever was chosen - through exactly the
-// same App methods the direct commands use.
-func runMenu(ctx context.Context, instance *app.App, opts options) error {
-	if !instance.Cloned() {
-		// There is nothing to show a selector about yet. Offering an empty
-		// menu would be worse than doing the obvious thing.
-		return instance.Install(ctx)
-	}
-	if !instance.Interactive {
-		// Bubble Tea would take the alt screen and then wait for keys that
-		// cannot arrive. Naming the commands is the only useful thing to say.
-		return fmt.Errorf("the menu needs a terminal to drive it; " +
-			"run `doti install`, `doti check` or `doti --help` instead")
-	}
-	items, err := instance.MenuItems()
-	if err != nil {
-		return err
-	}
-
-	model := tui.New(tui.Config{Items: items, Version: version, Width: 80, Height: 24})
-	final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
-	if err != nil {
-		return fmt.Errorf("running the menu: %w", err)
-	}
-	chosen, ok := final.(tui.Model)
-	if !ok {
-		return nil
-	}
-
-	switch chosen.Action() {
-	case tui.ActionNone:
-		return nil
-	case tui.ActionInstall:
-		if !chosen.Confirmed() {
-			return nil
-		}
-		return instance.Install(ctx)
-	case tui.ActionAdopt:
-		if !chosen.Confirmed() {
-			return nil
-		}
-		return instance.Adopt(ctx)
-	case tui.ActionPreview:
-		instance.DryRun = true
-		return instance.Install(ctx)
-	case tui.ActionUnlink:
-		instance.Report.Phase("configs")
-		return instance.Unlink(false)
-	case tui.ActionCheck:
-		return instance.Check(false)
-	case tui.ActionSync:
-		return instance.Sync(ctx)
-	case tui.ActionUpdate:
-		return instance.Update(ctx)
-	}
-	return nil
-}
-
 func preview(ctx context.Context, instance *app.App, opts options) error {
 	if opts.frames == "" {
-		return runMenu(ctx, instance, opts)
+		return runWindow(ctx, instance, opts, "")
 	}
-	items, err := instance.MenuItems()
+	components, err := instance.MenuItems()
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(opts.frames, 0o755); err != nil {
 		return err
 	}
-	for i, frame := range tui.Frames(items, version, 80, 26) {
+	for i, frame := range tui.Frames(components, version, 80, 26) {
 		path := filepath.Join(opts.frames, fmt.Sprintf("%02d-%s.ansi", i+1, frame.Name))
 		if err := os.WriteFile(path, []byte(frame.Body), 0o644); err != nil {
 			return err

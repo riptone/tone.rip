@@ -172,12 +172,15 @@ if ! ${RUN_INSTALL}; then
 fi
 say "running doti install"
 
-# Piped into bash, stdin is the exhausted download rather than the terminal,
-# so anything doti wants to ask - the vault password above all - has nothing
-# to read from: that is how the first release reached `bw unlock` and had it
-# crash on a closed pipe. Hand doti the terminal when there is one. When there
-# is not (CI, a container), it sees a non-interactive stdin and defers the
-# prompt rather than hanging on it.
+# Piped into bash, stdin is the exhausted download rather than the terminal, so
+# anything doti wants to ask - the vault password above all - has nothing to
+# read from: that is how the first release reached `bw unlock` and had it crash
+# on a closed pipe. Hand doti the terminal when there is one.
+#
+# It is also what decides which of the two renderings this install gets. With a
+# terminal on both streams doti draws its window and replays the run to stdout
+# on the way out, so the log is still in the scrollback; without one (CI, a
+# container) it prints lines as it goes and never stops to ask anything.
 #
 # The open is attempted rather than tested with -r, because a session with no
 # controlling terminal has a /dev/tty that passes -r and still fails open()

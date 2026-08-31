@@ -52,7 +52,8 @@ packages/
   net                fetch with a deadline, for every reachability check
   hono-middleware    security headers, CSP nonces, api-catalog, Access JWTs
   gotui              the terminal window ssh-cv and doti both draw: the
-                     palette, and the primitives that keep it painted
+                     palette, the card, the scrollbar, the footer's drop
+                     order, and which colours a terminal is allowed
   config/            shared tooling configs
     typescript-config  shared tsconfig presets
     vitest-config      shared coverage/include preset for every suite
@@ -73,6 +74,14 @@ to write twice: a raw space is a hole in the black, `lipgloss.Place` renders
 through the *default* renderer, and a grey below `#303030` quantises onto the
 background on a 256-colour client. Those live there once, with the tests that
 hold them.
+
+The line it draws is **the frame, not what is inside it**. Geometry, the
+scrollbar, the footer's drop order, the colour-profile floor and the request
+that makes the emulator itself go black all belong to the package; each program
+keeps only the styles for its own content. What that line is worth showed up
+when it was in the wrong place: the OSC that blacks out a terminal's own
+padding lived in `ssh-cv/main.go`, so `doti` drew the same black card and let
+the reader's theme show through around it.
 
 `apps/api` exists for the same reason at the service level: one GitHub proxy
 with one cache, one Tailscale probe, one CSP-report sink. The front-ends

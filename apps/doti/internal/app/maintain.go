@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/riptone/tone.rip/apps/doti/internal/health"
@@ -25,7 +24,7 @@ func (a *App) Secrets(ctx context.Context) error {
 
 	// BW_SESSION from the environment, never from a file: a session key on
 	// disk is a vault with the lock left open.
-	client := secrets.New(secrets.ExecRunner{}, os.Getenv("BW_SESSION"))
+	client := secrets.New(a.vault(), os.Getenv("BW_SESSION"))
 
 	// Before the unlock check, because pointing the CLI at the wrong
 	// deployment fails as "Invalid master password" - an error that sends you
@@ -66,7 +65,13 @@ func (a *App) Secrets(ctx context.Context) error {
 		Client: client, RepoRoot: a.Repo, Home: a.Home,
 		Platform: a.Platform, DryRun: a.DryRun,
 	}
-	results, err := renderer.RenderAll(ctx, m.Secrets)
+	wanted := make([]manifest.Secret, 0, len(m.Secrets))
+	for _, secret := range m.Secrets {
+		if a.wants(secret.Name) {
+			wanted = append(wanted, secret)
+		}
+	}
+	results, err := renderer.RenderAll(ctx, wanted)
 	// Report what did land before returning the failure - a partial run is
 	// worth knowing about.
 	for _, result := range results {
@@ -82,6 +87,14 @@ func (a *App) Secrets(ctx context.Context) error {
 		}
 	}
 	return err
+}
+
+// vault is the `bw` runner for this run.
+func (a *App) vault() secrets.Runner {
+	if a.Vault != nil {
+		return a.Vault
+	}
+	return secrets.ExecRunner{}
 }
 
 // openVault gets the vault into a readable state.
@@ -131,9 +144,20 @@ func (a *App) Scan() (health.Report, error) {
 	if err != nil {
 		return health.Report{}, err
 	}
+	// The links whose targets live outside $HOME. They were installed and then
+	// never verified, so `doti check` passed on a machine whose Windows
+	// Terminal settings had been replaced by the installer's own.
+	links := make([]health.Link, 0, 2)
+	for _, link := range a.SystemLinks() {
+		links = append(links, health.Link{
+			Name: link.Name, Target: link.Target, Source: link.Source,
+		})
+	}
+
 	return health.Check(health.Options{
 		Manifest: m, Platform: a.Platform,
 		Repo: a.Repo, Home: a.Home, Detect: a.Runner,
+		Links: links,
 	}), nil
 }
 
@@ -312,9 +336,12 @@ func (a *App) SelfUpdate(ctx context.Context, currentVersion string) error {
 	return nil
 }
 
+// The installers, built from the one repository constant rather than spelled
+// out - these and the release API used to name it three times.
 const (
-	installerURL = "https://raw.githubusercontent.com/riptone/tone.rip/main/apps/doti/scripts/install.sh"
-	installerPS1 = "https://raw.githubusercontent.com/riptone/tone.rip/main/apps/doti/scripts/install.ps1"
+	rawBase      = "https://raw.githubusercontent.com/" + RepoSlug + "/main/apps/doti/scripts/"
+	installerURL = rawBase + "install.sh"
+	installerPS1 = rawBase + "install.ps1"
 )
 
 // shellQuote makes a string safe to embed in a single-quoted shell word.
@@ -325,6 +352,3 @@ const (
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
-
-// backupRoot is exposed for the installer's own bookkeeping.
-func (a *App) backupRoot() string { return filepath.Join(a.Home, BackupsDir) }

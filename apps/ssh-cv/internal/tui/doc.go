@@ -42,16 +42,13 @@ func (d *doc) String() string {
 
 // line writes one row of the section, padded out to the full text width.
 //
-// The padding is the point: it means the viewport never has to pad a line
-// itself, and the viewport pads with plain spaces that carry no background -
-// which would show as a ragged hole down the right of every short line. See
-// the note on the palette in theme.go.
+// The padding is the point, and the reasoning is on gotui.Surface.Fill: a
+// viewport pads short lines itself, with plain spaces that carry no background,
+// which shows as a ragged hole down the right of every short line. apps/doti's
+// run log needed the same rule, so the rule moved.
 func (d *doc) line(text string) {
 	d.blank = text == ""
-	if pad := d.width - lipgloss.Width(text); pad > 0 {
-		text += d.s.pad(pad)
-	}
-	d.sb.WriteString(text + "\n")
+	d.sb.WriteString(d.s.chrome.Fill(text, d.width) + "\n")
 }
 
 // gap separates two blocks, and does nothing at the top of a section or where

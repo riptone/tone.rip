@@ -195,3 +195,36 @@ func stripANSI(in string) string {
 	}
 	return out.String()
 }
+
+// The reason FG exists: apps/doti's plain reporter carried these three values
+// spelled as raw escape sequences, free to drift from the palette they were
+// copied from. Pinning the round trip is what makes one of them the source.
+func TestFGMatchesThePalette(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   lipgloss.Color
+		want string
+	}{
+		{"accent", Accent, "\x1b[38;2;255;92;0m"},
+		{"zoom", Zoom, "\x1b[38;2;40;200;64m"},
+		{"faint", Faint, "\x1b[38;2;138;138;138m"},
+		{"black", Black, "\x1b[38;2;0;0;0m"},
+		{"text", Text, "\x1b[38;2;255;255;255m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := FG(tc.in); got != tc.want {
+				t.Errorf("FG(%s) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// A typo should be colourless, not a stray escape sequence in the middle of a
+// reported line.
+func TestFGRefusesWhatItCannotParse(t *testing.T) {
+	for _, bad := range []lipgloss.Color{"", "#fff", "ff5c00", "#gggggg", "#ff5c000"} {
+		if got := FG(bad); got != "" {
+			t.Errorf("FG(%q) = %q, want empty", bad, got)
+		}
+	}
+}

@@ -81,6 +81,24 @@ type Options struct {
 	Repo     string
 	Home     string
 	Detect   Detector
+	// Links are symlinks to verify beyond the ones the manifest names.
+	//
+	// The manifest's health.links cannot name these: their targets are
+	// resolved from the environment rather than written down - %LOCALAPPDATA%
+	// moves with the machine - so they were installed and then never checked,
+	// which made drift in them invisible to the one command whose whole job is
+	// finding drift.
+	Links []Link
+}
+
+// Link is one symlink to verify.
+type Link struct {
+	// Name is what the report calls it. Empty means the target.
+	Name string
+	// Target is where the link should be: absolute, or `~/`-relative.
+	Target string
+	// Source is what it should reach, relative to the repository root.
+	Source string
 }
 
 // Check inspects the machine and reports what it finds.
@@ -133,6 +151,18 @@ func Check(opts Options) Report {
 			report.Findings = append(report.Findings,
 				checkLink(opts, target, m.Health.Links[opts.Platform][target]))
 		}
+	}
+
+	// Last, and outside the manifest guard: these are supplied by the caller,
+	// so a repository with no health block still gets them checked.
+	for _, link := range opts.Links {
+		finding := checkLink(opts, link.Target, link.Source)
+		if link.Name != "" {
+			// Named rather than pathed, because the path is a %LOCALAPPDATA%
+			// expansion nobody reads twice.
+			finding.Name = link.Name
+		}
+		report.Findings = append(report.Findings, finding)
 	}
 
 	return report

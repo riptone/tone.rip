@@ -125,7 +125,7 @@ func TestIndexListsEveryRoleAndSection(t *testing.T) {
 // enough to be cut, which is what the page behind the row is for.
 func TestIndexRowsCarryRoleAndPeriod(t *testing.T) {
 	m := newTestModel(t, 100, 40, authz.Grant{})
-	index, _ := m.renderIndex(m.geo.text)
+	index, _ := m.renderIndex(m.geo.Text)
 
 	for i, exp := range m.content().Experience {
 		if !strings.Contains(index, exp.Role) {
@@ -147,7 +147,7 @@ func TestIndexRowsCarryRoleAndPeriod(t *testing.T) {
 // those rows are the only place a reader sees every organisation at once.
 func TestIndexNamesACompanyWhenThereIsOne(t *testing.T) {
 	m := newTestModel(t, 100, 40, authz.Grant{})
-	index, _ := m.renderIndex(m.geo.text)
+	index, _ := m.renderIndex(m.geo.Text)
 	if _, named := namedRole(t, m); !strings.Contains(index, named.Company) {
 		t.Errorf("the index does not name %q", named.Company)
 	}
@@ -159,7 +159,7 @@ func TestRolePageShowsCompanyStackAndDetail(t *testing.T) {
 	m := newTestModel(t, 100, 40, authz.Grant{})
 	index, exp := namedRole(t, m)
 
-	page := m.renderSection(m.items[index], m.geo.text)
+	page := m.renderSection(m.items[index], m.geo.Text)
 
 	if !strings.Contains(page, exp.Company) {
 		t.Errorf("role page does not name %q", exp.Company)
@@ -190,7 +190,7 @@ func TestUnnamedRoleDoesNotRepeatItself(t *testing.T) {
 		if exp.Company != "" {
 			continue
 		}
-		page := m.renderSection(m.items[i], m.geo.text)
+		page := m.renderSection(m.items[i], m.geo.Text)
 		if strings.Count(page, exp.Org) > 1 {
 			t.Errorf("role %d prints %q %d times", i, exp.Org, strings.Count(page, exp.Org))
 		}
@@ -202,7 +202,7 @@ func TestUnnamedRoleDoesNotRepeatItself(t *testing.T) {
 func TestEveryPageRendersItsTitleAndBody(t *testing.T) {
 	m := newTestModel(t, 100, 40, authz.Grant{})
 	for i, it := range m.items {
-		page := m.renderSection(it, m.geo.text)
+		page := m.renderSection(it, m.geo.Text)
 		if strings.TrimSpace(page) == "" {
 			t.Errorf("item %d (%q) renders an empty page", i, it.label)
 			continue
@@ -242,8 +242,8 @@ func TestTheFrameFitsTheTerminal(t *testing.T) {
 // document on a page, not a line of text across a wall.
 func TestTheWindowKeepsItsMeasure(t *testing.T) {
 	g := geometryFor(200, 60)
-	if g.width > cardWidthMax {
-		t.Errorf("card width = %d, want at most %d", g.width, cardWidthMax)
+	if g.Width > spec.WidthMax {
+		t.Errorf("card width = %d, want at most %d", g.Width, spec.WidthMax)
 	}
 	view := newTestModel(t, 200, 60, authz.Grant{}).View()
 	first := strings.SplitN(view, "\n", 2)[0]
@@ -388,7 +388,7 @@ func TestScrollAffordancesOnlyWhenThereIsMore(t *testing.T) {
 		t.Errorf("a page that fits counted its lines anyway: %q", tall.status())
 	}
 	for _, h := range tall.hints() {
-		if strings.Contains(h.text, tall.labels.scroll) {
+		if strings.Contains(h.Text, tall.labels.scroll) {
 			t.Error("a page that fits should not offer to scroll")
 		}
 	}

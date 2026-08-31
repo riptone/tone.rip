@@ -35,6 +35,8 @@ import (
 	"github.com/charmbracelet/wish/logging"
 	"github.com/charmbracelet/wish/recover"
 	"github.com/muesli/termenv"
+
+	"github.com/riptone/tone.rip/packages/gotui"
 	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/riptone/tone.rip/apps/ssh-cv/internal/authz"
@@ -250,8 +252,7 @@ func main() {
 func runPreview(doc *cv.Document) error {
 	// The same request a session makes of its client, so the preview looks
 	// like the thing it is previewing.
-	fmt.Print(setTerminalColours)
-	defer fmt.Print(resetTerminalColours)
+	defer gotui.PaintTerminal(os.Stdout)()
 
 	program := tea.NewProgram(
 		tui.New(tui.Config{Doc: doc}),
@@ -261,32 +262,20 @@ func runPreview(doc *cv.Document) error {
 	return err
 }
 
-// The client terminal's own default colours, set for the duration of a session
-// and put back afterwards.
+// terminalColours asks the client's terminal to make its own defaults black
+// for the duration of a session, and puts them back afterwards.
 //
-// OSC 11 is the default background, OSC 10 the default foreground; 111 and 110
-// reset them. The session paints its own cells black already (see
-// internal/tui/theme.go), so this is for the one thing painting cannot reach:
-// the emulator's *own* chrome. A terminal colours its tab bar and its status
-// line from the default background, and no program can touch those by drawing.
+// The sequences and the reasoning live in gotui.PaintTerminal, shared with
+// apps/doti - which drew the same black card and, having none of this, let the
+// reader's theme show through the emulator's padding.
 //
-// A terminal that ignores these is no worse off than before - the session is
-// still black inside - and one that honours them goes black to the edges of
-// its window.
-const (
-	setTerminalColours   = "\x1b]11;#000000\x07\x1b]10;#ffffff\x07"
-	resetTerminalColours = "\x1b]111\x07\x1b]110\x07"
-)
-
-// terminalColours wraps a session in that change and its undo.
+// Deferred rather than restored after next(): a session that ends with the
+// client vanishing still runs this, and a terminal left black after the CV has
+// gone would be the CV's fault.
 func terminalColours(next ssh.Handler) ssh.Handler {
 	return func(s ssh.Session) {
 		if _, _, ok := s.Pty(); ok {
-			_, _ = io.WriteString(s, setTerminalColours)
-			// Deferred rather than written after next(): a session that ends
-			// with the client vanishing still runs this, and a terminal left
-			// black after the CV has gone would be the CV's fault.
-			defer func() { _, _ = io.WriteString(s, resetTerminalColours) }()
+			defer gotui.PaintTerminal(s)()
 		}
 		next(s)
 	}
@@ -308,17 +297,17 @@ func terminalColours(next ssh.Handler) ssh.Handler {
 // answer would be thrown away. Nothing is gained for the stall.
 //
 // **Why the floor.** TERM under-reports constantly over SSH: ssh forwards it
-// and little else, and plain `xterm` means sixteen colours to termenv. Hex
-// degrades gracefully, but three window buttons deserve better than the
-// nearest sixteen, so anything that reports less than 256 is treated as 256.
-// A terminal that says it is `dumb` is taken at its word and gets none: escape
-// sequences it cannot render are worse than grey.
+// and little else, and plain `xterm` means sixteen colours to termenv. That
+// policy - raise anything below 256, take `dumb` at its word - is
+// gotui.ClampProfile, shared with apps/doti, whose local terminal
+// under-reports for its own reasons (a multiplexer claiming `screen`).
+//
+// What stays here is the half that is genuinely about a session: which writer
+// to paint, and whose environment to read TERM out of.
 func sessionRenderer(s ssh.Session) *lipgloss.Renderer {
 	pty, _, ok := s.Pty()
-	if !ok || pty.Term == "" || pty.Term == "dumb" {
-		r := lipgloss.NewRenderer(s)
-		r.SetColorProfile(termenv.Ascii)
-		return r
+	if !ok {
+		return gotui.ClampProfile(lipgloss.NewRenderer(s), "")
 	}
 
 	out := io.Writer(s)
@@ -332,11 +321,7 @@ func sessionRenderer(s ssh.Session) *lipgloss.Renderer {
 		termenv.WithUnsafe(),
 		termenv.WithColorCache(true),
 	)
-	// Profiles are ordered most-colours-first, so ">" means "fewer than".
-	if r.ColorProfile() > termenv.ANSI256 {
-		r.SetColorProfile(termenv.ANSI256)
-	}
-	return r
+	return gotui.ClampProfile(r, pty.Term)
 }
 
 // sessionEnv is the client's environment, for termenv to read TERM and

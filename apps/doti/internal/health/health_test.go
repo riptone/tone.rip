@@ -3,6 +3,7 @@ package health
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/riptone/tone.rip/apps/doti/internal/manifest"
@@ -201,5 +202,108 @@ func TestFindingsAreOrderedDeterministically(t *testing.T) {
 				t.Fatal("link order is not stable across runs")
 			}
 		}
+	}
+}
+
+// The links whose targets are outside $HOME. The manifest cannot name them -
+// %LOCALAPPDATA% moves with the machine - so they were installed and never
+// checked, which made drift in them invisible to the one command whose job is
+// finding drift.
+func TestExtraLinksAreCheckedLikeAnyOther(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "repo")
+	home := filepath.Join(root, "home")
+	// Outside $HOME, which is the whole point of these.
+	elsewhere := filepath.Join(root, "AppData", "Local", "Packages", "Terminal")
+	for _, dir := range []string{filepath.Join(repo, "win", "terminal"), home, elsewhere} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	source := filepath.Join(repo, "win", "terminal", "settings.json")
+	if err := os.WriteFile(source, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	target := filepath.Join(elsewhere, "settings.json")
+	opts := Options{
+		Manifest: &manifest.Manifest{}, Platform: manifest.Windows,
+		Repo: repo, Home: home, Detect: fakeDetector{},
+		Links: []Link{{Name: "windows-terminal", Target: target, Source: "win/terminal/settings.json"}},
+	}
+
+	// Nothing there at all.
+	missing := find(t, Check(opts), "windows-terminal")
+	if missing.OK || missing.Detail != "missing" {
+		t.Errorf("an absent link reported %+v", missing)
+	}
+
+	// A real file where a link belongs is drift: the repo moves on and the
+	// machine does not follow.
+	if err := os.WriteFile(target, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	copied := find(t, Check(opts), "windows-terminal")
+	if copied.OK || copied.Detail != "is a copy, not a link" {
+		t.Errorf("a copy reported %+v", copied)
+	}
+
+	// Linked correctly.
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(source, target); err != nil {
+		t.Fatal(err)
+	}
+	linked := find(t, Check(opts), "windows-terminal")
+	if !linked.OK {
+		t.Errorf("a correct link reported %+v", linked)
+	}
+
+	// Pointing somewhere else.
+	other := filepath.Join(root, "somebody-elses.json")
+	if err := os.WriteFile(other, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, target); err != nil {
+		t.Fatal(err)
+	}
+	wrong := find(t, Check(opts), "windows-terminal")
+	if wrong.OK || !strings.Contains(wrong.Detail, "points at") {
+		t.Errorf("a link into the wrong file reported %+v", wrong)
+	}
+}
+
+// Named rather than pathed, because the path is a %LOCALAPPDATA% expansion
+// nobody reads twice - and unnamed still has to say something.
+func TestAnUnnamedExtraLinkIsCalledByItsTarget(t *testing.T) {
+	root := t.TempDir()
+	opts := Options{
+		Manifest: &manifest.Manifest{}, Platform: manifest.Windows,
+		Repo: root, Home: root, Detect: fakeDetector{},
+		Links: []Link{{Target: filepath.Join(root, "nowhere.json"), Source: "a/b.json"}},
+	}
+	got := Check(opts).Findings
+	if len(got) != 1 {
+		t.Fatalf("want one finding, got %d", len(got))
+	}
+	if got[0].Name != filepath.Join(root, "nowhere.json") {
+		t.Errorf("name = %q, want the target", got[0].Name)
+	}
+}
+
+// Supplied by the caller, so a repository with no health block still gets them.
+func TestExtraLinksAreCheckedWithoutAHealthBlock(t *testing.T) {
+	root := t.TempDir()
+	opts := Options{
+		Manifest: &manifest.Manifest{}, Platform: manifest.MacOS,
+		Repo: root, Home: root, Detect: fakeDetector{},
+		Links: []Link{{Name: "somewhere", Target: filepath.Join(root, "x"), Source: "y"}},
+	}
+	if got := len(Check(opts).Missing()); got != 1 {
+		t.Errorf("%d findings, want the one supplied link", got)
 	}
 }
