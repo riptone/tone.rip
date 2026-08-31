@@ -304,3 +304,68 @@ func TestArchiveBaseIsPlatformIndependent(t *testing.T) {
 		}
 	}
 }
+
+// safeJoin is the guard that makes the containment property enforced at the
+// point of use rather than inferred from archiveBase three functions away.
+// CodeQL flagged the extraction as go/zipslip for exactly that reason.
+func TestSafeJoinRefusesAnythingLeavingTheDirectory(t *testing.T) {
+	dir := t.TempDir()
+
+	for _, name := range []string{
+		"", ".", "..",
+		"../evil.ttf", "../../evil.ttf",
+		"sub/evil.ttf", `sub\evil.ttf`,
+		"/etc/evil.ttf", `\evil.ttf`,
+	} {
+		if got, err := safeJoin(dir, name); err == nil {
+			t.Errorf("safeJoin(%q) returned %q, want a refusal", name, got)
+		}
+	}
+
+	// And the legitimate cases still work - including "...", which contains
+	// ".." as a substring but is a perfectly ordinary filename. A naive
+	// strings.Contains(name, "..") check would reject it.
+	for _, name := range []string{"font.ttf", "JetBrainsMonoNerdFont-Bold.ttf", "..."} {
+		got, err := safeJoin(dir, name)
+		if err != nil {
+			t.Errorf("safeJoin(%q) = %v, want it accepted", name, err)
+			continue
+		}
+		if filepath.Dir(got) != filepath.Clean(dir) {
+			t.Errorf("safeJoin(%q) = %q, which is not directly inside %q", name, got, dir)
+		}
+	}
+}
+
+// The end-to-end version: a hostile archive cannot place a file outside the
+// font directory, whatever its entry names say.
+func TestAHostileArchiveWritesNothingOutsideTheFontDirectory(t *testing.T) {
+	a, _ := linuxFixture(t)
+	canary := filepath.Join(t.TempDir(), "canary.ttf")
+
+	a.FontBaseURL = serveRelease(t, buildArchive(t, map[string]string{
+		"../../../../../../../../.." + canary:     "escaped",
+		`..\..\..\..\..\..\..\windows-escape.ttf`: "escaped",
+		"legit/JetBrainsMonoNerdFont-Regular.ttf": "fine",
+	}), "")
+
+	if err := a.InstallNerdFont(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(canary); err == nil {
+		t.Fatal("an archive entry escaped the font directory")
+	}
+
+	dir, _ := a.fontDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		full := filepath.Join(dir, entry.Name())
+		rel, err := filepath.Rel(dir, full)
+		if err != nil || strings.Contains(rel, "..") || strings.ContainsAny(rel, `/\`) {
+			t.Errorf("%q is not a plain file directly inside the font directory", entry.Name())
+		}
+	}
+}

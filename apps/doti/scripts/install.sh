@@ -24,6 +24,9 @@
 # drift - no manifest, no package names, no paths inside the repository. If a
 # change here would need the same change there, it belongs in doti instead.
 #
+# --base-url points at a mirror, or at a local server for the test that proves
+# the checksum step refuses a tampered binary.
+#
 # On trust: this is `curl | bash`. The checksums come from the same release as
 # the binary, so they catch a truncated download, not a compromised
 # repository. Pass --version to pin a release rather than take the newest.
@@ -33,10 +36,16 @@ REPO="${DOTI_REPO:-riptone/tone.rip}"
 TAG_PREFIX="doti/v"
 VERSION="${DOTI_VERSION:-}"
 RUN_INSTALL=true
+# Where the release assets come from. Overridable for a mirror, and for the
+# test that exercises the checksum verification against a local server -
+# which is the only way to prove that step refuses a tampered binary rather
+# than merely appearing to check. install.ps1 has the same seam.
+BASE_URL="${DOTI_BASE_URL:-}"
 
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
   case "${1}" in
     --version) VERSION="${2}"; shift 2 ;;
+    --base-url) BASE_URL="${2}"; shift 2 ;;
     --no-install) RUN_INSTALL=false; shift ;;
     -h|--help)
       sed -n '2,22p' "${0}" | sed 's/^# \{0,1\}//'
@@ -84,6 +93,7 @@ if ! command -v git >/dev/null 2>&1; then
       elif command -v pacman  >/dev/null 2>&1; then sudo pacman -S --noconfirm git
       else die "no known package manager - install git, then re-run this"
       fi ;;
+    *) die "cannot install git on ${os}" ;;
   esac
 fi
 
@@ -93,19 +103,19 @@ fi
 # different question from "the newest release" in a repository that also
 # releases ssh-cv.
 api="https://api.github.com/repos/${REPO}/releases"
-if [ -z "${VERSION}" ]; then
+if [[ -z "${VERSION}" ]]; then
   say "resolving the newest ${TAG_PREFIX}* release"
   VERSION=$(curl -fsSL "${api}?per_page=100" \
     | grep -o "\"tag_name\": *\"${TAG_PREFIX}[^\"]*\"" \
     | head -1 | sed 's/.*"\(.*\)"/\1/' | sed "s|^${TAG_PREFIX}|v|")
-  [ -n "${VERSION}" ] || die "found no ${TAG_PREFIX}* release in ${REPO}"
+  [[ -n "${VERSION}" ]] || die "found no ${TAG_PREFIX}* release in ${REPO}"
 fi
 tag="${TAG_PREFIX}${VERSION#v}"
 say "installing doti ${VERSION}"
 
 # --- 4. download and verify --------------------------------------------------
 asset="doti_${os}_${arch}"
-base="https://github.com/${REPO}/releases/download/${tag}"
+base="${BASE_URL:-https://github.com/${REPO}/releases/download/${tag}}"
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT
 
@@ -145,7 +155,7 @@ on_path() {
   esac
 }
 
-if [ -n "${DOTI_BIN_DIR:-}" ]; then
+if [[ -n "${DOTI_BIN_DIR:-}" ]]; then
   bindir="${DOTI_BIN_DIR}"
 else
   bindir="${HOME}/.local/bin"

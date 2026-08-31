@@ -148,6 +148,14 @@ it to contain no writing code. It resolves links rather than reading them, so
 a path reached through a folded parent passes; a real copy where a symlink
 belongs is reported, because that is drift that looks fine.
 
+Extraction is guarded twice, on purpose. Entries are flattened to a base
+name, and then `safeJoin` checks the *resolved* path is inside the target
+directory before anything is written. The second check is redundant today -
+and kept, because CodeQL flagged the extraction as `go/zipslip` precisely
+because the sanitisation was inferable from a helper rather than enforced
+where the path is used. A scanner cannot see that invariant, and neither can
+the next person to touch the loop.
+
 **`internal/app`** is what the commands do, and none of it prints - it
 reports. `cmd/doti` is flags and dispatch only (287 lines, down from 773),
 which is what makes the whole surface reachable from a test: a fake Runner
@@ -207,9 +215,12 @@ download and verify, install onto PATH, exec `doti install`. If a change to
 one would need the same change in the other, it belongs in Go instead. That
 rule is written at the top of both.
 
-`install.ps1` cannot be linted on Linux, so CI has a `windows-latest` job
-that parses it and runs PSScriptAnalyzer - without it, it would be the one
-file here that nothing checks.
+Both are linted: `shellcheck --enable=all` for the shell one, and because
+`install.ps1` cannot be linted on Linux, a `windows-latest` CI job parses it
+and runs PSScriptAnalyzer. Both also take a `--base-url` / `-BaseUrl`, which
+points at a mirror - or at a local server for the test that proves the
+checksum step *refuses* a tampered binary rather than merely appearing to
+check it. Verified both ways in both scripts.
 
 ## Not done yet
 

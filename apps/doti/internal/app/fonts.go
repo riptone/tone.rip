@@ -248,7 +248,11 @@ func extractFonts(archivePath, dir string) (int, error) {
 		if entry.FileInfo().IsDir() {
 			continue
 		}
-		if err := extractOne(entry, filepath.Join(dir, name)); err != nil {
+		target, err := safeJoin(dir, name)
+		if err != nil {
+			return count, err
+		}
+		if err := extractOne(entry, target); err != nil {
 			return count, err
 		}
 		count++
@@ -276,6 +280,42 @@ func archiveBase(entryName string) string {
 		return ""
 	}
 	return name
+}
+
+// safeJoin resolves name inside dir, refusing anything that would land
+// outside it.
+//
+// Redundant today, and deliberately kept anyway. archiveBase already reduces
+// an entry to a bare filename, so nothing reaching here has a path in it -
+// but that is an invariant of a helper three functions away, and:
+//
+//   - a static analyser cannot see it. CodeQL flagged this extraction as
+//     go/zipslip precisely because the sanitisation was inferable rather
+//     than enforced at the point of use.
+//   - neither can the next person. Someone "simplifying" archiveBase to
+//     filepath.Base, or extending this loop to preserve subdirectories,
+//     reintroduces the hole with nothing failing.
+//
+// The check is containment of the *resolved* path rather than a substring
+// scan for "..", because ".." is a legal substring of a legal filename
+// ("..." is a valid name) and containment is the property actually wanted.
+func safeJoin(dir, name string) (string, error) {
+	if name == "" || name == "." || name == ".." {
+		return "", fmt.Errorf("archive entry has no usable filename")
+	}
+	// Either separator: a zip built on Windows puts "\\" in entry names even
+	// though the format specifies "/".
+	if strings.ContainsAny(name, `/\`) {
+		return "", fmt.Errorf("archive entry %q still contains a path separator", name)
+	}
+
+	root := filepath.Clean(dir)
+	target := filepath.Join(root, name)
+	rel, err := filepath.Rel(root, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("archive entry %q would be written outside %s", name, root)
+	}
+	return target, nil
 }
 
 func extractOne(entry *zip.File, target string) error {
