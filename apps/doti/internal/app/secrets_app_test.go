@@ -333,3 +333,78 @@ func TestANilVaultIsTheRealBinary(t *testing.T) {
 		t.Error("an injected runner was ignored")
 	}
 }
+
+// `bw` answers from a local cache, so a failed sync means every value read
+// after it could be stale - and a rotated credential rendering as the old one,
+// silently, is the failure this phase exists to avoid. It stops.
+func TestAFailedSyncStopsBeforeAnythingIsRead(t *testing.T) {
+	a, _, rec := fixture(t, "brew", "jq", "ghostty", "zsh")
+	withSecrets(t, a, oneSecret)
+
+	vault := newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"unlocked"}`).
+		refuse("sync", errors.New("Failed to sync: connect ECONNREFUSED")).
+		answer("get item dotfiles/creds", noteBody)
+	a.Vault = vault
+
+	err := a.Secrets(context.Background())
+	if err == nil {
+		t.Fatal("a failed sync should be an error")
+	}
+	if !strings.Contains(err.Error(), "syncing vault") {
+		t.Errorf("the error does not say what failed: %v", err)
+	}
+	if !rec.Contains("vault sync failed") {
+		t.Errorf("the failure was not reported: %v", rec.Texts())
+	}
+	for _, call := range vault.asked("plain") {
+		if strings.HasPrefix(call, "get item") {
+			t.Errorf("a value was read through a stale cache: bw %s", call)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(a.Home, ".doti", "creds.json")); statErr == nil {
+		t.Error("a secret was written from a cache that could not be trusted")
+	}
+}
+
+// An item that is not in the vault. The name is worth having in the error,
+// because the usual cause is a typo in the manifest rather than a missing note.
+func TestAMissingItemNamesWhatWasLookedFor(t *testing.T) {
+	a, _, _ := fixture(t, "brew", "jq", "ghostty", "zsh")
+	withSecrets(t, a, oneSecret)
+
+	a.Vault = newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"unlocked"}`).
+		refuse("get item dotfiles/creds", errors.New("Not found."))
+
+	err := a.Secrets(context.Background())
+	if err == nil {
+		t.Fatal("a missing item should be an error")
+	}
+	if !strings.Contains(err.Error(), "dotfiles/creds") {
+		t.Errorf("the error does not name the item: %v", err)
+	}
+}
+
+// Whatever did land is reported before the failure is returned: a partial run
+// is worth knowing about, and the next one starts from what is already there.
+func TestASecondSecretFailingStillReportsTheFirst(t *testing.T) {
+	a, _, rec := fixture(t, "brew", "jq", "ghostty", "zsh")
+	withSecrets(t, a, `"vault": {"server":"https://vault.bitwarden.eu"},
+		 "secrets": [
+		   {"name":"creds","mode":"file","item":"dotfiles/creds","target":"~/.doti/creds.json"},
+		   {"name":"other","mode":"file","item":"dotfiles/other","target":"~/.doti/other.json"}
+		 ],`)
+
+	a.Vault = newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"unlocked"}`).
+		answer("get item dotfiles/creds", noteBody).
+		refuse("get item dotfiles/other", errors.New("Not found."))
+
+	if err := a.Secrets(context.Background()); err == nil {
+		t.Fatal("the failure should be returned")
+	}
+	if !rec.Contains("creds -> ") {
+		t.Errorf("the one that worked was not reported: %v", rec.Texts())
+	}
+	if _, err := os.Stat(filepath.Join(a.Home, ".doti", "creds.json")); err != nil {
+		t.Errorf("the first secret was rolled back: %v", err)
+	}
+}

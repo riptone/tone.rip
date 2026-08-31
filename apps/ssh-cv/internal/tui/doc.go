@@ -48,7 +48,10 @@ func (d *doc) String() string {
 // run log needed the same rule, so the rule moved.
 func (d *doc) line(text string) {
 	d.blank = text == ""
-	d.sb.WriteString(d.s.chrome.Fill(text, d.width) + "\n")
+	// Two writes rather than a concatenation: the builder is the thing that
+	// avoids allocating, and handing it a joined string allocates the join.
+	d.sb.WriteString(d.s.chrome.Fill(text, d.width))
+	d.sb.WriteByte('\n')
 }
 
 // gap separates two blocks, and does nothing at the top of a section or where
