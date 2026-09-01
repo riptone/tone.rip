@@ -278,6 +278,9 @@ func (a *App) Update(ctx context.Context) error {
 	// an upgrade with nowhere to happen would be a regression rather than a
 	// saving.
 	a.updateMcps(ctx)
+	// And the tools routed through bun, which neither `winget upgrade --all`
+	// nor `brew upgrade` knows anything about.
+	a.updateBunTools(ctx)
 
 	if a.Platform == manifest.Windows {
 		done := a.Report.Working("winget upgrade --all")
@@ -339,6 +342,37 @@ func (a *App) updateMcps(ctx context.Context) {
 		return
 	}
 	done(MarkChange, fmt.Sprintf("%d MCP servers up to date", len(m.Mcps)))
+}
+
+// updateBunTools upgrades the tools the manifest routes through bun.
+//
+// `bun install -g <pkg>` rather than `bun update -g`: install re-resolves to the
+// latest published version, and tracking latest is the entire reason a tool is
+// routed here - winget's opencode lagged upstream, and an update that respected
+// a recorded semver range would inherit the same lag by a different route.
+//
+// Named packages only. bun's globals are not all this repository's, for the same
+// reason updateMcps does not run bare.
+//
+// Best-effort, like the MCP servers: a failed bun should not stop
+// `winget upgrade --all`.
+func (a *App) updateBunTools(ctx context.Context) {
+	m, err := a.Manifest()
+	if err != nil {
+		return
+	}
+	packages := a.bunNames(m)
+	if len(packages) == 0 || !a.Runner.Look("bun") {
+		return
+	}
+	done := a.Report.Working(fmt.Sprintf("bun install -g (%d tool(s))", len(packages)))
+	for _, pkg := range packages {
+		if err := a.Runner.Run(ctx, "bun", "install", "-g", pkg); err != nil {
+			done(MarkWarn, fmt.Sprintf("bun install -g %s failed: %v", pkg, err))
+			return
+		}
+	}
+	done(MarkChange, fmt.Sprintf("%d bun tool(s) up to date", len(packages)))
 }
 
 // SelfUpdate replaces this binary with the newest release.

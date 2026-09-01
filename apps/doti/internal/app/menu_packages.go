@@ -208,7 +208,7 @@ func inventoried(parentKind, childKind Kind, label string, names []string,
 	}
 	var have int
 	for _, name := range names {
-		if owned[name] {
+		if owned[pkgs.Formula(name)] {
 			have++
 		}
 	}
@@ -219,7 +219,10 @@ func inventoried(parentKind, childKind Kind, label string, names []string,
 		Selected: true,
 	}}
 	for _, name := range names {
-		items = append(items, child(childKind, label, name, owned[name]))
+		// Formula, because a list may name a formula tap-qualified and the
+		// inventory is keyed short. The label stays the manifest's spelling -
+		// that is what `brew install` will be handed.
+		items = append(items, child(childKind, label, name, owned[pkgs.Formula(name)]))
 	}
 	return items
 }

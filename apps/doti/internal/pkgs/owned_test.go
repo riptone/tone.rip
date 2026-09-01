@@ -352,3 +352,72 @@ func TestNpmGlobalsWithAnEmptyRoot(t *testing.T) {
 		t.Errorf("present = %v", present)
 	}
 }
+
+// A manifest may name a formula tap-qualified, and `brew list` never gives that
+// spelling back - it prints the Cellar's short names. Formula is the bridge, and
+// it has to leave an unqualified name and a winget identifier untouched.
+func TestFormulaStripsTheTap(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"anomalyco/tap/opencode", "opencode"},
+		{"oven-sh/bun/bun", "bun"},
+		{"bun", "bun"},
+		{"", ""},
+		// Windows identifiers come through the same lookup and carry dots, not
+		// slashes. Untouched, or Removable would stop matching them.
+		{"Oven-sh.Bun", "Oven-sh.Bun"},
+		{"SST.opencode", "SST.opencode"},
+		// Casks live in taps too.
+		{"someone/tap/font-x", "font-x"},
+	} {
+		if got := Formula(tc.in); got != tc.want {
+			t.Errorf("Formula(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// A bun global leaves no trace in `brew list` or `winget export`. Its own
+// directory is the only place that answers, and bun named that directory itself:
+// `bun pm bin -g` on a machine that has never installed one replies
+// `No package.json was found for directory "<home>/.bun/install/global"`.
+func TestBunGlobalsReadsBunsOwnDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("BUN_INSTALL", "")
+	root := filepath.Join(home, ".bun", "install", "global", "node_modules")
+	// A scoped name is two directories deep, exactly as npm lays it out.
+	for _, pkg := range []string{"opencode-ai", filepath.Join("@scope", "thing")} {
+		if err := os.MkdirAll(filepath.Join(root, pkg), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := BunGlobals(home, []string{"opencode-ai", "@scope/thing", "absent"})
+	if !got["opencode-ai"] || !got["@scope/thing"] {
+		t.Errorf("BunGlobals = %v", got)
+	}
+	if got["absent"] {
+		t.Errorf("something bun never installed is present: %v", got)
+	}
+}
+
+// BUN_INSTALL moves the prefix, and bun honours it, so this has to.
+func TestBunGlobalsHonoursBunInstall(t *testing.T) {
+	elsewhere := t.TempDir()
+	t.Setenv("BUN_INSTALL", elsewhere)
+	if err := os.MkdirAll(filepath.Join(elsewhere, "install", "global",
+		"node_modules", "opencode-ai"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A home that holds nothing, to prove the env is what was read.
+	if got := BunGlobals(t.TempDir(), []string{"opencode-ai"}); !got["opencode-ai"] {
+		t.Errorf("BUN_INSTALL was ignored: %v", got)
+	}
+}
+
+// A machine that has never used bun globally has no such directory, which is
+// "none installed" rather than a failure - there is no error to return here.
+func TestBunGlobalsWithoutABunDirectory(t *testing.T) {
+	t.Setenv("BUN_INSTALL", "")
+	if got := BunGlobals(t.TempDir(), []string{"opencode-ai"}); len(got) != 0 {
+		t.Errorf("BunGlobals = %v", got)
+	}
+}

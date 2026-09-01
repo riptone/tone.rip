@@ -91,6 +91,20 @@ type Tool struct {
 	Cmd    string `json:"cmd"`
 	Brew   string `json:"brew,omitempty"`
 	Winget string `json:"winget,omitempty"`
+	// Bun is a global npm package name, installed with `bun install -g`.
+	//
+	// The fallback when this platform's own package manager has no entry, which
+	// on Windows is the interesting case: winget's opencode sat on 1.18.21 while
+	// every other channel shipped 1.18.25, and a release behind on the agent
+	// that edits the repo is not worth the tidiness. bun tracks the registry,
+	// and opencode's own `opencode upgrade` detects a bun install and follows
+	// the same route.
+	//
+	// A fallback rather than a Windows-only field, so `{"cmd": x, "bun": x}`
+	// installs on all three. A tool that also names brew or winget uses that
+	// one on the platform it belongs to - opencode names both, and gets the tap
+	// on macOS and Linux.
+	Bun string `json:"bun,omitempty"`
 	// App is the application bundle to look for when Cmd is not on PATH.
 	//
 	// A macOS GUI app installs to /Applications/<App>.app and puts nothing
@@ -264,6 +278,9 @@ func (m *Manifest) Validate() error {
 			return err
 		}
 	}
+	if err := m.validateBunOrder(); err != nil {
+		return err
+	}
 	seen := make(map[string]bool, len(m.Secrets))
 	for i := range m.Secrets {
 		if err := m.Secrets[i].validate(); err != nil {
@@ -273,6 +290,28 @@ func (m *Manifest) Validate() error {
 			return fmt.Errorf("manifest: duplicate secret %q", m.Secrets[i].Name)
 		}
 		seen[m.Secrets[i].Name] = true
+	}
+	return nil
+}
+
+// validateBunOrder holds the one ordering rule in the file.
+//
+// A tool installed with `bun install -g` needs bun on PATH by the time the
+// packages phase reaches it, and that phase walks tools[] in order - so bun has
+// to be declared before the first tool that names it. The alternative was
+// installing bun implicitly behind the reader's back, which is the sort of thing
+// that makes a manifest stop being the answer to "what does this install".
+func (m *Manifest) validateBunOrder() error {
+	var haveBun bool
+	for _, tool := range m.Tools {
+		if tool.Cmd == "bun" {
+			haveBun = true
+			continue
+		}
+		if tool.Bun != "" && !haveBun {
+			return fmt.Errorf("manifest: tool %q is installed with bun, so a "+
+				"tool with cmd \"bun\" has to be declared before it in tools", tool.Cmd)
+		}
 	}
 	return nil
 }

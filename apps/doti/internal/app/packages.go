@@ -247,7 +247,7 @@ func (a *App) InstallPackages(ctx context.Context) error {
 	}
 
 	if a.Platform == manifest.Windows {
-		return a.runWinget(ctx, want)
+		return a.runWinget(ctx, want, present)
 	}
 	if !a.Runner.Look("brew") {
 		return fmt.Errorf("homebrew is not installed - see https://brew.sh")
@@ -273,7 +273,42 @@ func (a *App) InstallPackages(ctx context.Context) error {
 	return nil
 }
 
-func (a *App) runWinget(ctx context.Context, want bundle) error {
+// runWinget is the Windows half of the packages phase: the winget import, then
+// whatever the manifest hands to bun instead.
+//
+// In that order, and the order is load-bearing. bun is itself a winget package,
+// so on a fresh machine it arrives *in* the import - and `bun install -g` before
+// that has finished is a command that does not exist yet. The manifest's rule
+// that bun be declared before the first tool naming it is the same constraint
+// written where a reader can see it.
+func (a *App) runWinget(ctx context.Context, want bundle, present map[string]bool) error {
+	// The tools bun installs, and only the ones this machine is missing.
+	//
+	// `bun install -g` on a package that is already there re-resolves it to the
+	// latest published version, which is an upgrade - the thing
+	// `brew bundle --no-upgrade` exists to not do. Install and update are
+	// different operations and the menu offers both.
+	var viaBun []string
+	for _, tool := range want.tools {
+		if src := a.sourceFor(tool); src.manager == managerBun && !present[tool.Cmd] {
+			viaBun = append(viaBun, src.name)
+		}
+	}
+
+	if err := a.importWinget(ctx, want); err != nil {
+		return err
+	}
+	return a.installViaBun(ctx, viaBun)
+}
+
+// importWinget runs the generated `winget import`, or says why it did not.
+func (a *App) importWinget(ctx context.Context, want bundle) error {
+	if len(pkgs.WingetIdentifiers(want.tools, want.extras)) == 0 {
+		// Nothing winget can install. Reachable now that a tool can name bun
+		// and no winget id, and handing winget an empty package list is a
+		// subprocess that can only fail or do nothing.
+		return nil
+	}
 	body, err := pkgs.WingetPackagesOf(want.tools, want.extras)
 	if err != nil {
 		return err
@@ -291,6 +326,34 @@ func (a *App) runWinget(ctx context.Context, want bundle) error {
 		return err
 	}
 	done(MarkChange, "installed the missing tools")
+	return nil
+}
+
+// installViaBun installs the tools the manifest routes through bun.
+//
+// One invocation per package rather than one for all of them, so a failure names
+// which package failed - and fatal rather than best-effort, unlike the MCP
+// servers: these are declared tools, and a tool the manifest asked for and did
+// not get is the thing `doti check` is supposed to go red about.
+func (a *App) installViaBun(ctx context.Context, packages []string) error {
+	if len(packages) == 0 {
+		return nil
+	}
+	if !a.Runner.Look("bun") {
+		// The manifest's ordering rule is meant to make this unreachable. It is
+		// reported rather than assumed away, because the rule holds for a whole
+		// run and this can also be a selection that ticked opencode and not bun.
+		return fmt.Errorf("bun is not installed, so %s cannot be installed - "+
+			"tick bun as well, or install it first", strings.Join(packages, ", "))
+	}
+	done := a.Report.Working(fmt.Sprintf("bun install -g (%d tool(s))", len(packages)))
+	for _, pkg := range packages {
+		if err := a.Runner.Run(ctx, "bun", "install", "-g", pkg); err != nil {
+			done(MarkWarn, "bun install -g "+pkg+" failed")
+			return err
+		}
+	}
+	done(MarkChange, "installed "+strings.Join(packages, ", "))
 	return nil
 }
 

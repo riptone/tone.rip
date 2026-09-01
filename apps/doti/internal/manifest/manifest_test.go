@@ -157,3 +157,47 @@ func TestTheRealManifestStillParses(t *testing.T) {
 		t.Error("real manifest parsed but has no stow packages")
 	}
 }
+
+// The one ordering rule in the file. A tool installed with `bun install -g`
+// needs bun on PATH by the time the packages phase reaches it, and that phase
+// walks tools[] in order - so declaring the tool before bun is a manifest that
+// cannot install itself on a fresh machine.
+func TestABunToolDeclaredBeforeBunIsRefused(t *testing.T) {
+	body := `{
+	  "app": "dotfiles",
+	  "tools": [
+	    { "cmd": "opencode", "bun": "opencode-ai" },
+	    { "cmd": "bun", "brew": "bun" }
+	  ]
+	}`
+	// Parse validates, so the file is refused rather than parsed and checked
+	// later: a manifest that cannot install itself should never become a
+	// *Manifest somebody holds.
+	_, err := Parse([]byte(body))
+	if err == nil {
+		t.Fatal("a bun tool declared before bun was accepted")
+	}
+	if !strings.Contains(err.Error(), "opencode") || !strings.Contains(err.Error(), "bun") {
+		t.Errorf("the error names neither side: %v", err)
+	}
+}
+
+func TestABunToolDeclaredAfterBunIsFine(t *testing.T) {
+	body := `{
+	  "app": "dotfiles",
+	  "tools": [
+	    { "cmd": "bun", "brew": "bun" },
+	    { "cmd": "opencode", "brew": "anomalyco/tap/opencode", "bun": "opencode-ai" }
+	  ]
+	}`
+	m, err := Parse([]byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Tools[1].Bun; got != "opencode-ai" {
+		t.Errorf("the bun field did not survive the parse: %q", got)
+	}
+}

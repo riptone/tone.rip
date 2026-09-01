@@ -47,14 +47,16 @@ func (a *App) Removable(ctx context.Context) ([]Component, error) {
 		return nil, err
 	}
 	required := a.requiredTools(m)
+	// bun keeps its own inventory, and `winget export` knows nothing about it.
+	bunOwned := pkgs.BunGlobals(a.Home, a.bunNames(m))
 
 	out := make([]Component, 0, len(m.Tools)+len(m.Mcps))
 	for _, tool := range m.Tools {
 		if required[tool.Cmd] {
 			continue
 		}
-		pkg := a.packageFor(tool)
-		if pkg == "" || !owned[pkg] {
+		src := a.sourceFor(tool)
+		if src.name == "" || !a.installedBy(src, owned, bunOwned) {
 			// Either the manifest hands this platform's package manager
 			// nothing, or the package manager did not install it. A tool that
 			// arrived some other way is not this tool's to delete.
@@ -102,13 +104,79 @@ func (a *App) requiredTools(m *manifest.Manifest) map[string]bool {
 	return required
 }
 
+// The three package managers a tool can come from.
+const (
+	managerBrew   = "brew"
+	managerWinget = "winget"
+	managerBun    = "bun"
+)
+
+// toolSource is the package manager that installs a tool on this platform and
+// the name to hand it.
+//
+// One value rather than a bare string, because the two questions this package
+// asks about a tool have different answers per manager: which inventory says it
+// is installed, and which command removes it. They used to be inferred from
+// a.Platform alone, which held right up until a tool on Windows came from
+// neither winget nor brew.
+type toolSource struct {
+	manager string
+	name    string
+}
+
+// sourceFor is which package manager installs a tool here.
+//
+// The platform's own first, bun as the fallback. opencode names both the brew
+// tap and `opencode-ai`, so it gets the tap on macOS and Linux and bun on
+// Windows, where winget's copy lags; a tool that names only bun installs on all
+// three.
+func (a *App) sourceFor(tool manifest.Tool) toolSource {
+	native, manager := tool.Brew, managerBrew
+	if a.Platform == manifest.Windows {
+		native, manager = tool.Winget, managerWinget
+	}
+	if native != "" {
+		return toolSource{manager: manager, name: native}
+	}
+	if tool.Bun != "" {
+		return toolSource{manager: managerBun, name: tool.Bun}
+	}
+	return toolSource{}
+}
+
 // packageFor is the name to hand this platform's package manager, or "" when
 // the manifest names none.
-func (a *App) packageFor(tool manifest.Tool) string {
-	if a.Platform == manifest.Windows {
-		return tool.Winget
+func (a *App) packageFor(tool manifest.Tool) string { return a.sourceFor(tool).name }
+
+// installedBy asks the inventory that belongs to a tool's source.
+//
+// One question, three answers: `brew list` for a formula or cask, `winget
+// export` for a winget id, and bun's own global directory for a bun package.
+// Asking the wrong one is not a near miss - `winget export` knows nothing about
+// a bun global, so opencode on Windows would have read as "never installed" for
+// as long as it existed.
+func (a *App) installedBy(src toolSource, owned, bunOwned map[string]bool) bool {
+	if src.manager == managerBun {
+		return bunOwned[src.name]
 	}
-	return tool.Brew
+	// Formula, because a manifest may name a formula tap-qualified while
+	// `brew list` answers short. A winget id has no slash and comes through
+	// untouched.
+	return owned[pkgs.Formula(src.name)]
+}
+
+// bunNames is every tool this platform installs with bun.
+//
+// Collected in one pass so the inventory is read once per call rather than once
+// per tool - the same reason Owned asks `brew list` for the whole machine.
+func (a *App) bunNames(m *manifest.Manifest) []string {
+	var out []string
+	for _, tool := range m.Tools {
+		if src := a.sourceFor(tool); src.manager == managerBun {
+			out = append(out, src.name)
+		}
+	}
+	return out
 }
 
 // RemovePackages uninstalls the tools and MCP servers named in Include.
@@ -188,20 +256,27 @@ func (a *App) RemovePackages(ctx context.Context) error {
 			// "not installed" for the second one is what made a system jq look
 			// like a bug in the removal.
 			if present[name] {
+				// Which manager, not just "the package manager": for a tool
+				// that comes from bun on this platform, saying "not by winget"
+				// would be true of a thing that was never going to install it.
+				manager := a.sourceFor(tool).manager
+				if manager == "" {
+					manager = a.packageManager()
+				}
 				a.Report.Line(MarkSkip, fmt.Sprintf("%s is installed, but not by %s - left alone",
-					name, a.packageManager()))
+					name, manager))
 				continue
 			}
 			a.Report.Line(MarkOK, name+" (not installed)")
 			continue
 		}
 
-		pkg := a.packageFor(tool)
+		src := a.sourceFor(tool)
 		if a.DryRun {
-			a.Report.Line(MarkChange, fmt.Sprintf("would remove %s (%s)", name, pkg))
+			a.Report.Line(MarkChange, fmt.Sprintf("would remove %s (%s)", name, src.name))
 			continue
 		}
-		if err := a.uninstall(ctx, pkg); err != nil {
+		if err := a.uninstall(ctx, src); err != nil {
 			// Homebrew refusing because something depends on it is the correct
 			// answer, so the message it gave is the useful part.
 			a.Report.Line(MarkWarn, fmt.Sprintf("%s: %v", name, err))
@@ -276,10 +351,13 @@ func (a *App) removeMcp(ctx context.Context, pkg string) error {
 // Deliberately without --ignore-dependencies or --force: the whole point of
 // asking a package manager rather than deleting files is that it knows what
 // else would break.
-func (a *App) uninstall(ctx context.Context, pkg string) error {
-	if a.Platform == manifest.Windows {
-		return a.Runner.Run(ctx, "winget", "uninstall", "--id", pkg,
+func (a *App) uninstall(ctx context.Context, src toolSource) error {
+	switch src.manager {
+	case managerBun:
+		return a.Runner.Run(ctx, "bun", "remove", "-g", src.name)
+	case managerWinget:
+		return a.Runner.Run(ctx, "winget", "uninstall", "--id", src.name,
 			"--exact", "--accept-source-agreements")
 	}
-	return a.Runner.Run(ctx, "brew", "uninstall", pkg)
+	return a.Runner.Run(ctx, "brew", "uninstall", src.name)
 }

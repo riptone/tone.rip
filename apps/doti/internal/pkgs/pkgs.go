@@ -208,9 +208,15 @@ func BrewfileOf(tools []manifest.Tool, plugins []manifest.ZshPlugin, casks []man
 	return b.String()
 }
 
-// wingetIdentifiers is the tool list plus the GUI extras, in that order and
+// WingetIdentifiers is the tool list plus the GUI extras, in that order and
 // without duplicates - the shell installer's `.[0] + (.[1] - .[0])`.
-func wingetIdentifiers(tools []manifest.Tool, extras []string) []string {
+//
+// Exported because the caller has to know whether the import is worth running at
+// all: a manifest whose Windows tools all come from bun renders a file with no
+// packages in it, and handing that to `winget import` is a subprocess that can
+// only fail or do nothing. Asking here rather than counting `tool.Winget != ""`
+// at the call site keeps one copy of the dedup rule.
+func WingetIdentifiers(tools []manifest.Tool, extras []string) []string {
 	ids := make([]string, 0, len(tools)+len(extras))
 	for _, tool := range tools {
 		if tool.Winget != "" {
@@ -258,7 +264,7 @@ func WingetPackagesOf(tools []manifest.Tool, extras []string) (string, error) {
 	source.SourceDetails.Identifier = "Microsoft.Winget.Source_8wekyb3d8bbwe"
 	source.SourceDetails.Name = "winget"
 	source.SourceDetails.Type = "Microsoft.PreIndexed.Package"
-	for _, id := range wingetIdentifiers(tools, extras) {
+	for _, id := range WingetIdentifiers(tools, extras) {
 		source.Packages = append(source.Packages, wingetPackage{PackageIdentifier: id})
 	}
 

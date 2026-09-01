@@ -132,6 +132,69 @@ func names(out []byte) map[string]bool {
 	return set
 }
 
+// Formula is how brew keys a formula in its own inventory: the name with any
+// tap stripped off.
+//
+// A manifest may name a formula tap-qualified, and for some tools it has to -
+// `anomalyco/tap/opencode` is the spelling opencode's own docs recommend,
+// because homebrew-core's copy lags. `brew install` and `brew uninstall` both
+// take that name happily. `brew list` does not give it back: it prints the
+// Cellar's short names, so the qualified spelling matched nothing in the owned
+// set and a tap-qualified tool would have been permanently invisible to the
+// removal selector and permanently "missing" in the install one - the jq bug
+// again, arrived at from the other side.
+//
+// `brew list --full-name` would print the qualified names, and was measured at
+// 221-292ms against 12-16ms for the short list on the same 51 formulae: it has
+// to load tap metadata where the short list only reads directory names. Fifteen
+// times the cost of the thing it would fix, on the path that opens the menu.
+// Stripping the manifest's side is free.
+func Formula(name string) string {
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		return name[i+1:]
+	}
+	return name
+}
+
+// BunGlobals reports which of the named packages `bun install -g` has put on
+// the machine.
+//
+// The Windows counterpart of NpmGlobals, and the reason the manifest has a `bun`
+// field at all: a bun global is invisible to `winget export`, so without this a
+// tool installed that way reads as missing forever in the install selector and
+// is never offered for removal - the same shape of bug a tap-qualified brew name
+// had, from a third direction.
+//
+// No subprocess. bun's global prefix is $BUN_INSTALL, defaulting to ~/.bun, and
+// packages land in install/global/node_modules underneath it - which is bun's
+// own account of the layout: `bun pm bin -g` on a machine that has never
+// installed one answers `No package.json was found for directory
+// "<home>/.bun/install/global"`. Asking bun would also have meant handling that
+// error as "none" rather than as a failure, where a stat that finds nothing
+// already says exactly that.
+func BunGlobals(home string, packages []string) map[string]bool {
+	present := map[string]bool{}
+	if len(packages) == 0 {
+		return present
+	}
+	prefix := os.Getenv("BUN_INSTALL")
+	if prefix == "" {
+		if home == "" {
+			return present
+		}
+		prefix = filepath.Join(home, ".bun")
+	}
+	root := filepath.Join(prefix, "install", "global", "node_modules")
+	for _, pkg := range packages {
+		// A scoped name is two directories deep, exactly as npm lays it out -
+		// bun keeps the same shape.
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(pkg))); err == nil {
+			present[pkg] = true
+		}
+	}
+	return present
+}
+
 // NpmGlobals reports which of the named global npm packages are installed.
 //
 // By `npm root -g` and a stat each, not `npm ls -g`: the root is one 120ms

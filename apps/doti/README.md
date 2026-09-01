@@ -250,6 +250,21 @@ and the rules are the feature:
   which of the two facts is the reason: *"jq is installed, but not by brew —
   left alone"*, where the old answer was "jq (not installed)" about a binary you
   can run.
+- **A tap-qualified name is one keg under two spellings.** A manifest may name a
+  formula `user/tap/formula`, and for some tools it has to: opencode's own docs
+  recommend `anomalyco/tap/opencode` because homebrew-core's copy lags — 1.18.20
+  against 1.18.25 upstream when this was written. `brew install` and `brew
+  uninstall` take that spelling; `brew list` never gives it back, printing the
+  Cellar's short names instead. So the qualified name matched nothing in the
+  owned set, and a tap-qualified tool was permanently invisible to the removal
+  selector *and* permanently "missing" in the install one — the jq bug arrived at
+  from the other side. `brew list --full-name` would print the qualified names
+  and was measured at 221–292ms against 12–16ms for the short list on the same
+  51 formulae, because it loads tap metadata where the short list reads
+  directory names: fifteen times the cost of the thing it fixes, on the path
+  that opens the menu. `pkgs.Formula` strips the manifest's side instead, for
+  free, and the label stays the manifest's spelling — that is what `brew` gets
+  handed.
 - **It refuses anything the manifest does not list.** A tool this repository
   never installed is not this repository's to remove — and a typo is reported
   rather than silently removing nothing, which reads as "it was already gone".
@@ -268,6 +283,46 @@ and the rules are the feature:
   `npm ls -g` walks and resolves the whole global tree at ~700ms. That same
   answer is why the install selector now says *"2 of 7 present"* instead of the
   "7 declared" it used to settle for.
+
+**A tool can name three package managers, and bun is the fallback.** A
+`tools[]` entry carries `brew`, `winget` and `bun`; the platform's own comes
+first and `bun` covers what it has no name for. The case that forced it: winget's
+opencode sat on 1.18.21 while the tap, npm and the install script all shipped
+1.18.25, so the manifest drops the winget id and names `opencode-ai` instead —
+`bun install -g` tracks the registry, and opencode's own `opencode upgrade`
+detects a bun install and follows the same route. A tool naming only `bun`
+installs on all three platforms.
+
+That is one field in the manifest and four behaviours here, because "which
+package manager" turns out to be three separate questions with three separate
+answers, and `a.Platform` could only answer the first:
+
+- **Install.** Windows runs the `winget import` *first* and the bun installs
+  after, because bun is itself a winget package and on a fresh machine arrives in
+  that import. The manifest enforces the same order from the other side: a tool
+  naming `bun` must be declared after the tool whose `cmd` is `bun`, or `Parse`
+  refuses the file. The generated `packages.json` never sees a bun package —
+  there is no identifier to import — and an import with nothing left in it is
+  skipped rather than handed to winget empty.
+- **Presence.** Only the *missing* ones get installed. `bun install -g` on a
+  package that is already there re-resolves it to the latest published version,
+  which is an upgrade, and `--no-upgrade` on the brew side exists precisely so an
+  install does not move your versions.
+- **Ownership.** `winget export` knows nothing about a bun global, so the
+  removal selector asks bun's own directory: `$BUN_INSTALL/install/global/
+  node_modules`, defaulting to `~/.bun`. No subprocess — bun named that path
+  itself, in the error `bun pm bin -g` gives on a machine that has never
+  installed one. Without this the tool would have read as "never installed" for
+  as long as it existed, and `bun remove -g` would never have been offered.
+- **Update.** `winget upgrade --all` does not reach a bun global either, so
+  `doti update` runs `bun install -g` over the named packages — install rather
+  than `bun update -g`, because tracking latest is the entire reason a tool is
+  routed here and an update respecting a recorded semver range would inherit the
+  same lag by a different door.
+
+Naming such a tool explicitly says *which* manager: *"opencode is installed, but
+not by bun — left alone"*. It said "not by winget" before, which was true of a
+thing that was never going to install it.
 
 **The lists are re-read after every run.** They used to be read once, before
 the program started, and never again - so a removal that worked left the tools
