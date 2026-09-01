@@ -30,7 +30,8 @@ curl … install.sh | bash
           ├─ read manifest.jsonc
           ├─ generate a Brewfile / packages.json into a temp dir,
           │  then brew bundle install --no-upgrade / winget import
-          ├─ npm install -g the MCP servers
+          │  (tools, casks and zsh plugins, each pickable)
+          ├─ npm install -g the MCP servers   (each pickable)
           ├─ link every stow package into $HOME
           ├─ write ~/.gitconfig.local if absent
           └─ render secrets from Bitwarden   (allowed to fail)
@@ -64,7 +65,7 @@ $ doti check --strict   # read-only; non-zero exit when something is missing
 $ doti link --only zsh  # one component
 $ doti unlink --restore # remove links, put the newest backups back
 $ doti uninstall        # what it would remove; nothing, until you name them
-$ doti uninstall --tools jq,fd   # remove exactly those
+$ doti uninstall --tools jq,fd   # remove exactly those (tools or MCP servers)
 $ doti sync             # git pull --ff-only, then re-link
 $ doti update           # upgrade installed packages
 $ doti secrets          # render secret files from Bitwarden
@@ -170,6 +171,15 @@ the operation sends a request and blocks, the model answers it with `tea.Exec`
 (which suspends the program and restores the terminal to the state `bw`
 expects), and the reply comes back down the same channel.
 
+So the master-password prompt is **not** drawn by the window: the log says
+`handing the terminal to bw unlock`, the window steps aside, `bw` prompts on the
+real terminal, and the window comes back with the answer. That is deliberate
+rather than a limitation. Drawing the prompt inside the TUI would mean doti
+reading the keystrokes, holding the password in its own memory and passing it to
+`bw` somehow - which is exactly the thing the stdin/stderr split exists to avoid.
+Nothing here should ever be in a position to leak a master password, and the
+cheapest way to guarantee that is to never have it.
+
 The detail that rules out `tea.ExecProcess`: it points all three streams at the
 terminal, and `bw unlock --raw` writes its prompt to **stderr** and the session
 key to **stdout**. A custom `tea.ExecCommand` hands over stdin and stderr and
@@ -228,6 +238,18 @@ and the rules are the feature:
   one removes nothing — there is no spelling of this that means *all* unless
   somebody typed one. `doti uninstall` on its own prints what it would be
   willing to remove and hands you the `--tools` line that would do it.
+- **It offers only what the package manager says it installed** — not what is on
+  `PATH`. The two are different questions, and the difference is not
+  theoretical: macOS ships `/usr/bin/jq`, so on a machine where `brew uninstall
+  jq` had already run the selector went on offering jq as "installed", every
+  session, across a reboot, because the list was built from `command -v` and
+  `command -v` was telling the truth. `pkgs.Owned` asks `brew list --formula -1`
+  plus `--cask -1` (≈40ms for a whole machine) and, on Windows, reads `winget
+  export` — the same file `pkgs.WingetPackages` renders, rather than the
+  localised table `winget list` prints. Naming such a tool explicitly now says
+  which of the two facts is the reason: *"jq is installed, but not by brew —
+  left alone"*, where the old answer was "jq (not installed)" about a binary you
+  can run.
 - **It refuses anything the manifest does not list.** A tool this repository
   never installed is not this repository's to remove — and a typo is reported
   rather than silently removing nothing, which reads as "it was already gone".
@@ -239,6 +261,13 @@ and the rules are the feature:
   something depends on a formula is the correct answer, reported rather than
   overridden — the whole point of asking a package manager instead of deleting
   files is that it knows what else would break.
+- **The MCP servers come off too.** `npm install -g` was the one thing an
+  install did that nothing could undo. They are offered individually, under
+  their own heading, and only the ones npm actually has — established by asking
+  `npm root -g` once and stat-ing each declared package, which is ~120ms where
+  `npm ls -g` walks and resolves the whole global tree at ~700ms. That same
+  answer is why the install selector now says *"2 of 7 present"* instead of the
+  "7 declared" it used to settle for.
 
 **The lists are re-read after every run.** They used to be read once, before
 the program started, and never again - so a removal that worked left the tools
@@ -336,6 +365,158 @@ could see, and space then toggled it. The window is scrolled by the smallest
 amount that keeps the cursor visible, and the scrollbar is drawn from the same
 offset so the two cannot disagree about where in the list you are.
 
+**Every package is on the list, one row at a time.** The Packages group used to
+be one row per manifest *list* — "brew packages, 11 of 16 present" — so the only
+answers available were all and nothing. Each list is a **parent** now with its
+members folded underneath: sixteen tools, five casks, two zsh plugins, seven MCP
+servers, each with its own checkbox. On Windows the casks and plugins are
+replaced by the `winget_extras`, which are the same idea under another package
+manager.
+
+**Folded by default**, which is what makes that cost nothing: the group reads
+exactly as it did when each list was one line, until somebody presses `→`. `←`
+closes it again — from a child too, which closes the thing it is inside and takes
+the cursor up with it, because leaving the cursor on a row that is no longer
+drawn is the bug the list scrolling already had once. `tab` does whichever
+applies, for the reader who has not worked out which arrow.
+
+```
+  Packages                                          Packages
+› [x] ▸ brew packages       14 of 15 present      › [x] ▾ brew packages       14 of 15 present
+  [x] ▸ brew casks                5 declared            [x] jq                     installed
+  [x] ▸ zsh plugins               2 declared            [x] git                    installed
+  [x] ▸ mcp servers           6 of 7 present            [~] …
+```
+
+A parent's box is the state of its children: `[x]` all, `[ ]` none, `[~]` some —
+and space on a partly ticked one fills it, because that is what the hand means.
+A child ticks its parent on the way up, since a parent left unticked with a
+ticked child under it would report a skipped phase and then install something.
+Folding is display only: a hidden child is hidden, not unticked, or closing a
+group would be a way to silently change the outcome. The footer counts leaves,
+not rows — a parent is a summary of its children, and counting it too would make
+"3 of 2" the reading for a fully ticked pair.
+
+**What forced the design honest** was a trap on the way: there used to be two
+Brewfile renderers, the whole manifest and a tools-only one for `--tools`.
+Rendering the tools-only file because *one tool* was unticked would have declined
+every GUI app and both zsh plugins as a side effect — decline `bat`, lose
+Ghostty. So there is one renderer, `pkgs.BrewfileOf`, taking the three lists
+explicitly, and each list is narrowed by its own caller. `--tools` keeps its
+older contract by passing the other two empty, and a selection supersedes it.
+
+**The labels had to become qualified for any of this to be safe.** `Include` is
+`[]app.Ref` now — a kind and a label — because the real manifest lists `git`,
+`stow` and `starship` as tools it installs *and* as stow packages it links. A
+flat list of names could only say "git", and both would read that as theirs; the
+collision was unreachable while the whole tool set was one row, and offering the
+tools individually is what made it real. An empty `Kind` matches any kind, which
+is what `--tools jq` means. Naming a parent and nothing under it means all of it,
+so a caller that does not know about the children still installs the group rather
+than nothing.
+
+Rendering a real machine's list costs 312µs folded and 485µs open on a 96×40
+card — 3% of a frame — so the `O(n)` parent lookups called once per row stay as
+they are. Measured, not assumed: `BenchmarkRenderSelector`.
+
+**An install no longer reinstalls the MCP servers it already has.** `npm install
+-g` on a package that is present takes about two seconds to decide it has nothing
+to do, so an install on a set-up machine spent fifteen of them on seven packages
+it had — the same `npm root -g` that fixed the counts answers this too. The
+upgrade that reinstall performed as a side effect moved to `doti update`, which
+is the split `brew bundle --no-upgrade` already draws: install and update are
+different operations and the menu offers both. `npm update -g` there names the
+declared packages rather than running bare, because the globals this repository
+did not install are not its to move.
+
+**Preview picks too**, which it did not, and that cost more than the
+inconsistency: previewing what *packages* would change stopped to ask for the
+vault master password, because the secrets phase runs either way and there was no
+box to untick. Two halves to that fix — the selector, and the phase itself:
+`App.Secrets` chose which secrets to render *after* pointing `bw` at the
+deployment, asking for the password and syncing, so unticking every secret still
+prompted and then wrote nothing. It decides first now. A master-password prompt
+for a phase that was going to do nothing is the worst version of a checkbox that
+does not work.
+
+**Adopt shows what is left, and nothing else.** Its selector was byte-for-byte
+the Install one — every tool, every cask, every linked config, on a machine that
+had them all — which made "install only what is missing" a description of an
+operation rather than of a screen. It now drops what the machine already has,
+along with any group left with nothing under it, and **opens** the groups it
+keeps, because a list built from the gaps is short by construction and folding a
+short list hides the answer. A group's own count is a summary; the children are
+the truth, so a group stays exactly when something under it is still missing.
+
+```
+Install                                    Adopt (same machine)
+› [x] ▸ brew packages   15 of 16 present  › [x] ▾ brew packages   15 of 16 present
+  [x] ▸ brew casks        5 of 6 present        [x] htop                   missing
+  [x] ▸ zsh plugins       2 of 2 present    [x] ▾ brew casks       5 of 6 present
+  [x] ▸ mcp servers       7 of 7 present        [x] not-a-real-cask        missing
+  [x]   zsh                  not linked    [x]   zsh                  not linked
+  …                       40 of 40         …                       11 of 11
+```
+
+**Which forced the casks and plugins to get a real answer.** They used to read
+"5 declared" with no present/missing state — nobody had asked brew — and a row
+with no state can only ever be *shown*, so every GUI app and both plugins turned
+up on a list of what was missing. `App.Owned` is the same inventory the removal
+reads, and it is exactly the predicate that decides whether the install step is a
+no-op: `brew bundle` skips what brew already owns. PATH would have been wrong in
+both directions here — a cask puts nothing on it, and a font is not a command.
+
+**Both inventories are asked once per invocation** and dropped by `App.Forget`,
+like the manifest and the ignore rules. One screen asks from two places — 
+`MenuItems` for the install list, `Removable` for the removal one — and on
+Windows the question is `winget export`, which takes seconds rather than
+`brew list`'s ~40ms. Caching both halved a real scan of this machine, 165ms to
+93ms (`BenchmarkLiveScan`). The one caller that deliberately does *not* use the
+cache is `installMcps`: it runs after the packages phase, which may just have
+installed npm itself.
+
+**`--tools` reached one of the two paths.** `doti uninstall --tools bat` in a
+terminal — the default, which is the window — opened straight onto the run screen
+with nothing selected, reported *"name what to remove; nothing was removed"* and
+then advised re-running with `--tools`. The same command with `--term` removed it.
+`Config.StartChosen` existed, was read, and was never set by any caller; the
+window now carries the flags the launched operation was given, which is the whole
+point of the one-table-not-two-switches arrangement above.
+
+**Nothing ticked means nothing**, and an empty *list* says so in its own words
+rather than suggesting a key that cannot help. It used to mean *everything* on
+every screen but the removal, and by accident: an empty selection reaches `internal/app` as an
+empty `Include`, and an empty `Include` is how the command line spells "no
+narrowing". So unticking every box on an Install and pressing enter installed the
+lot — the safest-looking keypress on the screen was the most destructive one
+available. Now it refuses and says why, in the lead line, because a key that does
+nothing and explains nothing reads as a hang.
+
+**Unlink picks, like Install and Remove.** It used to act on every stow package
+there was, which made "take ghostty back off this machine" something you could
+only do by unlinking all of them and re-installing the rest. Its selector offers
+the *stow packages alone*: `app.Component` carries a `Kind`, an operation
+declares which kinds its selector lists, and a list that also offered `brew
+packages`, the MCP servers, `gitconfig-local` and the secrets would be three
+quarters checkboxes that change nothing about what an unlink does. It starts with
+everything ticked, unlike the removal, because an unlink puts back what was there
+before.
+
+**`gitconfig-local` finally does something.** It was the last thing an install
+wrote that the selector could not turn off — and the checkbox was *already
+there*: `system_components` declares `gitconfig-local` on all three platforms,
+so the selector drew a box for it and nothing consulted the box. It had never
+been a system *link* either; `SystemLinks()` returns nothing by that name on any
+platform, because `writeGitLocal` writes the file rather than linking it. So the
+manifest's declaration is now the one row about that one file, carrying
+`writeGitLocal`'s own state instead of the "system link" the other two get — and
+the row is offered whether or not a manifest declares it, because an install
+writes it either way and a checkbox that exists only for some manifests is a step
+that silently stops happening for the rest. It shows a third state as well as the
+two obvious ones, because it is the one where ticking the box does nothing and
+the reader deserves to know before they tick it: *rendered from a secret*, when
+the manifest names a secret that owns the same path.
+
 **`h` (or `?`) opens the help**, from anywhere nothing is running — it would
 take the log off screen mid-install, and the log is why the window exists — and
 `esc` returns to whatever asked for it. Its text is built from the same menu
@@ -347,6 +528,27 @@ Reporter seam was for. `internal/app` imports no UI at all - it used to return
 the window's own item type, which had the domain depending on the thing that
 draws it and made a Reporter that sends Bubble Tea messages impossible to write
 without an import cycle.
+
+**Three outcomes, not two.** `ctrl+c` used to give whichever of "done" or
+"failed" the timing happened to produce: a phase blocked in `brew bundle` returns
+the context error and the footer went red, while one between subprocesses — or
+one taking no context at all, like `Link` — returns nil and it went **green**.
+Neither is what happened. There is an `interrupted` now, in the amber of the
+middle window button, because the traffic lights already had the right three
+colours and the middle one is the middle case. It outranks the error, since a
+cancelled `brew bundle` failing is a consequence of the reader's decision rather
+than a fault of the machine, and the log's last line says
+`stopped here: nothing after this ran`. The shell hears about it too: a window
+that shows "interrupted" and exits 0 tells the same lie as one that shows a red
+line and exits 0.
+
+**And the selectors follow a partial run.** Settling fires the re-scan whether
+the run finished, failed or was stopped, so ticking everything and letting one
+thing through leaves the lists describing what actually happened — verified live:
+after an install narrowed to one stow package, Install reads `zsh  linked` with
+the other six `not linked`, and Adopt lists exactly the eight things left. Which
+is the payoff of Adopt showing only the gaps: a stopped install becomes a to-do
+list.
 
 Three details that are not obvious:
 

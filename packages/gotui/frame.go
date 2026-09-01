@@ -195,6 +195,11 @@ func NewChrome(r *lipgloss.Renderer, spec Spec) Chrome {
 }
 
 // Geometry resolves this chrome's spec for a terminal size.
+//
+// The apps call Spec.For directly instead, and that is not an oversight: doti
+// draws two sizes of card from one Chrome - the menu's and the wider one a run
+// gets - so the geometry is per screen rather than per chrome. This stays for
+// the single-spec case and for the tests, which have exactly that.
 func (c Chrome) Geometry(width, height int) Geometry { return c.Spec.For(width, height) }
 
 // Render draws the card and centres it in the terminal.

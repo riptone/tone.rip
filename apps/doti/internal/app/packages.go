@@ -19,7 +19,7 @@ func (a *App) WantsExtra(name string) bool {
 	if err != nil {
 		return false
 	}
-	if !a.wants(name) {
+	if !a.wants(KindExtra, name) {
 		return false
 	}
 	for _, extra := range m.Extras {
@@ -53,6 +53,13 @@ func (a *App) selectedTools(missing []manifest.Tool) ([]manifest.Tool, error) {
 				available = append(available, cmd)
 			}
 			slices.Sort(available)
+			if len(available) == 0 {
+				// "(missing: )" is a worse answer than the sentence it was
+				// trying to be, and it is the common case now that the list is
+				// narrowed to what this platform can actually install.
+				return nil, fmt.Errorf("%q is not a missing tool: "+
+					"nothing this platform can install is missing", name)
+			}
 			return nil, fmt.Errorf("%q is not a missing tool (missing: %s)",
 				name, strings.Join(available, ", "))
 		}
@@ -61,53 +68,191 @@ func (a *App) selectedTools(missing []manifest.Tool) ([]manifest.Tool, error) {
 	return out, nil
 }
 
-// InstallPackages brings the machine's tools up to the manifest.
+// bundle is the three lists a `brew bundle` is rendered from, each narrowed by
+// what this run was told to include.
+//
+// A struct because they are narrowed independently and must stay that way:
+// rendering a tools-only file because one tool was unticked is what would
+// silently decline every GUI app and both zsh plugins along with it.
+type bundle struct {
+	tools   []manifest.Tool
+	plugins []manifest.ZshPlugin
+	casks   []manifest.Cask
+	// extras is the Windows counterpart of casks.
+	extras []string
+}
+
+func (b bundle) empty() bool {
+	return len(b.tools)+len(b.plugins)+len(b.casks)+len(b.extras) == 0
+}
+
+// describeBundle is what a dry run says it would install.
+//
+// Counted per list rather than named one by one, because "would install jq, fd,
+// ghostty, visual-studio-code, brave-browser, font-jetbrains-mono-nerd-font,
+// hiddenbar, zsh-autosuggestions, zsh-fast-syntax-highlighting" is a line nobody
+// reads to the end.
+func describeBundle(b bundle) string {
+	var parts []string
+	if n := len(b.tools); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d tool(s)", n))
+	}
+	if n := len(b.casks); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d cask(s)", n))
+	}
+	if n := len(b.plugins); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d zsh plugin(s)", n))
+	}
+	if n := len(b.extras); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d GUI app(s)", n))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// selected narrows every list the packages phase installs.
+//
+// One place, because the phase has four of them now and a narrowing applied in
+// three would be a checkbox that works most of the time.
+func (a *App) selected(m *manifest.Manifest, missing []manifest.Tool) (bundle, error) {
+	tools := a.toolsFor(m)
+	if a.Tools != "" {
+		// --tools names *missing* tools and errors on anything else, which is
+		// its own contract and older than the selector's.
+		//
+		// Narrowed to what this platform can install before the check, or the
+		// error it promises does not happen: `code` is declared with a winget id
+		// and no brew formula, so on a Mac it is "missing" by PATH, passes the
+		// check, and is then dropped by the renderer because it has no formula
+		// to write. `--tools code` was the silent no-op the check exists to
+		// rule out.
+		installable := map[string]bool{}
+		for _, tool := range tools {
+			installable[tool.Cmd] = true
+		}
+		open := make([]manifest.Tool, 0, len(missing))
+		for _, tool := range missing {
+			if installable[tool.Cmd] {
+				open = append(open, tool)
+			}
+		}
+		named, err := a.selectedTools(open)
+		if err != nil {
+			return bundle{}, err
+		}
+		tools = named
+	}
+
+	var b bundle
+	for _, tool := range tools {
+		if a.wantsUnder(Ref{KindTools, packagesLabel}, KindTool, tool.Cmd) {
+			b.tools = append(b.tools, tool)
+		}
+	}
+	if a.Tools != "" && !a.hasSelection() {
+		// --tools names tools and nothing else. Installing one missing tool
+		// should not also pull in every cask and zsh plugin, which is what made
+		// "install just this one thing" impossible from the CLI before it
+		// existed. A selection supersedes it, being the more specific answer.
+		return b, nil
+	}
+	if a.Platform == manifest.Windows {
+		for _, id := range m.WingetExtras {
+			if a.wantsUnder(Ref{KindWingetExtras, wingetExtrasLabel}, KindWingetExtra, id) {
+				b.extras = append(b.extras, id)
+			}
+		}
+		return b, nil
+	}
+	for _, plugin := range m.ZshPlugins {
+		if a.wantsUnder(Ref{KindPlugins, pluginsLabel}, KindPlugin, plugin.Brew) {
+			b.plugins = append(b.plugins, plugin)
+		}
+	}
+	// Every declared cask, not just this platform's: the rendered file guards
+	// the macOS ones with `if OS.mac?` and lets brew decide, which is what makes
+	// one generated file valid on both.
+	for _, cask := range m.BrewCasks {
+		if a.wantsUnder(Ref{KindCasks, casksLabel}, KindCask, cask.Brew) {
+			b.casks = append(b.casks, cask)
+		}
+	}
+	return b, nil
+}
+
+// InstallPackages brings the machine's packages up to the manifest.
 func (a *App) InstallPackages(ctx context.Context) error {
 	m, err := a.Manifest()
 	if err != nil {
 		return err
 	}
-	// The selector lists the tool set as one component, under this label.
-	if !a.wants(packagesLabel) {
+
+	status := pkgs.Inspect(m, a.Runner)
+	// The tools this platform can install, and which of them it has - the same
+	// two numbers the selector shows, from the same function, because a run and
+	// the screen that launched it disagreeing about a count is worse than either
+	// number being the wrong one.
+	installable := a.toolsFor(m)
+	present := a.toolsPresent(m)
+
+	want, err := a.selected(m, status.Missing)
+	if err != nil {
+		return err
+	}
+	if want.empty() {
+		// Nothing ticked under any of this phase's lists, which is how the
+		// selector spells "skip the packages".
 		a.Report.Line(MarkSkip, packagesLabel+" (not selected)")
 		return nil
 	}
 
-	status := pkgs.Inspect(m, a.Runner)
-	total := len(status.Present) + len(status.Missing)
+	// Which of the *selected* tools the machine does not have.
+	//
+	// Only the tools: those are the ones with a present / missing answer, and
+	// menu_packages.go says why the casks and plugins do not have one.
+	missing := make([]string, 0, len(want.tools))
+	for _, tool := range want.tools {
+		if !present[tool.Cmd] {
+			missing = append(missing, tool.Cmd)
+		}
+	}
 
-	if len(status.Missing) == 0 {
-		a.Report.Line(MarkOK, fmt.Sprintf("all %d tools present", total))
+	// Where the machine stands, about every tool the manifest names, before
+	// anything about what this run would do. It used to say "all N tools
+	// present" whenever nothing *selected* was missing - so ticking one present
+	// tool on a machine missing another reported every tool as present, which
+	// was simply false.
+	// MarkOK, like the other lines that state what the machine already has: a
+	// blank mark is for a continuation of the line above it, and this is the
+	// first line of the phase.
+	a.Report.Line(MarkOK, fmt.Sprintf("%d of %d tools present",
+		len(present), len(installable)))
+	switch {
+	case len(missing) > 0 && a.DryRun:
+		a.Report.Line(MarkChange, "would install "+strings.Join(missing, ", "))
+	case len(missing) > 0:
+		a.Report.Line(MarkNone, "installing "+strings.Join(missing, ", "))
+	case !a.hasSelection() && !a.DryRun:
+		// Everything, and nothing missing: brew bundle over the whole manifest
+		// would be a no-op, and skipping the subprocess is the same outcome
+		// faster.
 		return nil
 	}
-	wanted, err := a.selectedTools(status.Missing)
-	if err != nil {
-		return err
-	}
-	names := make([]string, 0, len(wanted))
-	for _, tool := range wanted {
-		names = append(names, tool.Cmd)
-	}
-	a.Report.Line(MarkNone, fmt.Sprintf("%d of %d present; installing %s",
-		len(status.Present), total, strings.Join(names, ", ")))
 
 	if a.DryRun {
-		a.Report.Line(MarkChange, "would install "+strings.Join(names, ", "))
+		// What the bundle would be rendered from, rather than what it would
+		// change: the casks and the plugins were never asked about, so claiming
+		// either way about them would be a guess.
+		a.Report.Line(MarkNone, "the bundle covers "+describeBundle(want))
 		return nil
 	}
 
 	if a.Platform == manifest.Windows {
-		return a.runWinget(ctx, m)
+		return a.runWinget(ctx, want)
 	}
 	if !a.Runner.Look("brew") {
 		return fmt.Errorf("homebrew is not installed - see https://brew.sh")
 	}
-	// A subset gets its own Brewfile: installing one missing tool must not
-	// also pull in every cask the full file carries.
-	body := pkgs.Brewfile(m)
-	if a.Tools != "" {
-		body = pkgs.BrewfileForTools(wanted)
-	}
+	body := pkgs.BrewfileOf(want.tools, want.plugins, want.casks)
 	file, cleanup, err := tempFile("Brewfile", body)
 	if err != nil {
 		return err
@@ -128,8 +273,8 @@ func (a *App) InstallPackages(ctx context.Context) error {
 	return nil
 }
 
-func (a *App) runWinget(ctx context.Context, m *manifest.Manifest) error {
-	body, err := pkgs.WingetPackages(m)
+func (a *App) runWinget(ctx context.Context, want bundle) error {
+	body, err := pkgs.WingetPackagesOf(want.tools, want.extras)
 	if err != nil {
 		return err
 	}
@@ -160,18 +305,66 @@ func (a *App) installMcps(ctx context.Context, packages []string) {
 	if len(packages) == 0 {
 		return
 	}
-	// The selector offers these under one label, and this is where an unticked
-	// box stops being decorative - it used to install them regardless.
-	if !a.wants(mcpLabel) {
+	// One at a time, and this is where an unticked box stops being decorative -
+	// they used to install regardless of the selector, and then regardless of
+	// which of them was ticked.
+	wanted := make([]string, 0, len(packages))
+	for _, pkg := range packages {
+		if a.wantsUnder(Ref{KindMcps, mcpLabel}, KindMcp, pkg) {
+			wanted = append(wanted, pkg)
+		}
+	}
+	if len(wanted) == 0 {
 		a.Report.Line(MarkSkip, mcpLabel+" (not selected)")
 		return
 	}
+	packages = wanted
 	if !a.Runner.Look("npm") {
 		a.Report.Line(MarkSkip, "npm is not installed, so no MCP servers")
 		return
 	}
+
+	// Only the ones npm does not already have. Asked even under --dry-run,
+	// because `npm root -g` is a question and the whole point of a preview is to
+	// say what would actually change.
+	//
+	// `npm install -g` on a package that is already there takes about two
+	// seconds to decide it has nothing to do, so an install on a set-up machine
+	// spent fifteen of them reinstalling seven packages it had. The upgrade it
+	// used to perform as a side effect now lives in `doti update`, which is the
+	// same split `brew bundle --no-upgrade` already draws: install and update
+	// are different operations, and the menu offers both.
+	// Asked directly rather than through App.Globals, and that is deliberate:
+	// this runs *after* the packages phase, which may just have installed node
+	// and npm - so an answer cached before them would be an answer about a
+	// machine that had no npm.
+	present, err := pkgs.NpmGlobals(ctx, a.Runner, packages)
+	if err != nil {
+		a.Report.Line(MarkWarn, fmt.Sprintf("could not ask npm what it has: %v", err))
+		present = nil
+	}
+	fresh := make([]string, 0, len(packages))
+	for _, pkg := range packages {
+		if !present[pkg] {
+			fresh = append(fresh, pkg)
+		}
+	}
+	// Counted over what was selected, and said so: "7 already present" when two
+	// of seven were ticked was a number about a set nobody had asked about.
+	if len(fresh) == 0 {
+		a.Report.Line(MarkOK, fmt.Sprintf("%s: %d selected, all present",
+			mcpLabel, len(packages)))
+		return
+	}
+	if len(fresh) < len(packages) {
+		a.Report.Line(MarkNone, fmt.Sprintf("%s: %d of %d selected already present",
+			mcpLabel, len(packages)-len(fresh), len(packages)))
+	}
+	packages = fresh
+
 	if a.DryRun {
-		a.Report.Line(MarkChange, fmt.Sprintf("would npm install -g %d package(s)", len(packages)))
+		a.Report.Line(MarkChange, fmt.Sprintf("would npm install -g %s",
+			strings.Join(packages, ", ")))
 		return
 	}
 	done := a.Report.Working(fmt.Sprintf("npm install -g (%d MCP servers)", len(packages)))

@@ -41,7 +41,7 @@ usage:
   doti check                verify tools and symlinks; changes nothing
   doti link                 link configs into $HOME
   doti unlink               remove the links this repo owns
-  doti uninstall            remove installed tools - names only, never all
+  doti uninstall            remove tools or MCP servers - names only, never all
   doti sync                 git pull --ff-only, then re-link
   doti update               upgrade installed packages
   doti secrets              render secret files from Bitwarden
@@ -100,24 +100,26 @@ type options struct {
 	term bool
 }
 
-// wantsHelp reports whether this invocation is a request for the usage text.
-//
-// Both spellings of the flag anywhere in the arguments, plus the bare word:
-// `doti help`, `doti --help`, `doti install -h`. A person reaching for any of
-// them wants the same paragraph.
 // include is the component list an operation acts on, taken from the flags.
 //
 // Only a removal takes one. Everywhere else an empty Include means everything,
 // which is what a command line wants; for `uninstall` an empty one means
 // nothing, and --tools is the only way to name something. There is deliberately
 // no flag that means "all of them".
-func (o options) include(op app.Operation) []string {
+func (o options) include(op app.Operation) []app.Ref {
 	if op != app.OpRemovePackages {
 		return nil
 	}
-	return app.SplitList(o.tools)
+	// Unqualified: `--tools jq` names whatever jq turns out to be, and a
+	// removal list holds nothing whose name means two things.
+	return app.Refs(app.SplitList(o.tools))
 }
 
+// wantsHelp reports whether this invocation is a request for the usage text.
+//
+// Both spellings of the flag anywhere in the arguments, plus the bare word:
+// `doti help`, `doti --help`, `doti install -h`. A person reaching for any of
+// them wants the same paragraph.
 func wantsHelp(args []string) bool {
 	for _, arg := range args {
 		switch arg {
@@ -342,7 +344,7 @@ func preview(ctx context.Context, instance *app.App, opts options) error {
 		}
 		return runWindow(ctx, instance, opts, "")
 	}
-	components, err := instance.MenuItems()
+	components, err := instance.MenuItems(ctx)
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/riptone/tone.rip/apps/doti/internal/app"
 )
 
 // Action is one operation the window can run.
@@ -26,6 +28,10 @@ const (
 	// ActionSelfUpdate replaces the binary. Not in the menu - it is offered in
 	// the footer, and only when the check found something.
 	ActionSelfUpdate Action = "self-update"
+	// ActionSecrets renders the secret files. Not in the menu either: it is a
+	// phase of an install, and `doti secrets` is how somebody asks for it on its
+	// own - which still opens the window, so it still needs a label.
+	ActionSecrets Action = "secrets"
 )
 
 // op is one entry in the menu.
@@ -37,6 +43,22 @@ type op struct {
 	// act on everything or on nothing, so a selector would be a keypress that
 	// never changes the outcome.
 	selects bool
+	// kinds narrows what its selector offers. Empty means everything.
+	//
+	// Unlink is why this exists: it acts on stow packages and nothing else, so
+	// a list that also offered `brew packages`, the MCP servers and the secrets
+	// would be three quarters checkboxes that change nothing about the outcome.
+	kinds []app.Kind
+	// onlyMissing drops from its selector everything the machine already has.
+	//
+	// Adopt is why: its whole description is "install only what is missing", and
+	// its selector was byte-for-byte the Install one - every tool, every cask,
+	// every linked config, on a machine that had them all. A screen that says
+	// "what is left" and lists everything is worse than no screen.
+	//
+	// It also opens its groups: a list built from what is missing is short by
+	// construction, and folding a short list hides the answer.
+	onlyMissing bool
 	// removes means the operation deletes software.
 	//
 	// Its selector starts with nothing ticked, so the safe action - press enter
@@ -52,10 +74,21 @@ type op struct {
 var menu = []op{
 	{action: ActionInstall, label: "Install", desc: "packages and configs", selects: true},
 	// "Unlink" rather than "Uninstall", which is now a different operation:
-	// this one leaves the software and takes away the symlinks.
-	{action: ActionUnlink, label: "Unlink", desc: "remove symlinks (packages stay)"},
-	{action: ActionAdopt, label: "Adopt", desc: "install only what is missing", selects: true},
-	{action: ActionPreview, label: "Preview", desc: "show what would change"},
+	// this one leaves the software and takes away the symlinks. It picks, like
+	// the other two that change $HOME - it used to unlink every package there
+	// was, which made "take ghostty back off this machine" a thing you could
+	// only do by unlinking all of them and re-installing the rest.
+	{action: ActionUnlink, label: "Unlink", desc: "remove symlinks (packages stay)",
+		selects: true, kinds: []app.Kind{app.KindStow}},
+	{action: ActionAdopt, label: "Adopt", desc: "install only what is missing",
+		selects: true, onlyMissing: true},
+	// Install-shaped, so it picks like the other two. It was the only one of the
+	// three without a selector, which had a cost beyond the inconsistency:
+	// previewing what packages would change stopped to ask for the vault master
+	// password, because the secrets phase runs either way and there was no box to
+	// untick.
+	{action: ActionPreview, label: "Preview", desc: "show what would change",
+		selects: true},
 	{action: ActionCheck, label: "Health check", desc: "verify symlinks and tools"},
 	{action: ActionSync, label: "Sync", desc: "git pull, then re-link"},
 	{action: ActionUpdate, label: "Update", desc: "upgrade installed packages"},
@@ -72,8 +105,15 @@ func labelFor(action Action) string {
 			return entry.label
 		}
 	}
-	if action == ActionSelfUpdate {
+	// The operations that reach the window without a menu row of their own.
+	// Without these the label is the raw action name, so the run screen's title
+	// read `secrets` where every other one reads `Secrets` - and a switch nobody
+	// updates is how a fourth one would read `some-new-thing`.
+	switch action {
+	case ActionSelfUpdate:
 		return "Self-update"
+	case ActionSecrets:
+		return "Secrets"
 	}
 	return string(action)
 }

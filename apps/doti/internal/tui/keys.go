@@ -29,6 +29,16 @@ type keymap struct {
 	Restart key.Binding
 	// Help opens the help screen, and closes it again.
 	Help key.Binding
+	// Unfold and Fold open and close a group on the selector; FoldToggle does
+	// whichever applies.
+	//
+	// The arrows are what a tree uses everywhere, and tab is the one key that
+	// always does something - for the reader who has not worked out which
+	// arrow. `h` and `l` would have been the vim pair, but `h` is help and a
+	// key that means two things depending on the screen is a key nobody trusts.
+	Unfold     key.Binding
+	Fold       key.Binding
+	FoldToggle key.Binding
 	// Stop cancels a running operation. Separate from Quit, because ctrl+c
 	// during an install should stop the install rather than the program.
 	Stop key.Binding
@@ -44,6 +54,10 @@ func newKeymap() keymap {
 		Restart: key.NewBinding(key.WithKeys("r")),
 		Help:    key.NewBinding(key.WithKeys("h", "?")),
 		Stop:    key.NewBinding(key.WithKeys("ctrl+c")),
+
+		Unfold:     key.NewBinding(key.WithKeys("right", "l")),
+		Fold:       key.NewBinding(key.WithKeys("left")),
+		FoldToggle: key.NewBinding(key.WithKeys("tab")),
 	}
 	// Space belongs to Toggle on this program's lists, so the page keys give
 	// it up rather than both claiming it and letting order decide.

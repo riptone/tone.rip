@@ -326,7 +326,7 @@ func TestIncludeNarrowsTheSecrets(t *testing.T) {
 	vault := newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"unlocked"}`).
 		answer("get item dotfiles/creds", noteBody)
 	a.Vault = vault
-	a.Include = []string{"creds"}
+	a.Include = Refs([]string{"creds"})
 
 	if err := a.Secrets(context.Background()); err != nil {
 		t.Fatal(err)
@@ -465,5 +465,59 @@ func TestASecondSecretFailingStillReportsTheFirst(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(a.Home, ".doti", "creds.json")); err != nil {
 		t.Errorf("the first secret was rolled back: %v", err)
+	}
+}
+
+// Unticking every secret must not open the vault.
+//
+// It used to: the per-secret filter ran *after* the deployment was set, the
+// master password was asked for and the vault was synced - so a Preview with the
+// secrets unticked still stopped to prompt, and then rendered nothing. A
+// master-password prompt for a phase that was going to do nothing is the worst
+// version of a checkbox that does not work.
+func TestNoSecretsSelectedNeverTouchesTheVault(t *testing.T) {
+	a, _, rec := fixture(t, "brew", "jq", "ghostty", "zsh")
+	withSecrets(t, a, oneSecret)
+
+	// Locked, so anything that got as far as opening it would have to prompt.
+	vault := newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"locked"}`).
+		answer("unlock --raw", "a-session-key").
+		answer("get item dotfiles/creds", noteBody)
+	a.Vault = vault
+	a.Include = []Ref{{Kind: KindStow, Label: "zsh"}}
+
+	if err := a.Secrets(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if asked := vault.asked("plain"); len(asked) != 0 {
+		t.Errorf("bw was run: %v", asked)
+	}
+	if asked := vault.asked("interactive"); len(asked) != 0 {
+		t.Errorf("the master password was asked for: %v", asked)
+	}
+	if !rec.Contains("no secrets selected") {
+		t.Errorf("%v", rec.Texts())
+	}
+}
+
+// And with one ticked it does, or the test above would pass for the wrong
+// reason.
+func TestOneSecretSelectedStillOpensTheVault(t *testing.T) {
+	a, _, _ := fixture(t, "brew", "jq", "ghostty", "zsh")
+	withSecrets(t, a, oneSecret)
+
+	vault := newVault(`{"serverUrl":"https://vault.bitwarden.eu","status":"locked"}`).
+		answer("unlock --raw", "a-session-key").
+		answer("get item dotfiles/creds", noteBody)
+	a.Vault = vault
+	// Somebody is watching, so a locked vault is a prompt rather than an error.
+	a.Interactive = true
+	a.Include = []Ref{{Kind: KindSecret, Label: "creds"}}
+
+	if err := a.Secrets(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !vault.sawInteractive("unlock --raw") {
+		t.Error("a ticked secret did not open the vault")
 	}
 }

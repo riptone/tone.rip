@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,10 +21,29 @@ type fakeRunner struct {
 	cmds map[string]bool
 	apps map[string]bool
 	ran  []string
-	fail map[string]error
+	// asked holds the Output invocations - the questions, kept apart from the
+	// steps in `ran` so that "nothing ran" stays a meaningful assertion once a
+	// removal has to ask brew for its inventory before it removes anything.
+	asked []string
+	fail  map[string]error
+	// out is what Output answers, keyed by the whole invocation.
+	out map[string]string
 	// onRun lets a test make a command have an effect - `git clone` has to
 	// produce a checkout or everything after it is untestable.
 	onRun func(name string, args []string) error
+	// onOutput is the same for a question that has to write a file first:
+	// `winget export` is handed a path and its answer is read back from disk.
+	onOutput func(name string, args []string) ([]byte, error)
+	// files is where a test keeps a generated file it wants to read back - the
+	// Brewfile and the winget import are both removed when the phase returns.
+	files map[string]string
+}
+
+// readFile is os.ReadFile as a string, for the tests that snapshot a generated
+// file before its temp directory goes away.
+func readFile(path string) (string, error) {
+	body, err := os.ReadFile(path)
+	return string(body), err
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
@@ -43,8 +63,63 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) error {
 	return nil
 }
 
+// Output answers an inventory question. The keys are the invocation the
+// caller makes - "brew list --formula -1" - and the values are its stdout, so a
+// test says what a package manager owns in the same shape a real one reports it.
+func (f *fakeRunner) Output(_ context.Context, name string, args ...string) ([]byte, error) {
+	invocation := name + " " + strings.Join(args, " ")
+	f.mu.Lock()
+	f.asked = append(f.asked, invocation)
+	f.mu.Unlock()
+
+	for prefix, err := range f.fail {
+		if strings.HasPrefix(invocation, prefix) {
+			return nil, err
+		}
+	}
+	if f.onOutput != nil {
+		return f.onOutput(name, args)
+	}
+	return []byte(f.out[invocation]), nil
+}
+
 func (f *fakeRunner) Look(name string) bool   { return f.cmds[name] }
 func (f *fakeRunner) HasApp(name string) bool { return f.apps[name] }
+
+// owns makes `brew list` name the given formulae, which is how a removal
+// decides what it is willing to delete.
+//
+// Separate from cmds on purpose: "on PATH" and "brew installed it" are two
+// different facts, and every test that needs them to disagree - a system jq on a
+// machine whose brew never had one - says so by setting only one.
+func (f *fakeRunner) owns(formulae ...string) {
+	f.cmds["brew"] = true
+	f.out["brew list --formula -1"] = strings.Join(formulae, "\n")
+}
+
+// ownsWinget makes `winget export` write the given identifiers, in the file
+// winget writes and pkgs.WingetPackages renders.
+func (f *fakeRunner) ownsWinget(ids ...string) {
+	f.cmds["winget"] = true
+	quoted := make([]string, 0, len(ids))
+	for _, id := range ids {
+		quoted = append(quoted, fmt.Sprintf(`{"PackageIdentifier":%q}`, id))
+	}
+	body := fmt.Sprintf(`{"Sources":[{"Packages":[%s]}]}`, strings.Join(quoted, ","))
+	// winget is handed the path to write to, so the fake has to write it: the
+	// answer is read back from disk, which is the part worth exercising.
+	f.onOutput = func(name string, args []string) ([]byte, error) {
+		if name != "winget" {
+			return nil, nil
+		}
+		for i, arg := range args {
+			if arg == "--output" && i+1 < len(args) {
+				return nil, os.WriteFile(args[i+1], []byte(body), 0o600)
+			}
+		}
+		return nil, nil
+	}
+}
 
 func (f *fakeRunner) didRun(prefix string) bool {
 	f.mu.Lock()
@@ -99,7 +174,7 @@ func fixture(t *testing.T, installed ...string) (*App, *fakeRunner, *Recorder) {
 	for _, name := range installed {
 		have[name] = true
 	}
-	runner := &fakeRunner{cmds: have, apps: map[string]bool{}}
+	runner := &fakeRunner{cmds: have, apps: map[string]bool{}, out: map[string]string{}}
 	recorder := &Recorder{}
 
 	return &App{
@@ -310,8 +385,11 @@ func TestInstallWithNoMissingToolsRunsNoPackageManager(t *testing.T) {
 	if runner.didRun("brew bundle") {
 		t.Error("nothing was missing, so brew should not have run")
 	}
-	if !rec.Contains("all 2 tools present") {
-		t.Errorf("expected an all-present line: %v", rec.Texts())
+	// A count of what the machine has against what the manifest names, which
+	// stays true when only some of them are selected - "all N tools present"
+	// did not.
+	if !rec.Contains("2 of 2 tools present") {
+		t.Errorf("expected a present count: %v", rec.Texts())
 	}
 }
 

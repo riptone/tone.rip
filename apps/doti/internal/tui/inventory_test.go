@@ -129,13 +129,13 @@ func TestARescanLandingMidSelectionKeepsTheTicks(t *testing.T) {
 	m = tap(m, " ") // tick jq
 
 	ticked := m.Chosen()
-	if len(ticked) != 1 || ticked[0] != "jq" {
-		t.Fatalf("ticked %v", ticked)
+	if len(ticked) != 1 || ticked[0].Label != "jq" {
+		t.Fatalf("ticked %v", labelsOf(ticked))
 	}
 
 	m = send(m, inventoryMsg(afterRemoval()))
-	if got := m.Chosen(); len(got) != 1 || got[0] != "jq" {
-		t.Errorf("the re-scan changed the selection to %v", got)
+	if got := m.Chosen(); len(got) != 1 || got[0].Label != "jq" {
+		t.Errorf("the re-scan changed the selection to %v", labelsOf(got))
 	}
 	// And the next open picks the new data up, which is the moment it matters.
 	fresh := openRemoval(t, tap(m, "esc"))

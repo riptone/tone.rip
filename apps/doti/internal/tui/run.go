@@ -65,7 +65,7 @@ type (
 )
 
 // startJob launches an operation and returns the commands that feed the screen.
-func startJob(run RunFunc, action Action, chosen []string) (*job, tea.Cmd) {
+func startJob(run RunFunc, action Action, chosen []app.Ref) (*job, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	j := &job{
 		events:  make(chan app.Record, eventCap),
@@ -155,6 +155,12 @@ type runState struct {
 	label  string
 
 	lines []logLine
+	// shown is how many of lines the reader can actually see.
+	//
+	// Every kind but "working" renders to at least one row; a "working" record
+	// is kept for the transcript and drawn as the live spinner row instead, so
+	// counting it would make the footer's tally two per slow step.
+	shown int
 	// rendered is lines, already wrapped and padded for the current width.
 	//
 	// Kept beside the records rather than derived on every event, which is
@@ -183,6 +189,23 @@ type runState struct {
 	err      error
 	finished bool
 	drained  bool
+	// settledHandled says the settle has already been dealt with.
+	//
+	// afterRun appends a line, retires a spent update offer and fires a re-scan,
+	// and every one of those is wrong to do twice. It is reached from two
+	// messages with no ordering between them - the same reason job.closeChannels
+	// is idempotent - and only the second finds settled() true today. "Today" is
+	// not a property worth relying on.
+	settledHandled bool
+	// stopped records that the reader pressed ctrl+c.
+	//
+	// A third outcome, and it has to be its own field rather than read off err:
+	// whether a cancelled operation returns ctx.Canceled or nil is an accident
+	// of where it happened to be. A phase blocked in `brew bundle` returns the
+	// context error and the footer said "failed" in red; a phase between
+	// subprocesses, or one taking no context at all like Link, returns nil and
+	// it said "done" in green. Neither is what happened.
+	stopped bool
 	// updated records that this run replaced the binary, which is the one
 	// outcome with something left to do afterwards.
 	updated bool
@@ -191,7 +214,7 @@ type runState struct {
 // settled reports whether the operation is over *and* its output complete.
 func (r runState) settled() bool { return r.finished && r.drained }
 
-// newSpinner is the same frames the plain reporter animates, at a rate chosen
+// newSpinner is the same frames the live reporter animates, at a rate chosen
 // to be seen rather than to be fast: every redraw repaints the whole card, and
 // nothing here moves quickly enough to deserve more.
 func newSpinner(s styles) spinner.Model {
@@ -256,7 +279,7 @@ func (m Model) flow() Model {
 }
 
 // begin moves to the run screen and starts an operation.
-func (m Model) begin(action Action, chosen []string) (Model, tea.Cmd) {
+func (m Model) begin(action Action, chosen []app.Ref) (Model, tea.Cmd) {
 	g := m.runGeometry()
 	view := viewport.New(g.Text, g.Body)
 	// The viewport keeps its own bindings, which is a second answer to what
@@ -297,12 +320,19 @@ func (m Model) event(rec app.Record) (tea.Model, tea.Cmd) {
 	if rec.Kind == "working" {
 		m.run.working = rec.Text
 		m.run.since = nowFunc()
+		// Kept, though it renders to nothing: the transcript is replayed into
+		// the scrollback when the alt screen goes away, and dropping these lost
+		// the only mention of *which* command produced each result - "installed
+		// the missing tools" with no "… brew bundle install" above it. rowsFor
+		// returns no rows for it, so rendered stays what is on screen.
+		m.run.lines = append(m.run.lines, logLine{kind: rec.Kind, text: rec.Text})
 		return m.flow(), waitEvent(m.run.job)
 	}
 
 	// A result line replaces the spinner it belongs to.
 	m.run.working = ""
 	line := logLine{kind: rec.Kind, mark: rec.Mark, text: rec.Text}
+	m.run.shown++
 	g := m.runGeometry()
 	if m.run.renderedFor != g.Text {
 		// The width moved without a resize reaching us. Rebuild, which also
@@ -324,6 +354,7 @@ func (m Model) appendLine(mark app.Mark, text string) Model {
 	line := logLine{kind: "line", mark: mark, text: text}
 	g := m.runGeometry()
 	m.run.lines = append(m.run.lines, line)
+	m.run.shown++
 	if m.run.renderedFor != g.Text {
 		return m.rewrap()
 	}
@@ -335,10 +366,17 @@ func (m Model) appendLine(mark app.Mark, text string) Model {
 // afterRun is the bookkeeping that only makes sense once both the work and its
 // output are complete.
 func (m Model) afterRun() (tea.Model, tea.Cmd) {
-	if !m.run.settled() {
+	if !m.run.settled() || m.run.settledHandled {
 		return m, nil
 	}
+	m.run.settledHandled = true
 	m.run.working = ""
+	if m.run.stopped {
+		// Last, so it is last: the operation may still have had queued events
+		// in flight when the key was pressed, and a line claiming nothing ran
+		// after it followed by three more lines would be its own small lie.
+		m = m.appendLine(app.MarkWarn, "stopped here: nothing after this ran")
+	}
 	if m.run.action == ActionSelfUpdate && m.run.err == nil {
 		m.run.updated = true
 		// The offer is spent. Leaving it up meant the menu still advertised

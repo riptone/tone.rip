@@ -113,7 +113,13 @@ func (a *App) Install(ctx context.Context) error {
 	if err := a.InstallPackages(ctx); err != nil {
 		return err
 	}
-	if a.WantsExtra("nerd-font") {
+	// Over the declared extras rather than by name, so the selector's rows and
+	// the steps behind them come from one list. Only the names in
+	// installableExtras are offered, and only those are dispatched here.
+	for name := range installableExtras {
+		if !a.WantsExtra(name) {
+			continue
+		}
 		if err := a.InstallNerdFont(ctx); err != nil {
 			return err
 		}
@@ -126,14 +132,6 @@ func (a *App) Install(ctx context.Context) error {
 	}
 	// After the configs, because the tracked .gitconfig is what includes it -
 	// writing it first would leave a file nothing reads yet.
-	//
-	// Not selectable, unlike everything else this phase does, and that is the
-	// line: the selector offers manifest *lists* - packages, extras, MCP
-	// servers, stow packages, system components, secrets - because each entry
-	// is a thing somebody chose to declare. This is one derived line of
-	// credential-helper config, computed from the platform, and it yields
-	// entirely to a secret that declares the same file. There is no decision in
-	// it to offer.
 	if err := a.writeGitLocal(); err != nil {
 		return err
 	}

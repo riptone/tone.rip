@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -122,21 +123,22 @@ func TestChoosingAnOperationOpensTheRunScreenRatherThanQuitting(t *testing.T) {
 // The bug the selector had: the ticked components were collected and then
 // nobody asked for them.
 func TestConfirmingTheSelectorPassesTheTickedComponentsToTheOperation(t *testing.T) {
-	var got []string
+	var got []app.Ref
 	var mu sync.Mutex
 	cfg := Config{
 		Components: components(),
 		Renderer:   lipgloss.NewRenderer(io.Discard),
 		Width:      80, Height: 26,
-		Run: func(_ context.Context, _ Action, chosen []string, _ RunOptions) error {
+		Run: func(_ context.Context, _ Action, chosen []app.Ref, _ RunOptions) error {
 			mu.Lock()
-			got = append([]string(nil), chosen...)
+			got = append([]app.Ref(nil), chosen...)
 			mu.Unlock()
 			return nil
 		},
 	}
 	m := New(cfg)
-	// Into the selector, untick the first component, confirm.
+	// Into the selector, untick the first component - the tools parent, which
+	// carries its children - and confirm.
 	m = tap(m, "enter", " ", "enter")
 	if m.screen != ScreenRun {
 		t.Fatalf("screen = %v", m.screen)
@@ -146,12 +148,30 @@ func TestConfirmingTheSelectorPassesTheTickedComponentsToTheOperation(t *testing
 	drain(t, cmd)
 	mu.Lock()
 	defer mu.Unlock()
-	if len(got) != 3 {
-		t.Fatalf("the operation was given %v, want the three still ticked", got)
+
+	for _, ref := range got {
+		switch ref.Label {
+		case "brew packages", "jq", "fd":
+			t.Errorf("the tools were unticked and %q was passed anyway: %v",
+				ref.Label, labelsOf(got))
+		}
 	}
-	for _, label := range got {
-		if label == "brew packages" {
-			t.Errorf("an unticked component was passed anyway: %v", got)
+	// And the rest still went, so this is not passing by passing nothing.
+	for _, want := range []string{"zsh", "mcp servers", "mssql-envs"} {
+		if !slices.ContainsFunc(got, func(r app.Ref) bool { return r.Label == want }) {
+			t.Errorf("%q was dropped: %v", want, labelsOf(got))
+		}
+	}
+}
+
+// Every ref carries its kind, because the labels collide: `git` is both a tool
+// the manifest installs and a stow package it links, and a flat list of names
+// could not say which of the two a tick meant.
+func TestTheChosenRefsCarryTheirKind(t *testing.T) {
+	m := tap(model(), "enter")
+	for _, ref := range m.Chosen() {
+		if ref.Kind == "" {
+			t.Errorf("%q arrived unqualified: %+v", ref.Label, ref)
 		}
 	}
 }
@@ -556,7 +576,7 @@ func TestAFailureSaysWhyOnScreen(t *testing.T) {
 // left unusable by a nil map somewhere in a package-manager wrapper.
 func TestAPanicBecomesAFailedRunRatherThanABrokenTerminal(t *testing.T) {
 	j, cmd := startJob(
-		func(context.Context, Action, []string, RunOptions) error {
+		func(context.Context, Action, []app.Ref, RunOptions) error {
 			panic("a nil map somewhere")
 		}, ActionInstall, nil)
 	defer j.stop()

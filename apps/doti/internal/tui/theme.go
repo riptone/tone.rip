@@ -38,6 +38,10 @@ type styles struct {
 	done  lipgloss.Style
 	body  lipgloss.Style
 	faint lipgloss.Style
+	// warn is an answer to a key that was just pressed and did not do what the
+	// reader expected - the accent, so it reads as the same register as a
+	// MarkWarn line rather than as a new colour to learn.
+	warn lipgloss.Style
 
 	// The report marks, one style per Mark, so a line in the window and the
 	// same line on stdout carry the same colour.
@@ -66,11 +70,13 @@ func newStyles(r *lipgloss.Renderer) styles {
 		done:  base.Foreground(gotui.Faint),
 		body:  base.Foreground(gotui.Text),
 		faint: base.Foreground(gotui.Faint),
+		warn:  base.Foreground(gotui.Accent),
 
-		// The same three colours the live reporter writes as raw sequences,
-		// from the same palette - so `doti install` and the window's Install
-		// do not merely agree about what happened, they agree about how it
-		// looked.
+		// The same palette the live reporter writes as raw sequences, so
+		// `doti install` and the window's Install do not merely agree about
+		// what happened, they agree about how it looked. MarkNone is the one
+		// that differs, and only because its glyph is a space: the live
+		// reporter leaves it uncoloured where this gives it the body's Muted.
 		marks: map[app.Mark]lipgloss.Style{
 			app.MarkNone:   base.Foreground(gotui.Muted),
 			app.MarkOK:     base.Foreground(gotui.Faint),

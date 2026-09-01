@@ -154,7 +154,7 @@ func TestTheLaunchedOperationIsOnScreenAndKeepsItsStream(t *testing.T) {
 		Renderer:   lipgloss.NewRenderer(io.Discard),
 		Width:      80, Height: 26,
 		Start: ActionInstall,
-		Run: func(_ context.Context, action Action, _ []string, _ RunOptions) error {
+		Run: func(_ context.Context, action Action, _ []app.Ref, _ RunOptions) error {
 			ran = app.Operation(action)
 			return nil
 		},

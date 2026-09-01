@@ -16,19 +16,70 @@ import (
 	"github.com/riptone/tone.rip/packages/gotui"
 )
 
+// components is what a scan of a machine looks like: kinds, because the
+// selectors that offer a subset filter on those, and parents with children,
+// because a fixture of flat rows would never exercise the fold.
 func components() []app.Component {
-	return []app.Component{
-		{Group: "Packages", Label: "brew packages", Status: "11 of 16 present", Selected: true},
-		{Group: "Configs", Label: "zsh", Status: "linked", Done: true, Selected: true},
-		{Group: "Configs", Label: "ghostty", Status: "not linked", Selected: true},
-		{Group: "Secrets", Label: "mssql-envs", Status: "not rendered", Selected: true},
+	tool := func(label, status string) app.Component {
+		return app.Component{Group: "Packages", Kind: app.KindTool,
+			Parent: "brew packages", Label: label, Status: status,
+			Done: status == "installed", Selected: true}
 	}
+	return []app.Component{
+		{Group: "Packages", Kind: app.KindTools, Label: "brew packages",
+			Status: "1 of 2 present", Selected: true},
+		tool("jq", "installed"),
+		tool("fd", "missing"),
+		{Group: "Packages", Kind: app.KindMcps, Label: "mcp servers",
+			Status: "1 of 1 present", Done: true, Selected: true},
+		{Group: "Packages", Kind: app.KindMcp, Parent: "mcp servers",
+			Label: "mcp-sqlite-tools", Status: "installed", Done: true, Selected: true},
+		{Group: "Configs", Kind: app.KindStow, Label: "zsh",
+			Status: "linked", Done: true, Selected: true},
+		{Group: "Configs", Kind: app.KindStow, Label: "ghostty",
+			Status: "not linked", Selected: true},
+		{Group: "Configs", Kind: app.KindGitLocal, Label: "gitconfig-local",
+			Status: "written", Done: true, Selected: true},
+		{Group: "Secrets", Kind: app.KindSecret, Label: "mssql-envs",
+			Status: "not rendered", Selected: true},
+	}
+}
+
+// leaves is how many of the fixture's components are things rather than
+// summaries of things - which is what the selector counts, and what Chosen
+// returns beside the parents that carry them.
+func leaves() int {
+	var n int
+	for _, item := range components() {
+		if item.Kind != app.KindTools && item.Kind != app.KindMcps {
+			n++
+		}
+	}
+	return n
+}
+
+// labelsOf is the labels in a list of refs, for a readable failure.
+func labelsOf(refs []app.Ref) []string {
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, ref.Label)
+	}
+	return out
+}
+
+// chosenLabels is what is ticked, as a set.
+func chosenLabels(m Model) map[string]bool {
+	set := map[string]bool{}
+	for _, ref := range m.Chosen() {
+		set[ref.Label] = true
+	}
+	return set
 }
 
 // noWork is a Run that is never actually invoked: the tests below feed the
 // window their own events, which is what lets the whole run screen be asserted
 // without a machine to install onto.
-func noWork(context.Context, Action, []string, RunOptions) error { return nil }
+func noWork(context.Context, Action, []app.Ref, RunOptions) error { return nil }
 
 func model() Model {
 	return New(Config{
@@ -137,16 +188,27 @@ func TestTheSelectorShowsEveryItemUnderItsGroup(t *testing.T) {
 }
 
 func TestSpaceTogglesAndTheCountFollows(t *testing.T) {
+	// Counted from the fixture rather than written down, so adding a component
+	// to it does not turn every assertion here into a puzzle. Leaves, not rows:
+	// a parent is a summary of its children, and counting it as well would make
+	// "3 of 2 tools" the reading for a fully ticked group.
+	all := leaves()
+
 	m := tap(model(), "enter")
-	if !strings.Contains(plain(m), "4 of 4") {
-		t.Fatalf("everything should start ticked:\n%s", plain(m))
+	if want := fmt.Sprintf("%d of %d", all, all); !strings.Contains(plain(m), want) {
+		t.Fatalf("everything should start ticked, want %q:\n%s", want, plain(m))
 	}
-	m = tap(m, " ")
-	if !strings.Contains(plain(m), "3 of 4") {
-		t.Errorf("space did not untick:\n%s", plain(m))
+
+	// The cursor starts on a folded parent, so untick a leaf instead - the last
+	// one, which nothing folds away.
+	m = tap(m, "G", " ")
+	if want := fmt.Sprintf("%d of %d", all-1, all); !strings.Contains(plain(m), want) {
+		t.Errorf("space did not untick, want %q:\n%s", want, plain(m))
 	}
-	if got := len(m.Chosen()); got != 3 {
-		t.Errorf("Chosen() = %d labels, want 3", got)
+	// One fewer leaf, and every parent still ticked - so the refs are the
+	// leaves that are left plus the parents that carry them.
+	if got := len(m.Chosen()); got != len(components())-1 {
+		t.Errorf("Chosen() = %v", labelsOf(m.Chosen()))
 	}
 }
 
@@ -155,8 +217,8 @@ func TestAllAndNone(t *testing.T) {
 	if got := len(m.Chosen()); got != 0 {
 		t.Errorf("after n, Chosen() = %d, want 0", got)
 	}
-	if got := len(tap(m, "a").Chosen()); got != 4 {
-		t.Errorf("after a, Chosen() = %d, want 4", got)
+	if got, want := len(tap(m, "a").Chosen()), len(components()); got != want {
+		t.Errorf("after a, Chosen() = %d, want %d", got, want)
 	}
 }
 
@@ -168,8 +230,8 @@ func TestTogglingDoesNotReachBackwards(t *testing.T) {
 	if len(before.Chosen()) == len(after.Chosen()) {
 		t.Fatal("the toggle did nothing, so this proves nothing")
 	}
-	if got := len(before.Chosen()); got != 4 {
-		t.Errorf("the earlier model now has %d ticked; it had 4", got)
+	if got, want := len(before.Chosen()), len(components()); got != want {
+		t.Errorf("the earlier model now has %d ticked; it had %d", got, want)
 	}
 }
 

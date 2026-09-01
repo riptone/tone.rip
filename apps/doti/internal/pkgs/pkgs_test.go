@@ -118,11 +118,18 @@ func TestADuplicateExtraIsNotEmittedTwice(t *testing.T) {
 type fakeRunner struct {
 	cmds map[string]bool
 	apps map[string]bool
+	// out is what Output answers, keyed by the whole invocation.
+	out map[string]string
 }
 
 func (f fakeRunner) Run(context.Context, string, ...string) error { return nil }
-func (f fakeRunner) Look(name string) bool                        { return f.cmds[name] }
-func (f fakeRunner) HasApp(name string) bool                      { return f.apps[name] }
+
+func (f fakeRunner) Output(_ context.Context, name string, args ...string) ([]byte, error) {
+	return []byte(f.out[name+" "+strings.Join(args, " ")]), nil
+}
+
+func (f fakeRunner) Look(name string) bool   { return f.cmds[name] }
+func (f fakeRunner) HasApp(name string) bool { return f.apps[name] }
 
 func TestInspectSplitsPresentFromMissing(t *testing.T) {
 	status := Inspect(load(t), fakeRunner{cmds: map[string]bool{"jq": true, "code": true}})

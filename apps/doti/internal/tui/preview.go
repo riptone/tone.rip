@@ -32,11 +32,25 @@ func press(m Model, keys ...string) Model {
 // send feeds one message through the real Update, for the screens that are
 // driven by an operation rather than by a key.
 func send(m Model, msgs ...tea.Msg) Model {
+	next, _ := sendWithCmd(m, msgs...)
+	return next
+}
+
+// sendWithCmd is send, keeping the last command Update produced.
+//
+// For the background work a message sets off - the re-scan a settled run asks
+// for - which a test has to be able to reach without calling the handler a
+// second time by hand. Doing that was how afterRun's line came out twice.
+func sendWithCmd(m Model, msgs ...tea.Msg) (Model, tea.Cmd) {
+	var last tea.Cmd
 	for _, msg := range msgs {
-		next, _ := m.Update(msg)
+		next, cmd := m.Update(msg)
 		m = next.(Model)
+		if cmd != nil {
+			last = cmd
+		}
 	}
-	return m
+	return m, last
 }
 
 func keyMsg(k string) tea.KeyMsg {
@@ -72,7 +86,7 @@ func Frames(components []app.Component, version string, width, height int) []Fra
 		// Never called: the frames below feed their own events, so the run
 		// screen is captured without a machine to install onto. It has to be
 		// non-nil, because a window with nothing wired says so on screen.
-		Run: func(context.Context, Action, []string, RunOptions) error { return nil },
+		Run: func(context.Context, Action, []app.Ref, RunOptions) error { return nil },
 	}
 
 	root := New(cfg)
@@ -86,19 +100,21 @@ func Frames(components []app.Component, version string, width, height int) []Fra
 	offered := send(root, updateFoundMsg("v0.2.0"))
 	frames = append(frames, Frame{Name: "menu-update", Body: offered.View()})
 
-	// Third entry down: Adopt, the one that opens the selector with a
-	// machine's real state already filled in.
+	// Third entry down: Adopt, whose selector shows only what is left.
 	onAdopt := press(root, "down", "down")
 	frames = append(frames, Frame{Name: "menu-adopt", Body: onAdopt.View()})
 
-	selector := press(onAdopt, "enter")
+	// Install's, not Adopt's: this is the capture that has to show the whole
+	// machine, and Adopt's list is by definition whatever happens to be missing
+	// on the machine the capture was taken from - empty, on a set-up one.
+	selector := press(root, "enter")
 	frames = append(frames, Frame{Name: "select", Body: selector.View()})
 
-	// Move down a few and untick one, so the cursor and an unchecked box are
-	// both visible in the same shot.
+	// A group opened and one thing inside it unticked, so the fold marker, a
+	// child row and a parent's partial box are all in the same shot.
 	frames = append(frames, Frame{
 		Name: "select-toggled",
-		Body: press(selector, "down", "down", "down", " ").View(),
+		Body: press(selector, "right", "down", " ").View(),
 	})
 
 	// A run in progress, and the same run finished. These are the screens the
@@ -125,7 +141,8 @@ func runFrames() []tea.Msg {
 		eventMsg(app.Record{Kind: "phase", Text: "repository"}),
 		line(app.MarkOK, "/Users/you/dotfiles"),
 		eventMsg(app.Record{Kind: "phase", Text: "packages"}),
-		line(app.MarkOK, "all 16 tools present"),
+		line(app.MarkOK, "15 of 16 tools present"),
+		line(app.MarkChange, "installing bat"),
 		line(app.MarkChange, "7 MCP servers installed"),
 		eventMsg(app.Record{Kind: "phase", Text: "configs"}),
 		line(app.MarkChange, "stow       linked 1"),

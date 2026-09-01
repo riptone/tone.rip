@@ -83,6 +83,15 @@ func runWindow(ctx context.Context, instance *app.App, opts options, start app.O
 		Run:        operationRunner(instance, opts),
 		Check:      updateChecker(app.Releases{}),
 		Start:      tui.Action(start),
+		// The flags the launched operation was given, which the window has to
+		// carry or the two paths diverge on the one flag that matters most.
+		//
+		// It did: StartChosen existed, was read, and was never set - so
+		// `doti uninstall --tools bat` in a terminal opened straight onto the
+		// run screen with nothing selected, reported "name what to remove;
+		// nothing was removed", and then advised re-running with --tools. The
+		// same command with --term removed it.
+		StartChosen: opts.include(start),
 	})
 
 	final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()
@@ -114,7 +123,7 @@ func runWindow(ctx context.Context, instance *app.App, opts options, start app.O
 
 // operationRunner is the window's one way to do work.
 func operationRunner(instance *app.App, opts options) tui.RunFunc {
-	return func(ctx context.Context, action tui.Action, chosen []string, run tui.RunOptions) error {
+	return func(ctx context.Context, action tui.Action, chosen []app.Ref, run tui.RunOptions) error {
 		// A copy per run. The window can do several in one session, and
 		// Preview sets DryRun - which must not still be set when the reader
 		// goes back to the menu and picks Install.
@@ -166,19 +175,34 @@ func updateChecker(releases app.Releases) tui.CheckFunc {
 // replay writes a finished run's events out as lines.
 //
 // Through the same PlainReporter the plain path uses, rather than a second
-// renderer that agrees with it.
+// renderer that agrees with it - which is also why a "working" record goes
+// through Working and its result through the function Working returns. Anything
+// else would be this file deciding what `  … brew bundle install` looks like,
+// and the claim that a replay is what --term would have printed only holds if
+// nothing here renders anything.
 func replay(records []app.Record, out io.Writer) {
 	if len(records) == 0 {
 		return
 	}
 	reporter := app.PlainReporter{Out: out}
+	// The function the last "working" handed back, owed exactly one call - the
+	// next record is always its result, because that is the contract Working
+	// imposes on whoever reported it.
+	var finish func(app.Mark, string)
 	for _, record := range records {
 		switch record.Kind {
 		case "phase":
 			reporter.Phase(record.Text)
 		case "summary":
 			reporter.Summary(record.Text)
+		case "working":
+			finish = reporter.Working(record.Text)
 		default:
+			if finish != nil {
+				finish(record.Mark, record.Text)
+				finish = nil
+				continue
+			}
 			reporter.Line(record.Mark, record.Text)
 		}
 	}
@@ -213,7 +237,7 @@ func wantsWindow(opts options, interactive bool) bool {
 // rather than the state it started from. It used to be called once and the
 // result kept for the life of the window.
 func inventoryScanner(instance *app.App) tui.ScanFunc {
-	return func(context.Context) (tui.Inventory, error) {
+	return func(ctx context.Context) (tui.Inventory, error) {
 		// A copy, and a fresh manifest read: this runs after an operation that
 		// may have set DryRun or narrowed Include on its own copy, and neither
 		// belongs in a description of the machine.
@@ -222,11 +246,11 @@ func inventoryScanner(instance *app.App) tui.ScanFunc {
 		each.Include = nil
 		each.Forget()
 
-		components, err := each.MenuItems()
+		components, err := each.MenuItems(ctx)
 		if err != nil {
 			return tui.Inventory{}, err
 		}
-		removable, err := each.Removable()
+		removable, err := each.Removable(ctx)
 		if err != nil {
 			return tui.Inventory{}, err
 		}

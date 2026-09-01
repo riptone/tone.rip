@@ -69,6 +69,28 @@ func (a *App) fontDir() (string, error) {
 	}
 }
 
+// nerdFontFaces is how many Nerd Font faces are already in the font directory.
+//
+// The same glob InstallNerdFont uses to decide it has nothing to do, exposed so
+// the selector can say so too. Without it the extras row read "not checked"
+// forever, which made it the one thing Adopt could never drop from a list of
+// what the machine is missing.
+func (a *App) nerdFontFaces() int {
+	if a.Platform == manifest.MacOS {
+		// The Brewfile carries the cask, so the cask row is the answer.
+		return 0
+	}
+	dir, err := a.fontDir()
+	if err != nil {
+		return 0
+	}
+	installed, err := filepath.Glob(filepath.Join(dir, "*NerdFont*.ttf"))
+	if err != nil {
+		return 0
+	}
+	return len(installed)
+}
+
 // InstallNerdFont downloads and extracts the font, if this platform needs it.
 func (a *App) InstallNerdFont(ctx context.Context) error {
 	if a.Platform == manifest.MacOS {

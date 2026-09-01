@@ -131,11 +131,17 @@ func (m Model) helpRows(width int) []string {
 	heading("Choosing what to act on")
 	entry("space / x", "tick or untick the component under the cursor")
 	entry("a / n", "tick all / tick none")
-	paragraph("Install and Adopt open this list. Remove packages opens it too, " +
-		"with nothing ticked - the ticking is the confirmation.")
+	entry("→ / l", "open a group: the tools, casks, plugins or MCP servers in it")
+	entry("←", "close it again")
+	entry("tab", "open or close, whichever applies")
+	paragraph("Install, Preview and Unlink open this list; Adopt opens it with " +
+		"only what the machine is missing, and Remove packages with nothing " +
+		"ticked - the ticking is the confirmation. A group's box shows ~ when " +
+		"only some of what is inside it is ticked; space on one of those ticks " +
+		"all of it.")
 
 	heading("While something is running")
-	entry("ctrl+c", "stop it; what already happened stays on screen")
+	entry("ctrl+c", "stop it: the footer says interrupted, in amber")
 	entry("↑ ↓", "scroll the log, which stops it following the newest line")
 	entry("G", "back to the newest line, and follow it again")
 	entry("enter", "return here once it says done or failed")

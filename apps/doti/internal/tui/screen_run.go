@@ -31,6 +31,9 @@ func (m Model) runKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// got to, and the lines it already reported stay on screen.
 	case key.Matches(msg, m.keys.Stop) && !m.run.settled():
 		m.run.job.stop()
+		// Recorded here rather than inferred at the end, because by the end the
+		// only evidence is an error the operation may or may not have returned.
+		m.run.stopped = true
 		return m, nil
 
 	// A replaced binary is not the one running. Relaunching is the only useful
@@ -92,6 +95,11 @@ func (m Model) rowsFor(line logLine, width int, first bool) []string {
 	}
 
 	switch line.kind {
+	case "working":
+		// No rows: it is on screen as the spinner line, which flow appends and
+		// the next result replaces. Kept in the log only so the replayed
+		// transcript says which command each result came from.
+		return nil
 	case "phase":
 		// A blank above each heading, except the first: the phases are the
 		// only structure a long run has.
@@ -187,13 +195,22 @@ func (m Model) runHints() []hint {
 // and in a colour that does not need reading. "done" and "failed" in the same
 // grey are two words that have to be told apart by spelling.
 //
-// Green and red rather than the accent: the accent is the cursor, and one thing
-// on screen has to stay findable instantly.
+// Three outcomes, not two, and the traffic lights already had the colours: red
+// for a failure, green for a finish, and the amber of the middle button for the
+// middle case - the reader stopped it, so some of it ran and the rest did not.
+// It comes first because it explains the error rather than being explained by
+// it: a cancelled `brew bundle` returns a context error, and "failed" would
+// blame the machine for a decision the reader made.
+//
+// None of the three is the accent: the accent is the cursor, and one thing on
+// screen has to stay findable instantly.
 func (m Model) runStatus() (string, lipgloss.TerminalColor) {
 	switch {
 	case !m.run.settled():
-		return fmt.Sprintf("%d %s", len(m.run.lines),
-			plural(len(m.run.lines), "line")), nil
+		return fmt.Sprintf("%d %s", m.run.shown,
+			plural(m.run.shown, "line")), nil
+	case m.run.stopped:
+		return "interrupted", gotui.Minimise
 	case m.run.err != nil:
 		return "failed", gotui.Close
 	case m.run.updated:
@@ -204,7 +221,7 @@ func (m Model) runStatus() (string, lipgloss.TerminalColor) {
 }
 
 // elapsed is a compact duration: seconds under a minute, then m:ss. The same
-// shape the plain reporter prints.
+// shape the live reporter prints - PlainReporter times nothing.
 func elapsed(d time.Duration) string {
 	seconds := int(d.Seconds())
 	if seconds < 60 {

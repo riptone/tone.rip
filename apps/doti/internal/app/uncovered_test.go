@@ -20,7 +20,7 @@ import (
 func TestMenuItemsDescribeTheMachine(t *testing.T) {
 	a, _, _ := fixture(t, "brew", "jq", "ghostty", "zsh")
 
-	items, err := a.MenuItems()
+	items, err := a.MenuItems(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,12 +73,14 @@ func TestMenuItemsFollowTheMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items, err := a.MenuItems()
+	items, err := a.MenuItems(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, item := range items {
-		if item.Group != "Configs" {
+		// By kind rather than by group: Configs also carries the system links
+		// and ~/.gitconfig.local, and neither is something Link touches.
+		if item.Kind != KindStow {
 			continue
 		}
 		if item.Status != "linked" || !item.Done {
@@ -92,20 +94,20 @@ func TestMenuItemsFollowTheMachine(t *testing.T) {
 func TestMenuItemsIgnoreOnlyAndInclude(t *testing.T) {
 	a, _, _ := fixture(t, "brew", "jq", "ghostty", "zsh")
 	a.Only = "zsh"
-	a.Include = []string{"zsh"}
+	a.Include = Refs([]string{"zsh"})
 
-	items, err := a.MenuItems()
+	items, err := a.MenuItems(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	var configs int
 	for _, item := range items {
-		if item.Group == "Configs" {
+		if item.Kind == KindStow {
 			configs++
 		}
 	}
 	if configs != 2 {
-		t.Errorf("the selector offered %d config components, want both", configs)
+		t.Errorf("the selector offered %d stow packages, want both", configs)
 	}
 }
 
@@ -365,7 +367,10 @@ func TestTheMcpServersAreBestEffort(t *testing.T) {
 		if err := a.Install(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		if !rec.Contains("would npm install -g 2 package(s)") {
+		// Named rather than counted: a preview that says "2 package(s)" makes
+		// the reader go looking for which two.
+		if !rec.Contains("would npm install -g " +
+			"@modelcontextprotocol/server-a, @modelcontextprotocol/server-b") {
 			t.Errorf("it should say what it would do: %v", rec.Texts())
 		}
 		for _, ran := range runner.ran {

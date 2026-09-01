@@ -9,15 +9,19 @@ import (
 	"github.com/riptone/tone.rip/apps/doti/internal/pkgs"
 )
 
-// Removing packages, which is the one operation here that deletes software.
+// Removing software, which is the one operation here that deletes any.
 //
 // The README said this was deliberately absent, and the reason still holds:
 // deleting somebody's `node` because a manifest changed would be a bad
-// surprise. So it exists now under four rules, and the rules are the feature:
+// surprise. So it exists now under five rules, and the rules are the feature:
 //
 //   - It removes exactly what it was *named*. Include is the list, and an empty
 //     Include removes nothing - there is no spelling of this that means "all"
 //     unless somebody typed one.
+//   - It offers only what the package manager says it installed. Not what is on
+//     PATH: macOS ships /usr/bin/jq, so a machine where `brew uninstall jq` had
+//     already run went on offering jq as "installed" for as long as the list was
+//     built from `command -v`. See pkgs.Owned.
 //   - It refuses anything the manifest does not list. A tool this repository
 //     never installed is not this repository's to remove.
 //   - It refuses the tools the manifest calls required. `brew`, `git`, `stow`
@@ -27,31 +31,51 @@ import (
 //     something depends on a formula is the correct answer, reported rather
 //     than overridden.
 
-// Removable is the manifest's tools that are installed and that this tool is
-// willing to remove.
+// Removable is what this tool is willing to remove and the machine still has:
+// the manifest's tools that the package manager owns, and the MCP servers npm
+// actually has installed.
 //
 // The selector's list for a removal, which is also why they arrive unticked:
 // see MenuItems for the shape.
-func (a *App) Removable() ([]Component, error) {
+func (a *App) Removable(ctx context.Context) ([]Component, error) {
 	m, err := a.Manifest()
+	if err != nil {
+		return nil, err
+	}
+	owned, err := a.Owned(ctx)
 	if err != nil {
 		return nil, err
 	}
 	required := a.requiredTools(m)
 
-	status := pkgs.Inspect(m, a.Runner)
-	out := make([]Component, 0, len(status.Present))
-	for _, tool := range status.Present {
+	out := make([]Component, 0, len(m.Tools)+len(m.Mcps))
+	for _, tool := range m.Tools {
 		if required[tool.Cmd] {
 			continue
 		}
-		if a.packageFor(tool) == "" {
-			// Nothing to hand a package manager: it arrived some other way, so
-			// removing it is not this tool's business either.
+		pkg := a.packageFor(tool)
+		if pkg == "" || !owned[pkg] {
+			// Either the manifest hands this platform's package manager
+			// nothing, or the package manager did not install it. A tool that
+			// arrived some other way is not this tool's to delete.
 			continue
 		}
 		out = append(out, Component{
-			Group: "Packages", Label: tool.Cmd,
+			Group: "Packages", Kind: KindTool, Label: tool.Cmd,
+			Status: "installed", Done: true, Selected: false,
+		})
+	}
+
+	installed, err := a.Globals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, pkg := range m.Mcps {
+		if !installed[pkg] {
+			continue
+		}
+		out = append(out, Component{
+			Group: "MCP servers", Kind: KindMcp, Label: pkg,
 			Status: "installed", Done: true, Selected: false,
 		})
 	}
@@ -87,7 +111,7 @@ func (a *App) packageFor(tool manifest.Tool) string {
 	return tool.Brew
 }
 
-// RemovePackages uninstalls the tools named in Include.
+// RemovePackages uninstalls the tools and MCP servers named in Include.
 //
 // Named, not selected-by-default: an empty Include is reported as the no-op it
 // is, with the list of what could have been named. That is the whole safety
@@ -98,30 +122,28 @@ func (a *App) RemovePackages(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	removable, err := a.Removable()
+	removable, err := a.Removable(ctx)
 	if err != nil {
 		return err
 	}
 
 	if len(a.Include) == 0 {
-		if len(removable) == 0 {
-			a.Report.Line(MarkOK, "nothing this repository installed is still present")
-			return nil
-		}
-		names := make([]string, 0, len(removable))
-		for _, item := range removable {
-			names = append(names, item.Label)
-		}
-		a.Report.Line(MarkSkip, "name what to remove; nothing was removed")
-		a.Report.Line(MarkNone, "removable: "+strings.Join(names, ", "))
-		a.Report.Summary("re-run with --tools " + strings.Join(names, ",") +
-			", or pick them in the window")
-		return nil
+		return a.reportNothingNamed(removable)
 	}
 
 	byCmd := map[string]manifest.Tool{}
 	for _, tool := range m.Tools {
 		byCmd[tool.Cmd] = tool
+	}
+	mcps := map[string]bool{}
+	for _, pkg := range m.Mcps {
+		mcps[pkg] = true
+	}
+	// Present, as opposed to owned: the two differ, and the difference is the
+	// only honest way to say why a named tool is being left alone.
+	present := map[string]bool{}
+	for _, tool := range pkgs.Inspect(m, a.Runner).Present {
+		present[tool.Cmd] = true
 	}
 	allowed := map[string]bool{}
 	for _, item := range removable {
@@ -130,7 +152,11 @@ func (a *App) RemovePackages(ctx context.Context) error {
 	required := a.requiredTools(m)
 
 	var failed []string
-	for _, name := range a.Include {
+	for _, ref := range a.Include {
+		// The label, because a removal is named one thing at a time and the
+		// kind is only there to disambiguate a name that means two things -
+		// which a removal list never holds, having no stow packages in it.
+		name := ref.Label
 		tool, known := byCmd[name]
 		switch {
 		// Required first, and that order is the point: the required set comes
@@ -140,6 +166,17 @@ func (a *App) RemovePackages(ctx context.Context) error {
 		case required[name]:
 			a.Report.Line(MarkSkip, name+" is required by the manifest and will not be removed")
 			continue
+		case mcps[name]:
+			if !allowed[name] {
+				a.Report.Line(MarkOK, name+" (not installed)")
+				continue
+			}
+			if err := a.removeMcp(ctx, name); err != nil {
+				a.Report.Line(MarkWarn, fmt.Sprintf("%s: %v", name, err))
+				failed = append(failed, name)
+				continue
+			}
+			continue
 		case !known:
 			// Not ours to remove. Reported rather than ignored, because a typo
 			// silently removing nothing reads as "it was already gone".
@@ -147,6 +184,14 @@ func (a *App) RemovePackages(ctx context.Context) error {
 			failed = append(failed, name)
 			continue
 		case !allowed[name]:
+			// Absent, or present and foreign. Two different facts, and saying
+			// "not installed" for the second one is what made a system jq look
+			// like a bug in the removal.
+			if present[name] {
+				a.Report.Line(MarkSkip, fmt.Sprintf("%s is installed, but not by %s - left alone",
+					name, a.packageManager()))
+				continue
+			}
 			a.Report.Line(MarkOK, name+" (not installed)")
 			continue
 		}
@@ -167,9 +212,62 @@ func (a *App) RemovePackages(ctx context.Context) error {
 	}
 
 	if len(failed) > 0 {
-		return fmt.Errorf("%d of %d did not come off: %s",
+		// Of the names, not of the attempts: a typo was never attempted and a
+		// tool that was already gone needed no attempt, and both belong in a
+		// fraction the reader can check against what they typed. Saying which
+		// set the denominator is costs four words and removes the ambiguity.
+		return fmt.Errorf("%d of the %d named did not come off: %s",
 			len(failed), len(a.Include), strings.Join(failed, ", "))
 	}
+	return nil
+}
+
+// reportNothingNamed is `doti uninstall` with no selection: the list of what
+// could have been named, and nothing removed.
+func (a *App) reportNothingNamed(removable []Component) error {
+	if len(removable) == 0 {
+		a.Report.Line(MarkOK, "nothing this repository installed is still present")
+		return nil
+	}
+	names := make([]string, 0, len(removable))
+	for _, item := range removable {
+		names = append(names, item.Label)
+	}
+	a.Report.Line(MarkSkip, "name what to remove; nothing was removed")
+	a.Report.Line(MarkNone, "removable: "+strings.Join(names, ", "))
+	a.Report.Summary("re-run with --tools " + strings.Join(names, ",") +
+		", or pick them in the window")
+	return nil
+}
+
+// packageManager names the thing that would have had to install a tool for this
+// to be willing to remove it. For the message, so it says `brew` on a Mac and
+// `winget` on Windows rather than "the package manager".
+func (a *App) packageManager() string {
+	if a.Platform == manifest.Windows {
+		return "winget"
+	}
+	return "brew"
+}
+
+// removeMcp uninstalls one global npm package.
+//
+// Reported per package rather than as one batch, unlike the install: a removal
+// is named one at a time, so "removed X" for each is the same granularity the
+// reader asked in.
+func (a *App) removeMcp(ctx context.Context, pkg string) error {
+	if a.DryRun {
+		a.Report.Line(MarkChange, fmt.Sprintf("would remove %s (npm -g)", pkg))
+		return nil
+	}
+	if !a.Runner.Look("npm") {
+		a.Report.Line(MarkSkip, "npm is not installed, so "+pkg+" cannot be removed")
+		return nil
+	}
+	if err := a.Runner.Run(ctx, "npm", "uninstall", "-g", pkg); err != nil {
+		return err
+	}
+	a.Report.Line(MarkChange, "removed "+pkg)
 	return nil
 }
 

@@ -18,6 +18,14 @@ func (a *App) Link() error {
 	if err != nil {
 		return err
 	}
+	if len(selected) == 0 {
+		// Said, like every other phase says it. This one used to fall through
+		// silently, so an install with the configs unticked printed a `configs`
+		// heading with nothing under it - which reads as a step that broke
+		// rather than one nobody asked for.
+		a.Report.Line(MarkSkip, "no configs selected")
+		return nil
+	}
 
 	// One backup directory per run, stamped, so a restore is "put the newest
 	// one back" rather than a merge of several runs.
@@ -87,6 +95,12 @@ func (a *App) Unlink(restore bool) error {
 	selected, err := a.Packages()
 	if err != nil {
 		return err
+	}
+	if len(selected) == 0 {
+		// Said, for the same reason Link says it: a `configs` heading with
+		// nothing under it reads as a step that broke.
+		a.Report.Line(MarkSkip, "no configs selected")
+		return nil
 	}
 
 	for _, pkg := range selected {

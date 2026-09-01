@@ -22,6 +22,16 @@ import (
 // An existing file is never touched. It is the documented place for a
 // per-machine identity override, so someone's email is very likely in it.
 func (a *App) writeGitLocal() error {
+	// The selector offers this like everything else an install writes, under the
+	// name the manifest already gave it. It was the last thing that ignored the
+	// checkboxes: system_components declared `gitconfig-local`, the selector
+	// drew a box for it, and nothing consulted the box - because the file is
+	// written here rather than linked by installSystemLinks.
+	if !a.wants(KindGitLocal, gitLocalName) {
+		a.Report.Line(MarkSkip, gitLocalName+" (not selected)")
+		return nil
+	}
+
 	path := filepath.Join(a.Home, ".gitconfig.local")
 
 	// Yielded, not raced. If a secret declares this path, the secrets phase
@@ -150,13 +160,28 @@ func (a *App) installSystemLinks() error {
 		if len(component.Platforms) > 0 && !slices.Contains(component.Platforms, a.Platform) {
 			continue
 		}
-		if !a.wants(component.Name) {
+		if !a.wants(KindSystem, component.Name) {
 			continue
 		}
 		declared[component.Name] = true
 	}
 
-	for _, link := range a.SystemLinks() {
+	links := a.SystemLinks()
+	var wanted int
+	for _, link := range links {
+		if declared[link.Name] {
+			wanted++
+		}
+	}
+	if len(links) > 0 && wanted == 0 {
+		// Only when this platform has some: on macOS SystemLinks is empty by
+		// design, and a line about none being selected would be noise on every
+		// install.
+		a.Report.Line(MarkSkip, "no system links selected")
+		return nil
+	}
+
+	for _, link := range links {
 		if !declared[link.Name] {
 			continue
 		}

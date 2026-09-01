@@ -193,7 +193,7 @@ func TestEachRunGetsItsOwnCopyOfTheApp(t *testing.T) {
 
 	// An operation nothing answers to: the copy is made and configured before
 	// the switch refuses it, which is exactly the window this tests.
-	err := runner(context.Background(), "dance", []string{"zsh"},
+	err := runner(context.Background(), "dance", app.Refs([]string{"zsh"}),
 		tui.RunOptions{Report: &app.Recorder{}})
 	if err == nil {
 		t.Fatal("want an unknown-operation error")
@@ -294,8 +294,17 @@ func TestOnlyARemovalTakesAnIncludeListFromTheFlags(t *testing.T) {
 	opts := options{tools: "jq, fd"}
 
 	got := opts.include(app.OpRemovePackages)
-	if strings.Join(got, ",") != "jq,fd" {
-		t.Errorf("a removal got %v, want jq and fd", got)
+	names := make([]string, 0, len(got))
+	for _, ref := range got {
+		// Unqualified: a --tools list names whatever the name turns out to be,
+		// and a removal list holds nothing whose name means two things.
+		if ref.Kind != "" {
+			t.Errorf("%q arrived qualified as %q", ref.Label, ref.Kind)
+		}
+		names = append(names, ref.Label)
+	}
+	if strings.Join(names, ",") != "jq,fd" {
+		t.Errorf("a removal got %v, want jq and fd", names)
 	}
 
 	// Install narrows through App.Tools, and its Include is matched against
@@ -357,7 +366,7 @@ func TestTheInventoryScannerLeavesTheSharedAppAlone(t *testing.T) {
 	instance := &app.App{
 		Repo: repo, Home: home, Platform: platform,
 		Report: &app.Recorder{}, Runner: nothingInstalled{},
-		DryRun: true, Include: []string{"zsh"},
+		DryRun: true, Include: app.Refs([]string{"zsh"}),
 	}
 
 	inventory, err := inventoryScanner(instance)(context.Background())
@@ -384,7 +393,12 @@ type nothingInstalled struct{}
 
 func (nothingInstalled) Run(context.Context, string, ...string) error { return nil }
 func (nothingInstalled) Look(string) bool                             { return false }
-func (nothingInstalled) HasApp(string) bool                           { return false }
+
+func (nothingInstalled) Output(context.Context, string, ...string) ([]byte, error) {
+	return nil, nil
+}
+
+func (nothingInstalled) HasApp(string) bool { return false }
 
 // Asserted through a real operation, because the interesting part is what the
 // App the operation runs with actually holds.
@@ -409,7 +423,7 @@ func TestOnlyIsClearedForASelectionAndKeptWithout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	run := func(chosen []string) []string {
+	run := func(chosen []app.Ref) []string {
 		recorder := &app.Recorder{}
 		instance := &app.App{
 			Repo: repo, Home: t.TempDir(), Platform: platform,
@@ -423,7 +437,7 @@ func TestOnlyIsClearedForASelectionAndKeptWithout(t *testing.T) {
 	}
 
 	// Ticked ghostty: --only zsh must not silently win.
-	withSelection := strings.Join(run([]string{"ghostty"}), "\n")
+	withSelection := strings.Join(run([]app.Ref{{Kind: app.KindStow, Label: "ghostty"}}), "\n")
 	if !strings.Contains(withSelection, "ghostty") {
 		t.Errorf("the ticked component was skipped: %s", withSelection)
 	}

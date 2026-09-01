@@ -34,10 +34,10 @@ const (
 
 // Do performs one operation.
 //
-// include narrows it to the named components, as the selector's labels; empty
-// means everything. version is what a self-update compares against, and is
-// ignored by everything else.
-func (a *App) Do(ctx context.Context, op Operation, include []string, version string) error {
+// include narrows it to the components the selector ticked; empty means
+// everything. version is what a self-update compares against, and is ignored by
+// everything else.
+func (a *App) Do(ctx context.Context, op Operation, include []Ref, version string) error {
 	// Set on a copy of nothing - App is a pointer and this is the field the
 	// narrowing lives in, so it is assigned once here rather than threaded
 	// through nine signatures.

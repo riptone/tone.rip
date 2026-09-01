@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,13 +35,12 @@ type App struct {
 	Only string
 	// Tools narrows package installation to a comma-separated subset.
 	Tools string
-	// Include narrows a run to the components the selector ticked, by the
-	// labels MenuItems produced. Empty means everything, which is what every
-	// command-line invocation wants.
+	// Include narrows a run to the components the selector ticked. Empty means
+	// everything, which is what every command-line invocation wants.
 	//
 	// It exists because the window's checkboxes did nothing: the menu returned
 	// what had been ticked and the handler that ran the operation never asked.
-	Include []string
+	Include []Ref
 	// Interactive is true when a person is watching and can answer a prompt.
 	//
 	// Set from the same check that picks the Reporter. It gates the vault
@@ -63,6 +63,17 @@ type App struct {
 	// manifest is loaded once per invocation, on first use.
 	manifest *manifest.Manifest
 	ignorer  *stow.Ignorer
+	// owned is the package manager's inventory, asked once per invocation.
+	//
+	// Cached because it is asked from two places on one screen - MenuItems for
+	// the install list, Removable for the removal one - and because on Windows
+	// the question is `winget export`, which takes seconds rather than the ~40ms
+	// `brew list` takes. Two of those on a menu open would be felt.
+	owned map[string]bool
+	// globals is which of the manifest's MCP servers npm has, asked once for the
+	// same reason: both lists ask about the same set, and `npm root -g` is a
+	// ~120ms subprocess.
+	globals map[string]bool
 }
 
 // Forget drops the cached manifest and ignore rules.
@@ -78,6 +89,8 @@ type App struct {
 func (a *App) Forget() {
 	a.manifest = nil
 	a.ignorer = nil
+	a.owned = nil
+	a.globals = nil
 }
 
 // New builds an App for this machine.
@@ -130,6 +143,48 @@ func (a *App) Manifest() (*manifest.Manifest, error) {
 	return m, nil
 }
 
+// Owned is what the platform's package manager says it installed, once.
+//
+// See pkgs.Owned for why this is a different question from "is it on PATH", and
+// why a removal has to ask this one.
+func (a *App) Owned(ctx context.Context) (map[string]bool, error) {
+	if a.owned != nil {
+		return a.owned, nil
+	}
+	owned, err := pkgs.Owned(ctx, a.Platform, a.Runner)
+	if err != nil {
+		return nil, err
+	}
+	a.owned = owned
+	return owned, nil
+}
+
+// Globals is which of the manifest's MCP servers npm already has, once.
+//
+// Always the manifest's whole list rather than a caller's subset, so one answer
+// serves every caller - which is what makes caching it correct rather than a
+// coincidence that holds until somebody passes a different list.
+func (a *App) Globals(ctx context.Context) (map[string]bool, error) {
+	if a.globals != nil {
+		return a.globals, nil
+	}
+	m, err := a.Manifest()
+	if err != nil {
+		return nil, err
+	}
+	globals, err := pkgs.NpmGlobals(ctx, a.Runner, m.Mcps)
+	if err != nil {
+		return nil, err
+	}
+	if globals == nil {
+		// A nil map would be re-asked every time, which is the one thing this
+		// exists to prevent.
+		globals = map[string]bool{}
+	}
+	a.globals = globals
+	return globals, nil
+}
+
 // Ignorer compiles the manifest's stow_ignore patterns, once.
 func (a *App) Ignorer() (*stow.Ignorer, error) {
 	if a.ignorer != nil {
@@ -161,12 +216,76 @@ func (a *App) Expand(path string) string {
 	return filepath.Join(a.Home, filepath.FromSlash(strings.TrimPrefix(path, "~/")))
 }
 
-// wants reports whether a named component is part of this run.
+// Ref names one component: what sort of thing it is, and which one.
+//
+// Qualified rather than a bare label, because the labels collide. The real
+// manifest lists `git`, `stow` and `starship` as tools it installs *and* as stow
+// packages it links, so a flat list of names cannot say "install the tool and
+// leave the config alone" - it could only say "git", and both would read that
+// as theirs. Nothing noticed while the whole tool set was one row called `brew
+// packages`; offering the tools individually is what made it reachable.
+//
+// An empty Kind matches any kind, which is what a command-line `--tools` list
+// means: `doti uninstall --tools jq` names whatever jq turns out to be.
+type Ref struct {
+	Kind  Kind
+	Label string
+}
+
+// Refs builds a list of unqualified references from plain names, which is the
+// shape a --tools flag arrives in.
+func Refs(labels []string) []Ref {
+	if len(labels) == 0 {
+		return nil
+	}
+	out := make([]Ref, 0, len(labels))
+	for _, label := range labels {
+		out = append(out, Ref{Label: label})
+	}
+	return out
+}
+
+// wants reports whether a component is part of this run.
 //
 // An empty Include is "everything", which is what every command-line
 // invocation wants and what the window means before anything is unticked.
-func (a *App) wants(label string) bool {
-	return len(a.Include) == 0 || slices.Contains(a.Include, label)
+func (a *App) wants(kind Kind, label string) bool {
+	if len(a.Include) == 0 {
+		return true
+	}
+	for _, ref := range a.Include {
+		if ref.Label == label && (ref.Kind == "" || ref.Kind == kind) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasSelection reports whether this run was narrowed at all.
+func (a *App) hasSelection() bool { return len(a.Include) > 0 }
+
+// wantsUnder reports whether a child component is part of this run - by its own
+// name, or because the run named its parent and nothing under it.
+//
+// Naming a parent alone means all of it. That is what a caller who does not know
+// about the children looks like, and reading it as "none of them" would turn
+// `Include: {brew packages}` into an install of nothing. The window always sends
+// both - the parent, ticked because at least one child is, and every ticked
+// child - so the second clause is for everything that is not the window.
+func (a *App) wantsUnder(parent Ref, kind Kind, label string) bool {
+	if a.wants(kind, label) {
+		return true
+	}
+	if !a.wants(parent.Kind, parent.Label) {
+		return false
+	}
+	for _, ref := range a.Include {
+		if ref.Kind == kind {
+			// Something under this parent was named, and it was not this one.
+			return false
+		}
+	}
+	return true
 }
 
 // Packages is the manifest's stow packages for this platform, in manifest
@@ -185,7 +304,7 @@ func (a *App) Packages() ([]manifest.StowPackage, error) {
 		}
 		// The selector's Configs group is these names, so this is where a
 		// unticked box stops being decorative.
-		if !a.wants(pkg.Name) {
+		if !a.wants(KindStow, pkg.Name) {
 			continue
 		}
 		out = append(out, pkg)

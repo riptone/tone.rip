@@ -22,6 +22,29 @@ func (a *App) Secrets(ctx context.Context) error {
 		return nil
 	}
 
+	// Which secrets this run is for, decided *before* the vault is touched.
+	//
+	// It used to be decided after, and the cost of that was the whole phase:
+	// untick every secret on the selector and doti still pointed `bw` at the
+	// deployment, still asked for the master password, and still synced - then
+	// rendered nothing. A master-password prompt for a phase that was going to
+	// do nothing is the worst version of a checkbox that does not work.
+	wanted := make([]manifest.Secret, 0, len(m.Secrets))
+	for _, secret := range m.Secrets {
+		// Both filters, and the platform one matters as much as the selection:
+		// a manifest whose secrets are all declared for other platforms left
+		// `wanted` non-empty on a Mac, so this opened the vault, prompted for a
+		// master password and then rendered nothing but "not for macos". Which
+		// is exactly what the check below exists to prevent.
+		if secret.WantsPlatform(a.Platform) && a.wants(KindSecret, secret.Name) {
+			wanted = append(wanted, secret)
+		}
+	}
+	if len(wanted) == 0 {
+		a.Report.Line(MarkSkip, "no secrets selected")
+		return nil
+	}
+
 	// BW_SESSION from the environment, never from a file: a session key on
 	// disk is a vault with the lock left open.
 	client := secrets.New(a.vault(), os.Getenv("BW_SESSION"))
@@ -64,12 +87,6 @@ func (a *App) Secrets(ctx context.Context) error {
 	renderer := &secrets.Renderer{
 		Client: client, RepoRoot: a.Repo, Home: a.Home,
 		Platform: a.Platform, DryRun: a.DryRun,
-	}
-	wanted := make([]manifest.Secret, 0, len(m.Secrets))
-	for _, secret := range m.Secrets {
-		if a.wants(secret.Name) {
-			wanted = append(wanted, secret)
-		}
 	}
 	results, err := renderer.RenderAll(ctx, wanted)
 	// Report what did land before returning the failure - a partial run is
@@ -254,6 +271,13 @@ func (a *App) Update(ctx context.Context) error {
 		a.Report.Line(MarkChange, "would upgrade installed packages")
 		return nil
 	}
+	// The MCP servers, on both platforms - they come from npm either way.
+	//
+	// This is where their upgrade lives now. An install used to perform one as a
+	// side effect of reinstalling every declared package; it no longer does, and
+	// an upgrade with nowhere to happen would be a regression rather than a
+	// saving.
+	a.updateMcps(ctx)
 
 	if a.Platform == manifest.Windows {
 		done := a.Report.Working("winget upgrade --all")
@@ -283,6 +307,38 @@ func (a *App) Update(ctx context.Context) error {
 	}
 	done(MarkChange, "packages upgraded")
 	return nil
+}
+
+// updateMcps upgrades the manifest's global npm packages.
+//
+// Named rather than `npm update -g` bare: that would upgrade every global
+// package on the machine, and the ones this repository did not install are not
+// this repository's to move.
+//
+// Not narrowed by Include, and deliberately: this operation is wholesale.
+// `brew upgrade` and `winget upgrade --all` cannot be pointed at a subset of a
+// manifest, so the menu gives Update no selector - and narrowing only the npm
+// third of it would be an arbitrary half-answer to a question nobody asked. It
+// did have that gate, which was unreachable and therefore untestable, which is
+// its own reason to remove it.
+//
+// Best-effort, like the install: none of them is load-bearing for a working
+// shell, and a failed npm should not stop `brew upgrade`.
+func (a *App) updateMcps(ctx context.Context) {
+	m, err := a.Manifest()
+	if err != nil || len(m.Mcps) == 0 {
+		return
+	}
+	if !a.Runner.Look("npm") {
+		return
+	}
+	done := a.Report.Working(fmt.Sprintf("npm update -g (%d MCP servers)", len(m.Mcps)))
+	args := append([]string{"update", "-g"}, m.Mcps...)
+	if err := a.Runner.Run(ctx, "npm", args...); err != nil {
+		done(MarkWarn, fmt.Sprintf("npm update failed: %v", err))
+		return
+	}
+	done(MarkChange, fmt.Sprintf("%d MCP servers up to date", len(m.Mcps)))
 }
 
 // SelfUpdate replaces this binary with the newest release.

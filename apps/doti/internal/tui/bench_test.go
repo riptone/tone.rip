@@ -91,3 +91,49 @@ func BenchmarkResizeWithALongRun(b *testing.B) {
 		m = next.(Model)
 	}
 }
+
+// The selector, folded and open. Both matter now that a real machine's list is
+// forty rows rather than four: isParent and tally each walk the components, and
+// the view calls them once per row - so the render is quadratic in the list, and
+// the only question worth asking is whether the constant makes that matter.
+func BenchmarkRenderSelector(b *testing.B) {
+	big := make([]app.Component, 0, 40)
+	big = append(big, app.Component{Group: "Packages", Kind: app.KindTools,
+		Label: "brew packages", Status: "14 of 15 present", Selected: true})
+	for i := range 15 {
+		big = append(big, app.Component{Group: "Packages", Kind: app.KindTool,
+			Parent: "brew packages", Label: "tool-" + string(rune('a'+i)),
+			Status: "installed", Done: true, Selected: true})
+	}
+	big = append(big, app.Component{Group: "Packages", Kind: app.KindMcps,
+		Label: "mcp servers", Status: "7 of 7 present", Selected: true})
+	for i := range 7 {
+		big = append(big, app.Component{Group: "Packages", Kind: app.KindMcp,
+			Parent: "mcp servers", Label: "@scope/server-" + string(rune('a'+i)),
+			Status: "installed", Done: true, Selected: true})
+	}
+	for i := range 8 {
+		big = append(big, app.Component{Group: "Configs", Kind: app.KindStow,
+			Label: "pkg-" + string(rune('a'+i)), Status: "linked",
+			Done: true, Selected: true})
+	}
+
+	m := New(Config{
+		Components: big, Version: "v1.0.0", Width: 96, Height: 40,
+		Renderer: lipgloss.NewRenderer(io.Discard), Run: noWork,
+	})
+	m = press(m, "enter")
+
+	b.Run("folded", func(b *testing.B) {
+		for range b.N {
+			_ = m.View()
+		}
+	})
+
+	open := press(press(m, "right"), "G")
+	b.Run("open", func(b *testing.B) {
+		for range b.N {
+			_ = open.View()
+		}
+	})
+}

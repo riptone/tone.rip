@@ -20,6 +20,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -52,7 +53,7 @@ const (
 // Reporter interface already imposed on every command. main wires this to
 // internal/app; a test wires a fake and drives the whole screen without a
 // machine to install onto.
-type RunFunc func(ctx context.Context, action Action, chosen []string, opts RunOptions) error
+type RunFunc func(ctx context.Context, action Action, chosen []app.Ref, opts RunOptions) error
 
 // RunOptions is what the window hands an operation: where to report, and the
 // `bw` runner that borrows the terminal back when the vault needs a person.
@@ -99,8 +100,12 @@ type Config struct {
 	// reader never asked for.
 	Start Action
 	// StartChosen narrows Start the way the selector would have.
-	StartChosen []string
+	StartChosen []app.Ref
 }
+
+// errStopped is what a run the reader cancelled reports to the shell, when the
+// operation itself returned nothing.
+var errStopped = errors.New("stopped before it finished")
 
 // Model is the whole UI.
 type Model struct {
@@ -120,6 +125,12 @@ type Model struct {
 	// items is the working copy the open selector is toggling.
 	items  []app.Component
 	itemAt int
+	// notice is a one-line answer to a key that did not do what the reader
+	// expected, shown at the top of the selector. Cleared by the next key.
+	notice string
+	// folded says which parents are closed. Rebuilt into rows on every change,
+	// and copied before every write - see Model.fold.
+	folded map[string]bool
 	rows   []row
 
 	// update is the newest release once the check has answered, and "" until
@@ -158,10 +169,11 @@ func New(cfg Config) Model {
 		components: cfg.Components,
 		removable:  cfg.Removable,
 		items:      append([]app.Component(nil), cfg.Components...),
+		folded:     foldedByDefault(cfg.Components),
 		width:      cfg.Width,
 		height:     cfg.Height,
 	}
-	m.rows = flatten(m.items)
+	m.rows = flatten(m.items, m.folded)
 	m.run.spin = newSpinner(m.styles)
 
 	// The launch happens here rather than in Init, which was a bug worth
@@ -184,7 +196,14 @@ type row struct {
 	item    int
 }
 
-func flatten(items []app.Component) []row {
+// flatten turns the components into the rows the screen draws: a heading
+// whenever the group changes, then one row per item that is not folded away.
+//
+// The heading is emitted before the fold test, so a group whose every member is
+// a folded child keeps its heading - and after it, an item hidden under a closed
+// parent is simply not a row. That is what keeps the cursor honest: it moves
+// over rows, and a row is by definition something on screen.
+func flatten(items []app.Component, folded map[string]bool) []row {
 	var rows []row
 	group := ""
 	for i, item := range items {
@@ -192,17 +211,25 @@ func flatten(items []app.Component) []row {
 			group = item.Group
 			rows = append(rows, row{heading: group, item: -1})
 		}
+		if item.Parent != "" && folded[item.Parent] {
+			continue
+		}
 		rows = append(rows, row{item: i})
 	}
 	return rows
 }
 
-// Chosen is the labels left ticked.
-func (m Model) Chosen() []string {
-	var out []string
+// Chosen is what is left ticked, as references the app can act on.
+//
+// Qualified, because the labels collide: `git` is both a tool the manifest
+// installs and a stow package it links, and a flat list of names could not say
+// which of the two a tick meant. Folding a parent does not change this - a
+// hidden child is hidden, not unticked.
+func (m Model) Chosen() []app.Ref {
+	var out []app.Ref
 	for _, item := range m.items {
 		if item.Selected {
-			out = append(out, item.Label)
+			out = append(out, app.Ref{Kind: item.Kind, Label: item.Label})
 		}
 	}
 	return out
@@ -234,8 +261,17 @@ func (m Model) Transcript() []app.Record {
 // Err is the failure of the last operation, if it failed.
 //
 // Read by main so the process exit code says what the screen said. A window
-// that showed a red line and exited 0 lies to the shell it was started from.
-func (m Model) Err() error { return m.run.err }
+// that showed a red line and exited 0 lies to the shell it was started from -
+// and one that showed "interrupted" and exited 0 tells the same lie, because
+// half an install is not a successful one. Whether a cancelled operation
+// returned an error of its own is an accident of where it was, so the stop is
+// what this answers to.
+func (m Model) Err() error {
+	if m.run.stopped && m.run.err == nil {
+		return errStopped
+	}
+	return m.run.err
+}
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.startCmd, checkUpdate(m.cfg.Check))
@@ -293,9 +329,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// rewrap rebuilds every rendered row at the current width.
-//
-
+// key dispatches one keypress: the two bindings that mean the same thing on
+// every screen first, then the screen's own.
 func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// esc is bound to both Back and Quit, and which one it means depends on
 	// whether there is anywhere to go back to - the rule apps/ssh-cv follows.
@@ -329,12 +364,6 @@ func (m Model) key(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.runKey(msg)
 	}
 }
-
-// event folds one reported record into the log.
-//
-
-// appendLine puts one line into the log without going through the stream.
-//
 
 // View renders the current screen.
 func (m Model) View() string {
