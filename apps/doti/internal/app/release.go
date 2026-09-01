@@ -132,11 +132,20 @@ func Newer(current, candidate string) bool {
 	return false
 }
 
-// parseVersion reads "v1.2.3" into its three numbers. Anything with a
-// pre-release suffix is refused rather than guessed at: comparing those
+// parseVersion reads "v1.2.3" into its three numbers.
+//
+// Build metadata is dropped, because semver says it takes no part in precedence
+// and because every locally built binary carries some: `bun run install-local`
+// stamps "<tag>+dev.<sha>", which split into *four* parts on the dot and was
+// refused - so a working copy could never be told about a release, whatever was
+// released. That is not the "dev" guard in Newer; that one is for a binary with
+// no version at all.
+//
+// A pre-release suffix is still refused rather than guessed at: comparing those
 // correctly is a specification, and this needs three integers.
 func parseVersion(v string) ([3]int, bool) {
 	var out [3]int
+	v, _, _ = strings.Cut(v, "+")
 	parts := strings.Split(strings.TrimPrefix(v, "v"), ".")
 	if len(parts) != 3 {
 		return out, false

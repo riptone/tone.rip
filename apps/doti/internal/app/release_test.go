@@ -114,3 +114,50 @@ func TestOneRepositoryConstant(t *testing.T) {
 		t.Errorf("TagPrefix = %q, want this app's namespace", TagPrefix)
 	}
 }
+
+// Build metadata takes no part in precedence, and every locally built binary
+// carries some: `bun run install-local` stamps "<tag>+dev.<sha>", which split
+// into four parts on the dot and was refused - so a working copy could never be
+// told about a release, whatever was released.
+func TestBuildMetadataDoesNotBlockTheOffer(t *testing.T) {
+	for _, tc := range []struct {
+		current, candidate string
+		want               bool
+	}{
+		{"v0.1.1+dev.c23f48f", "v0.1.2", true},
+		{"v0.1.1+dev.c23f48f", "v0.2.0", true},
+		{"v0.1.1+dev.c23f48f", "v1.0.0", true},
+		// The same release, built locally: nothing newer to offer.
+		{"v0.1.2+dev.c23f48f", "v0.1.2", false},
+		// Ahead of the release, which is the normal state of a working copy
+		// between tags.
+		{"v0.1.3+dev.c23f48f", "v0.1.2", false},
+		// A release build, unchanged behaviour.
+		{"v0.1.1", "v0.1.2", true},
+		{"v0.1.2", "v0.1.1", false},
+		// A binary with no version at all is still never offered anything: it
+		// is somebody's `go build`, and replacing it is not this tool's call.
+		{"dev", "v0.1.2", false},
+		// Metadata on both sides, in case a release ever carries some.
+		{"v0.1.1+build.1", "v0.1.2+build.9", true},
+		// A pre-release is still refused rather than guessed at.
+		{"v0.1.1-rc.1", "v0.1.2", false},
+		{"v0.1.1", "v0.1.2-rc.1", false},
+	} {
+		if got := Newer(tc.current, tc.candidate); got != tc.want {
+			t.Errorf("Newer(%q, %q) = %v, want %v",
+				tc.current, tc.candidate, got, tc.want)
+		}
+	}
+}
+
+// And the metadata is dropped rather than parsed into the numbers.
+func TestParseVersionDropsBuildMetadata(t *testing.T) {
+	got, ok := parseVersion("v0.1.1+dev.c23f48f")
+	if !ok {
+		t.Fatal("refused a stamped local build")
+	}
+	if got != [3]int{0, 1, 1} {
+		t.Errorf("parsed %v", got)
+	}
+}

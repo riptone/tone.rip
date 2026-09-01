@@ -475,6 +475,14 @@ Windows the question is `winget export`, which takes seconds rather than
 cache is `installMcps`: it runs after the packages phase, which may just have
 installed npm itself.
 
+**No locally built binary could ever be offered an update.** `bun run
+install-local` stamps `<tag>+dev.<sha>`, and `parseVersion` split that on the dot
+into *four* parts and refused — so `Newer` returned false whatever was released.
+Semver says build metadata takes no part in precedence, and it is dropped now. A
+pre-release suffix is still refused rather than guessed at, and a binary with no
+version at all still declines every offer: that guard is for somebody's `go
+build`, and replacing it is not this tool's call.
+
 **`--tools` reached one of the two paths.** `doti uninstall --tools bat` in a
 terminal — the default, which is the window — opened straight onto the run screen
 with nothing selected, reported *"name what to remove; nothing was removed"* and
