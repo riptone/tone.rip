@@ -12,7 +12,7 @@
 #   3. resolves the newest `doti/v*` release and downloads the matching binary
 #   4. verifies it against the release's SHA256SUMS
 #   5. installs it somewhere on PATH, preferring a directory that needs no sudo
-#   6. runs `doti install`, which clones the configs and sets the machine up
+#   6. hands over to `doti`, which clones the configs and sets the machine up
 #
 # Everything after step 5 is doti's job, including the clone - so this script
 # never needs to know the repository layout, and does not change when it moves.
@@ -170,23 +170,29 @@ if ! ${RUN_INSTALL}; then
   say "done - run \`doti\` for the menu, or \`doti install\` for everything"
   exit 0
 fi
-say "running doti install"
-
 # Piped into bash, stdin is the exhausted download rather than the terminal, so
 # anything doti wants to ask - the vault password above all - has nothing to
 # read from: that is how the first release reached `bw unlock` and had it crash
 # on a closed pipe. Hand doti the terminal when there is one.
 #
-# It is also what decides which of the two renderings this install gets. With a
-# terminal on both streams doti draws its window and replays the run to stdout
-# on the way out, so the log is still in the scrollback; without one (CI, a
-# container) it prints lines as it goes and never stops to ask anything.
+# It is also what decides which of the two renderings this gets. With a terminal
+# on both streams doti draws its window and replays the run to stdout on the way
+# out, so the log is still in the scrollback; without one (CI, a container) it
+# prints lines as it goes and never stops to ask anything.
 #
 # The open is attempted rather than tested with -r, because a session with no
 # controlling terminal has a /dev/tty that passes -r and still fails open()
 # with ENXIO - and learning that from a failed exec would kill the installer
 # after it had already put the binary in place.
 if (: </dev/tty) 2>/dev/null; then
-  exec "${bindir}/doti" install </dev/tty
+  # Bare `doti`, not `doti install`. On a machine with no checkout the window
+  # opens on the install screen and waits for enter, so the last thing this
+  # script does is offer a choice rather than start a clone the reader never
+  # asked for by name. `curl | bash` is consent to install the binary; it is not
+  # consent to symlink over $HOME without looking.
+  say "opening doti"
+  exec "${bindir}/doti" </dev/tty
 fi
+# Nobody to ask, so the only useful thing left is the thing they came for.
+say "running doti install"
 exec "${bindir}/doti" install

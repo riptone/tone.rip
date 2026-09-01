@@ -24,8 +24,11 @@ curl … install.sh | bash
   ├─ 4. download the binary, verify SHA256SUMS,
   │     then ask *the download* its own version
   ├─ 5. install it to ~/.local/bin
-  └─ 6. exec `doti install`
+  └─ 6. exec `doti` with a terminal, `doti install` without one
           │
+          ├─ (with a terminal: the install screen, waiting for enter -
+          │   `curl | bash` is consent to install the binary, not to
+          │   symlink over $HOME without looking)
           ├─ clone ~/dotfiles if it is not there
           ├─ read manifest.jsonc
           ├─ generate a Brewfile / packages.json into a temp dir,
@@ -372,8 +375,14 @@ Repository
 › [x] ~/dotfiles                              not cloned
 ```
 
-`enter` starts it; nothing happens before that. Three things had to be true for
-it to work:
+`enter` starts it; nothing happens before that — and the bootstrap hands over
+to bare `doti` now rather than to `doti install`, so a genuine first install
+gets that screen too. It did not: both scripts ended with `exec doti install`,
+a named command that correctly runs on sight, which meant the one path where
+nobody had ever seen the machine was also the one path that never asked.
+Without a terminal they still run `install` — there is nobody to ask.
+
+Four things had to be true for it to work:
 
 - **`Start` grew a second meaning.** It ran the operation on sight, which is
   right for `doti install` — asked for by name, and what `scripts/install.sh`

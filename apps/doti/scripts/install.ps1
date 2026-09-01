@@ -181,8 +181,19 @@ try {
     Say 'done - run `doti` for the menu, or `doti install` for everything'
     return
   }
-  Say 'running doti install'
-  & $target install
+  # Bare `doti` when there is a console: on a machine with no checkout the
+  # window opens on the install screen and waits for enter, so the last thing
+  # this script does is offer a choice rather than start a clone nobody named.
+  # `irm | iex` is consent to install the binary, not to link over $HOME
+  # unseen. Without a console there is nobody to ask, and `install` is the
+  # thing they came for.
+  if ([Environment]::UserInteractive) {
+    Say 'opening doti'
+    & $target
+  } else {
+    Say 'running doti install'
+    & $target install
+  }
   exit $LASTEXITCODE
 }
 finally {
