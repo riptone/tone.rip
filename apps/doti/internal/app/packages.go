@@ -224,8 +224,29 @@ func (a *App) InstallPackages(ctx context.Context) error {
 	// MarkOK, like the other lines that state what the machine already has: a
 	// blank mark is for a continuation of the line above it, and this is the
 	// first line of the phase.
-	a.Report.Line(MarkOK, fmt.Sprintf("%d of %d tools present",
-		len(present), len(installable)))
+	// And how many of those the manifest's own package manager did not put
+	// there. `16 of 16 tools present` from a run that installed nothing, on a
+	// machine where two of the sixteen came from their own install scripts, is
+	// a true sentence that reads as "I installed everything" - which is what it
+	// was taken to mean. Same wording as the selector's parent row, from the
+	// same predicate, so the two cannot drift.
+	// Best-effort, unlike Removable, which takes the opposite view of the same
+	// error and should: an empty removal list would be a lie about what is on
+	// the machine, where a missing line on a report is only a claim not made.
+	// Refusing to install anything because an inventory would not answer is the
+	// wrong trade in this direction.
+	foreign, _ := a.foreignTools(ctx, m)
+	tally := fmt.Sprintf("%d of %d tools present", len(present), len(installable))
+	if len(foreign) > 0 {
+		tally += fmt.Sprintf(", %d from elsewhere", len(foreign))
+	}
+	a.Report.Line(MarkOK, tally)
+	if len(foreign) > 0 {
+		// Named, because the count alone does not say which ones to go and look
+		// at - and left alone, because reinstalling a working binary from a
+		// different source is the surprise `adopt` exists to avoid.
+		a.Report.Line(MarkSkip, "from elsewhere, left alone: "+strings.Join(foreign, ", "))
+	}
 	switch {
 	case len(missing) > 0 && a.DryRun:
 		a.Report.Line(MarkChange, "would install "+strings.Join(missing, ", "))

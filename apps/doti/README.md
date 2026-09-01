@@ -324,6 +324,75 @@ Naming such a tool explicitly says *which* manager: *"opencode is installed, but
 not by bun — left alone"*. It said "not by winget" before, which was true of a
 thing that was never going to install it.
 
+**The two selectors used to contradict each other, and neither said why.** The
+install page read `17 of 17 present` while the removal page listed twelve rows.
+Both were right. `jq` was Apple's `/usr/bin/jq`, and `bun` and `opencode` had
+arrived from their own install scripts — so all three were on `PATH`, none was
+brew's, and none could be removed through brew. The install selector answered
+"can I run this" and the removal selector answered "did the manifest's source
+put it there", which are different questions with the same word for an answer.
+
+A tool the machine has but did not get from the source the manifest names now
+says so, on the row and on the parent the fold shows:
+
+```
+brew packages                16 of 16 present, 2 from elsewhere
+  bun                        installed (not by brew)
+  opencode                   installed (not by brew)
+  bat                        installed
+```
+
+It is still `Done`, and still not installed over: the machine does have the
+tool, and reinstalling a working binary from a different source is the surprise
+`adopt` exists to avoid. The run prints the same two lines from the same
+predicate — `foreignTools`, so the screen and the report cannot drift — which is
+the half that was actually noticed:
+
+```
+· 16 of 16 tools present, 2 from elsewhere
+- from elsewhere, left alone: bun, opencode
+```
+
+`doti install` had been finishing, reporting every tool present, and installing
+nothing. True, and it reads as "I installed everything". On the install path the
+inventory is best-effort: an unreadable `brew list` drops the extra line rather
+than failing the run, where `Removable` takes the opposite view of the same
+error and should — a missing line is a claim not made, an empty removal list is
+a lie.
+
+**A first run opens the install screen instead of being one.** Bare `doti` on a
+machine with no checkout used to go straight into a full install — clone,
+packages, symlinks over `$HOME` — with no screen and no keypress between the
+reader and any of it. The reasoning in the code was that there is nothing to
+show a menu about yet, which was true of the *selectors* and not of the
+decision. `MenuItems` now answers with the one row it can honestly offer:
+
+```
+Repository
+› [x] ~/dotfiles                              not cloned
+```
+
+`enter` starts it; nothing happens before that. Three things had to be true for
+it to work:
+
+- **`Start` grew a second meaning.** It ran the operation on sight, which is
+  right for `doti install` — asked for by name, and what `scripts/install.sh`
+  ends with — and wrong for "this is the only screen worth opening on".
+  `StartAsks` opens the selector instead. Both are tested, because the
+  regression here would be a bootstrap that stops to ask a pipe.
+- **The scan runs before the clone.** It was guarded on `Cloned()` because
+  `MenuItems` read the manifest first and there was none.
+- **The selection is dropped by the clone.** This is the trap the arrangement
+  sets: tick the only box there is, and that `Include` then narrows every list
+  read out of a manifest that did not exist when it was ticked. Without the
+  reset the run reports `brew packages (not selected)`, `no configs selected`,
+  `gitconfig-local (not selected)` — it clones and does nothing else, which is
+  worse than what it replaced.
+
+Non-interactive is unchanged: a pipe, a container or CI has nothing to press
+enter with, so it still installs. Refusing to work with no way to say otherwise
+would be the wrong trade in that direction.
+
 **The lists are re-read after every run.** They used to be read once, before
 the program started, and never again - so a removal that worked left the tools
 it had just uninstalled still saying "installed", and an install left the

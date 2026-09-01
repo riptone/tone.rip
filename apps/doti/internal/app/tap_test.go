@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -120,5 +122,111 @@ func TestATapQualifiedCaskReadsAsInstalled(t *testing.T) {
 		if item.Kind == KindCasks && item.Status != "1 of 1 present" {
 			t.Errorf("the casks parent says %q", item.Status)
 		}
+	}
+}
+
+// statusOf finds one tool's row in the selector.
+func statusOf(t *testing.T, items []Component, kind Kind, label string) Component {
+	t.Helper()
+	for _, item := range items {
+		if item.Kind == kind && item.Label == label {
+			return item
+		}
+	}
+	t.Fatalf("%s %q is not in the selector: %v", kind, label, labels(items))
+	return Component{}
+}
+
+// The install selector and the removal selector have to tell the same story.
+//
+// They did not: macOS ships /usr/bin/jq, bun and opencode arrive from their own
+// install scripts, and all three read a flat "installed" next to a removal list
+// three rows shorter with nothing anywhere to explain the difference.
+func TestAToolFromSomewhereElseSaysSoOnTheInstallSelector(t *testing.T) {
+	a, runner, _ := tapFixture(t)
+	// Both on PATH; brew owns only one of them.
+	runner.owns("bun")
+
+	items, err := a.MenuItems(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign := statusOf(t, items, KindTool, "opencode")
+	if foreign.Status != "installed (not by brew)" {
+		t.Errorf("a tool brew does not own reads %q", foreign.Status)
+	}
+	if !foreign.Foreign {
+		t.Error("it is not marked foreign, so the parent cannot count it")
+	}
+	// Still Done: the machine has it, and an install must not reinstall over a
+	// working binary from a different source.
+	if !foreign.Done {
+		t.Error("a tool the machine has reads as not done")
+	}
+	if owned := statusOf(t, items, KindTool, "bun"); owned.Status != "installed" || owned.Foreign {
+		t.Errorf("a tool brew does own reads %q foreign=%v", owned.Status, owned.Foreign)
+	}
+
+	// And the parent says it, because the parent is what a folded group shows.
+	parent := statusOf(t, items, KindTools, packagesLabel)
+	if !strings.Contains(parent.Status, "1 from elsewhere") {
+		t.Errorf("the parent says %q", parent.Status)
+	}
+}
+
+// Nothing foreign, nothing said. The count is only worth a reader's attention
+// when it is not zero.
+func TestTheParentSaysNothingWhenEveryToolIsThePackageManagers(t *testing.T) {
+	a, _, _ := tapFixture(t)
+
+	items, err := a.MenuItems(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := statusOf(t, items, KindTools, packagesLabel)
+	if strings.Contains(parent.Status, "elsewhere") {
+		t.Errorf("the parent says %q on a machine where brew owns everything", parent.Status)
+	}
+}
+
+// And the run says it, in the same words the selector's parent row uses.
+//
+// This is the half that was actually reported: `doti install` finished, said
+// every tool was present, and had installed nothing - which is true and reads
+// as "I installed everything". Two of the tools had come from their own install
+// scripts and were never brew's to begin with.
+func TestTheRunSaysWhichToolsCameFromElsewhere(t *testing.T) {
+	a, runner, rec := tapFixture(t)
+	runner.owns("bun")
+
+	if err := a.InstallPackages(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !rec.Contains("2 of 2 tools present, 1 from elsewhere") {
+		t.Errorf("the tally does not mention it: %v", rec.Texts())
+	}
+	if !rec.Contains("from elsewhere, left alone: opencode") {
+		t.Errorf("the run does not name it: %v", rec.Texts())
+	}
+	// Left alone means left alone: nothing was reinstalled over it.
+	for _, ran := range runner.ran {
+		if strings.Contains(ran, "bundle") {
+			t.Errorf("a machine with nothing missing ran an install: %s", ran)
+		}
+	}
+}
+
+// An inventory that will not answer is not a reason to refuse to install
+// anything. Removable takes the opposite view of the same error, and should.
+func TestABrokenInventoryDoesNotStopAnInstall(t *testing.T) {
+	a, runner, rec := tapFixture(t)
+	runner.fail = map[string]error{"brew list": errors.New("Error: Not a git repository")}
+
+	if err := a.InstallPackages(context.Background()); err != nil {
+		t.Fatalf("an unreadable inventory failed the install: %v", err)
+	}
+	joined := strings.Join(rec.Texts(), "\n")
+	if strings.Contains(joined, "from elsewhere") {
+		t.Errorf("a claim was made with no inventory to back it: %v", rec.Texts())
 	}
 }

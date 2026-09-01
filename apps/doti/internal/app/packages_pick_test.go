@@ -40,6 +40,18 @@ func pickFixture(t *testing.T, installed ...string) (*App, *fakeRunner, *Recorde
 	t.Helper()
 	a, runner, rec := fixture(t, append([]string{"brew", "npm"}, installed...)...)
 	write(t, filepath.Join(a.Repo, "manifest.jsonc"), pickManifest)
+	// On PATH *and* brew's, which is the ordinary case: doti installed them, so
+	// both facts are true. The two coming apart is its own subject - a system jq
+	// under a manifest that says `brew: jq` - and the tests about it say so:
+	// see TestAToolFromSomewhereElseSaysSoOnTheInstallSelector.
+	brewNames := map[string]string{"jq": "jq", "fd": "fd", "rg": "ripgrep"}
+	formulae := make([]string, 0, len(installed))
+	for _, cmd := range installed {
+		if name, ok := brewNames[cmd]; ok {
+			formulae = append(formulae, name)
+		}
+	}
+	runner.owns(formulae...)
 	return a, runner, rec
 }
 

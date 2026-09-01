@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/riptone/tone.rip/apps/doti/internal/stow"
 )
@@ -91,6 +92,9 @@ const (
 	KindWingetExtra  Kind = "winget-extra"
 	// KindSecret is a file rendered from the vault.
 	KindSecret Kind = "secret"
+	// KindRepo is the checkout itself, and the only row there is before it
+	// exists.
+	KindRepo Kind = "repo"
 )
 
 // Component is one thing on the machine a selector can include or leave out.
@@ -121,6 +125,13 @@ type Component struct {
 	Done bool
 	// Selected is the checkbox. Defaults on.
 	Selected bool
+	// Foreign means the machine has it, but not from the source the manifest
+	// names - a system jq under a manifest that says `brew: jq`, say.
+	//
+	// Carried rather than re-derived from Status, because the selector counts
+	// them on the parent row and matching on a rendered string is how a count
+	// silently becomes zero the day the wording changes.
+	Foreign bool
 }
 
 // MenuItems describes the machine to the selector: what is installed, what is
@@ -129,6 +140,18 @@ type Component struct {
 // Everything defaults to ticked, because re-running a step is how drift gets
 // repaired and the common case is "yes, all of it".
 func (a *App) MenuItems(ctx context.Context) ([]Component, error) {
+	if !a.Cloned() {
+		// Nothing else can be described yet: every other row is read out of a
+		// manifest that is not on the machine. One row rather than none,
+		// because the alternative was the window deciding on the reader's
+		// behalf - bare `doti` on a fresh machine went straight into a full
+		// install, no screen and no keypress, and the first thing it did was
+		// clone.
+		return []Component{{
+			Group: "Repository", Kind: KindRepo, Label: a.shortRepo(),
+			Status: "not cloned", Selected: true,
+		}}, nil
+	}
 	m, err := a.Manifest()
 	if err != nil {
 		return nil, err
@@ -229,6 +252,15 @@ func (a *App) gitLocalComponent() Component {
 		item.Status = "not written"
 	}
 	return item
+}
+
+// shortRepo is the checkout path with $HOME written as ~, for a row that has to
+// fit the narrowest card this program draws.
+func (a *App) shortRepo() string {
+	if a.Home != "" && strings.HasPrefix(a.Repo, a.Home) {
+		return "~" + a.Repo[len(a.Home):]
+	}
+	return a.Repo
 }
 
 // fileExists is os.Stat with the error thrown away, for the times the only

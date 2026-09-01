@@ -22,21 +22,7 @@ import (
 // what the fold is drawn from: a child separated from its parent by another row
 // would fold away under the wrong one.
 func (a *App) packageItems(ctx context.Context, m *manifest.Manifest) ([]Component, error) {
-	present := a.toolsPresent(m)
-	tools := a.toolsFor(m)
-	have := len(present)
-	items := []Component{{
-		Group: "Packages", Kind: KindTools, Label: packagesLabel,
-		Status:   fmt.Sprintf("%d of %d present", have, len(tools)),
-		Done:     have == len(tools),
-		Selected: true,
-	}}
-	for _, tool := range tools {
-		items = append(items, child(KindTool, packagesLabel, tool.Cmd, present[tool.Cmd]))
-	}
-
-	// The other two lists `brew bundle` installs, or the one `winget import`
-	// does.
+	// The inventories, before the tools rather than after them.
 	//
 	// Asked about, not merely declared, and that changed for a reason: the Adopt
 	// selector is meant to show what is *left*, and a row with no present /
@@ -49,6 +35,36 @@ func (a *App) packageItems(ctx context.Context, m *manifest.Manifest) ([]Compone
 	if err != nil {
 		return nil, err
 	}
+	bunOwned := pkgs.BunGlobals(a.Home, a.bunNames(m))
+
+	present := a.toolsPresent(m)
+	tools := a.toolsFor(m)
+	have := len(present)
+	children := make([]Component, 0, len(tools))
+	var foreign int
+	for _, tool := range tools {
+		item := a.toolChild(tool, present[tool.Cmd], owned, bunOwned)
+		if item.Foreign {
+			foreign++
+		}
+		children = append(children, item)
+	}
+	status := fmt.Sprintf("%d of %d present", have, len(tools))
+	if foreign > 0 {
+		// Named on the parent as well as on the row, because the parent is what
+		// a folded group shows - and a fold that reads "17 of 17 present" over
+		// three tools nothing here installed is the whole of how this went
+		// unnoticed.
+		status += fmt.Sprintf(", %d from elsewhere", foreign)
+	}
+	items := []Component{{
+		Group: "Packages", Kind: KindTools, Label: packagesLabel,
+		Status:   status,
+		Done:     have == len(tools),
+		Selected: true,
+	}}
+	items = append(items, children...)
+
 	if a.Platform == manifest.Windows {
 		items = append(items, inventoried(KindWingetExtras, KindWingetExtra,
 			wingetExtrasLabel, m.WingetExtras, owned)...)
@@ -225,6 +241,65 @@ func inventoried(parentKind, childKind Kind, label string, names []string,
 		items = append(items, child(childKind, label, name, owned[pkgs.Formula(name)]))
 	}
 	return items
+}
+
+// foreignTools is the tools this machine has that did not come from the source
+// the manifest names for them.
+//
+// Shared by the selector and the run, for the same reason their counts are: two
+// screens describing one machine in two different numbers is worse than either
+// number being wrong, because there is no way to tell which to believe.
+func (a *App) foreignTools(ctx context.Context, m *manifest.Manifest) ([]string, error) {
+	owned, err := a.Owned(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bunOwned := pkgs.BunGlobals(a.Home, a.bunNames(m))
+	present := a.toolsPresent(m)
+	var out []string
+	for _, tool := range a.toolsFor(m) {
+		if present[tool.Cmd] && !a.installedBy(a.sourceFor(tool), owned, bunOwned) {
+			out = append(out, tool.Cmd)
+		}
+	}
+	return out, nil
+}
+
+// toolChild is one tool, carrying the difference between "the source the
+// manifest names has it" and "something else does".
+//
+// Both are true statements about a machine and they used to render identically,
+// which is how `17 of 17 present` came to sit next to an uninstall list three
+// rows shorter with nothing on either screen to explain the gap. macOS ships
+// /usr/bin/jq; bun and opencode arrived from their own install scripts. None of
+// the three is brew's, so none can be removed through brew - and the install
+// selector was the only screen in a position to say so before somebody went
+// looking for them in the removal list.
+//
+// Still Done, and still not installed over: the machine does have the tool, and
+// reinstalling a working binary from a different source is the surprise `adopt`
+// exists to avoid. The row says where it came from; it does not act on it.
+func (a *App) toolChild(tool manifest.Tool, onPath bool, owned, bunOwned map[string]bool) Component {
+	if a.installedBy(a.sourceFor(tool), owned, bunOwned) {
+		return child(KindTool, packagesLabel, tool.Cmd, true)
+	}
+	if !onPath {
+		return child(KindTool, packagesLabel, tool.Cmd, false)
+	}
+	item := child(KindTool, packagesLabel, tool.Cmd, true)
+	item.Status = "installed (not by " + a.managerName(tool) + ")"
+	item.Foreign = true
+	return item
+}
+
+// managerName is the manager that would have had to install a tool, for a
+// message. Never "" - a tool with no package name for this platform is not in
+// this list at all, but a fallback beats printing "not by ".
+func (a *App) managerName(tool manifest.Tool) string {
+	if manager := a.sourceFor(tool).manager; manager != "" {
+		return manager
+	}
+	return a.packageManager()
 }
 
 // child is one member of a list whose presence the machine was asked about.

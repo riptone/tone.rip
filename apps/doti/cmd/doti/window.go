@@ -45,12 +45,29 @@ var operations = map[string]app.Operation{
 //
 // start is the operation to open on, or "" for the menu.
 func runWindow(ctx context.Context, instance *app.App, opts options, start app.Operation) error {
+	var asks bool
 	if start == "" && !instance.Cloned() {
-		// There is nothing to show a menu about yet. Offering an empty one
-		// would be worse than doing the obvious thing.
-		return instance.Install(ctx)
+		// A fresh machine opens on Install rather than running one.
+		//
+		// It used to *be* one: bare `doti` with no checkout went straight into
+		// a full install - clone, packages, symlinks over $HOME - with no
+		// screen and no keypress between the reader and all of it. The
+		// reasoning was that there is nothing to show a menu about yet, which
+		// was true of the selectors and not of the decision. MenuItems answers
+		// with the one row it can honestly offer, the checkout itself, so the
+		// screen exists and enter is what starts anything.
+		//
+		// `doti install` is unchanged and still runs on sight: it was asked for
+		// by name, and scripts/install.sh ends with exactly that.
+		start, asks = app.OpInstall, true
 	}
 	if !instance.Interactive {
+		if start == app.OpInstall && !instance.Cloned() {
+			// Nothing to press enter with. A pipe, a container or CI gets the
+			// old behaviour, because the alternative is refusing to work with
+			// no way to say otherwise.
+			return instance.Install(ctx)
+		}
 		// Bubble Tea would take the alt screen and then wait for keys that
 		// cannot arrive. Only reachable when something asked for the window
 		// explicitly: without that, wantsWindow has already sent this run
@@ -60,12 +77,12 @@ func runWindow(ctx context.Context, instance *app.App, opts options, start app.O
 	}
 
 	scan := inventoryScanner(instance)
-	var inventory tui.Inventory
-	if instance.Cloned() {
-		var err error
-		if inventory, err = scan(ctx); err != nil {
-			return err
-		}
+	// Unconditional now. It used to be guarded on Cloned(), because MenuItems
+	// read the manifest first and there was none; it answers with the checkout
+	// row instead, which is what gives the first run something to draw.
+	inventory, err := scan(ctx)
+	if err != nil {
+		return err
 	}
 
 	// The renderer and the terminal's own colours, both of which apps/ssh-cv
@@ -92,6 +109,8 @@ func runWindow(ctx context.Context, instance *app.App, opts options, start app.O
 		// nothing was removed", and then advised re-running with --tools. The
 		// same command with --term removed it.
 		StartChosen: opts.include(start),
+		// Opened, not run, when this is the first time and nothing was named.
+		StartAsks: asks,
 	})
 
 	final, err := tea.NewProgram(model, tea.WithAltScreen()).Run()

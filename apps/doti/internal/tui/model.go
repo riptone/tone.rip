@@ -101,6 +101,14 @@ type Config struct {
 	Start Action
 	// StartChosen narrows Start the way the selector would have.
 	StartChosen []app.Ref
+	// StartAsks opens Start's selector instead of running it.
+	//
+	// The difference between "the reader named this operation" and "this is the
+	// only operation worth opening on". `doti install` in a terminal means run
+	// it, and does. Bare `doti` on a machine with no checkout means show me the
+	// install screen - it used to mean clone the repository and set the whole
+	// machine up, with nothing between the reader and all of it.
+	StartAsks bool
 }
 
 // errStopped is what a run the reader cancelled reports to the shell, when the
@@ -182,6 +190,12 @@ func New(cfg Config) Model {
 	// menu, and the events arrived at a model whose job was nil - so the
 	// stream stopped after the first line.
 	if cfg.Start != "" {
+		if at, ok := menuIndex(cfg.Start); ok && cfg.StartAsks {
+			// menuAt as well as the screen, so esc goes back to the entry this
+			// opened and the enter handler reads the right op.
+			m.menuAt = at
+			return m.openSelector(menu[at])
+		}
 		started, cmd := m.begin(cfg.Start, cfg.StartChosen)
 		started.startCmd = cmd
 		return started

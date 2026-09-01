@@ -38,6 +38,10 @@ import (
 // The selector's list for a removal, which is also why they arrive unticked:
 // see MenuItems for the shape.
 func (a *App) Removable(ctx context.Context) ([]Component, error) {
+	if !a.Cloned() {
+		// No manifest, so nothing is known to have been installed from one.
+		return nil, nil
+	}
 	m, err := a.Manifest()
 	if err != nil {
 		return nil, err

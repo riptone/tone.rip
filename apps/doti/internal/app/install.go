@@ -94,9 +94,18 @@ func (a *App) EnsureRepo(ctx context.Context) error {
 // vault still ends up fully configured, minus the credential files, and is
 // told so.
 func (a *App) Install(ctx context.Context) error {
+	// Whether this run is the one that creates the checkout, asked before it
+	// does. What the selector could offer at that point was a single row naming
+	// the checkout, so a selection carried past here would narrow every list to
+	// nothing - an install that ticked the only available box and then installed
+	// no packages at all.
+	fresh := !a.Cloned()
 	a.Report.Phase("repository")
 	if err := a.EnsureRepo(ctx); err != nil {
 		return err
+	}
+	if fresh {
+		a.Include = nil
 	}
 	if !a.Cloned() {
 		// Only reachable under --dry-run, where the clone did not happen.

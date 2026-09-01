@@ -149,6 +149,17 @@ func (m Model) menuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// menuIndex finds an operation's entry, for the callers that have an action and
+// need the menu row behind it.
+func menuIndex(action Action) (int, bool) {
+	for i, entry := range menu {
+		if entry.action == action {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 func digit(key string) int {
 	if len(key) != 1 || key[0] < '1' || key[0] > '9' {
 		return 0
