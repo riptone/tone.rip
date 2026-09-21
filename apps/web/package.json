@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@astrojs/cloudflare": "catalog:",
-    "@astrojs/sitemap": "^3.7.3",
+    "@astrojs/sitemap": "^3.7.4",
     "@repo/content": "*",
     "@repo/hono-middleware": "*",
     "@repo/net": "*",
