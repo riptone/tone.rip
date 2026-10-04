@@ -39,7 +39,7 @@
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "bun-types": "catalog:",
-    "chrome-launcher": "^1.2.1",
+    "chrome-launcher": "^1.2.2",
     "jsdom": "catalog:",
     "lighthouse": "^13.5.0",
     "typescript": "catalog:",

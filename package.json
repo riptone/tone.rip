@@ -17,11 +17,11 @@
     "ci": "bun run check && turbo run check-types test build //#lint //#knip //#check-cycles //#check-bundle-size e2e && git diff --exit-code -- apps/ssh-cv/internal/cv/cv.json"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.14",
+    "@biomejs/biome": "^2.5.15",
     "@types/node": "catalog:",
-    "knip": "^6.38.0",
+    "knip": "^6.39.0",
     "madge": "^8.0.0",
-    "turbo": "^2.11.3",
+    "turbo": "^2.11.5",
     "typescript": "catalog:"
   },
   "engines": {
