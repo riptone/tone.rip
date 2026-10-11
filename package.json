@@ -19,9 +19,9 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
     "@types/node": "catalog:",
-    "knip": "^6.39.0",
+    "knip": "^6.40.0",
     "madge": "^8.0.0",
-    "turbo": "^2.11.5",
+    "turbo": "^2.11.7",
     "typescript": "catalog:"
   },
   "engines": {
