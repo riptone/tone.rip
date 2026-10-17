@@ -83,15 +83,6 @@ export interface SelfHostedApp {
   name: string;
   href: string;
   tags: string[];
-  /**
-   * Path to request when checking whether this app is reachable.
-   *
-   * Per app rather than derived from its hostname, because the hostnames are
-   * not this repository's to know: it is public, and the set of services
-   * somebody self-hosts is a map of their attack surface. The exceptions live
-   * in a Worker secret and are applied in apps/api - see PROBE_PATHS there.
-   */
-  probePath: string;
   iconUrl: string | null;
 }
 
@@ -107,9 +98,9 @@ export interface SelfHostedApp {
  *   - **not renderable** - Access covers things that are not web pages at all
  *     (`ssh`, `vnc`, `rdp`, warp policies). They belong to the account, not to
  *     a launcher.
- *   - **unparseable domain** - `new URL()` is the same parse the CSP
- *     derivation does later, so anything that would throw there is dropped
- *     here instead, where it is one missing tile rather than a 500.
+ *   - **unparseable domain** - the tile's href is built with `new URL()`,
+ *     so anything that would throw there is dropped here instead, where it
+ *     is one missing tile rather than a 500.
  *
  * `logo_url` is required to be https for the same reason the CSP is: an
  * http image on an https page is blocked anyway, so admitting it would only
@@ -142,20 +133,16 @@ export function toSelfHostedApps(
     apps.push({
       name: application.name,
       href,
-      // The default. apps/api overrides it for the hosts named in its
-      // PROBE_PATHS secret; this module deliberately knows none of them.
-      probePath: "/",
       // The launcher tag is kept, not stripped.
       //
       // It is tempting to drop it here - it is on every entry by definition,
-      // so as a *label* it distinguishes nothing. But it is also load-bearing
-      // data: apps/api's `isTailnetOnly` reads it to decide whether the edge
-      // may probe a host at all, and hosts that resolve to Tailscale CGNAT
-      // addresses are unreachable from Cloudflare, so probing them would
-      // report a confident "down" for everything that is actually fine.
-      //
-      // Stripping it here broke exactly that, silently. Hiding a label is a
-      // presentation concern and is done where the labels are drawn.
+      // so as a *label* it distinguishes nothing. But this function maps the
+      // account's data, and an application's tags are what Access says they
+      // are; which of them are worth drawing is a presentation decision,
+      // and it is made where the labels are drawn (apps/dashboard's
+      // index.astro). Deciding it here instead would make every consumer
+      // inherit one page's taste - and the last time the tag was stripped at
+      // this layer, it silently broke the one consumer that did read it.
       tags,
       iconUrl: logo?.startsWith("https://") ? logo : null,
     });

@@ -84,7 +84,7 @@ padding lived in `ssh-cv/main.go`, so `doti` drew the same black card and let
 the reader's theme show through around it.
 
 `apps/api` exists for the same reason at the service level: one GitHub proxy
-with one cache, one Tailscale probe, one CSP-report sink. The front-ends
+with one cache, one Cloudflare Access reader, one CSP-report sink. The front-ends
 render markup and ship interaction. They do not each keep their own copy of
 the truth.
 
@@ -163,7 +163,7 @@ That starts every application at once. Individually:
 
 Nothing here needs credentials to run. The SSH CV generates its own throwaway
 host key and allowlist under `.dev/`; the API falls back to unauthenticated
-GitHub requests; the dashboard renders its tiles without live status.
+GitHub requests; the dashboard renders stand-in tiles (`src/dev-apps.ts`).
 
 | command | what it does |
 | --- | --- |

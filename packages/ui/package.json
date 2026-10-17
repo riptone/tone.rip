@@ -6,7 +6,6 @@
   "exports": {
     "./BaseHead.astro": "./src/BaseHead.astro",
     "./brand/Logo.astro": "./src/brand/Logo.astro",
-    "./contrast": "./src/contrast.ts",
     "./gradient": "./src/gradient/index.ts",
     "./motion/scroll-progress": "./src/motion/scroll-progress.ts",
     "./site": "./src/site/index.ts",

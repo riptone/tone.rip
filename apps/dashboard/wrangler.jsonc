@@ -17,17 +17,16 @@
   "observability": {
     "enabled": true
   },
-  // apps/api on the same account. Both of the calls this app makes to it -
-  // the SSR tile fetch in pages/index.astro and the /status proxy - used to
-  // go out to https://api.tone.rip and come back in: DNS, TLS, a second trip
-  // through Cloudflare's edge, and a billed subrequest, to reach a Worker
-  // sitting beside this one. A service binding dispatches to it in-process
-  // instead.
+  // apps/api on the same account. The one call this app makes to it - the
+  // SSR tile fetch in pages/index.astro - used to go out to
+  // https://api.tone.rip and come back in: DNS, TLS, a second trip through
+  // Cloudflare's edge, and a billed subrequest, to reach a Worker sitting
+  // beside this one. A service binding dispatches to it in-process instead.
   //
   // It does not weaken anything. Access gates api.tone.rip at the edge, and
   // this binding skips that edge - but that gate was never what protected
-  // those routes from this app, because a server-to-server call from here
-  // carries no interactive session anyway. What protects them is
+  // /apps from this app, because a server-to-server call from here carries
+  // no interactive session anyway. What protects it is
   // requireCloudflareAccess() inside apps/api, which verifies the JWT this
   // app forwards. That check is unchanged and still runs.
   "services": [{ "binding": "API", "service": "api" }],

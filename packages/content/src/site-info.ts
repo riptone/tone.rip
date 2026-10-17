@@ -54,17 +54,16 @@ export const DASHBOARD_INFO: SiteInfo = {
   slug: "dashboard",
   name: "dash",
   tagline: "Self-hosted services launcher",
-  description:
-    "A minimal launcher and live health/status board for tone's self-hosted services.",
+  description: "A minimal launcher for tone's self-hosted services.",
   url: "https://dash.tone.rip",
-  links: [{ label: "Status API", href: "https://api.tone.rip/status" }],
+  links: [{ label: "Apps API", href: "https://api.tone.rip/apps" }],
   markdown: [
     "# dash",
     "",
-    "A minimal launcher for tone's self-hosted services, with live up/down status.",
+    "A minimal launcher for tone's self-hosted services: the Cloudflare Access applications tagged Self-Hosted, with search and a tag filter.",
     "",
     "## API",
-    "- `GET /status` - health of every registered app, plus Tailscale device status",
+    "- `GET /apps` - the applications the launcher lists. Requires a Cloudflare Access JWT.",
     "",
   ].join("\n"),
 };

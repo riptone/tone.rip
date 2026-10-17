@@ -1,7 +1,11 @@
 GITHUB_TOKEN=
 
-TAILSCALE_OAUTH_CLIENT_ID=
-TAILSCALE_OAUTH_CLIENT_SECRET=
-TAILSCALE_OAUTH_SCOPE=devices:core:read
-TAILSCALE_TAILNET=
-TAILSCALE_STATUS_DEVICE=
+# Cloudflare API token with Access: Apps Read, and its account - for /apps.
+CF_ACCESS_TOKEN=
+CF_ACCOUNT_ID=
+BWS_ACCESS_TOKEN=
+BWS_REGION=eu
+
+# POST /ssh/authorize - see src/services/ssh-allowlist.ts for the format.
+SSH_GATEWAY_TOKEN=
+SSH_AUTHORIZED_KEYS=

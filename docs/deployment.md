@@ -25,15 +25,32 @@ Do this during low-traffic hours, and don't delete anything old until the new Wo
 
 ```bash
 cd apps/api
-wrangler secret put GITHUB_TOKEN               # optional - raises the GitHub API rate limit for /projects
-wrangler secret put TAILSCALE_OAUTH_CLIENT_ID  # optional - only if /status should report Tailscale device status
-wrangler secret put TAILSCALE_OAUTH_CLIENT_SECRET
-wrangler secret put TAILSCALE_TAILNET
-wrangler secret put TAILSCALE_STATUS_DEVICE
+wrangler secret put GITHUB_TOKEN     # optional - raises the GitHub API rate limit for /projects
+wrangler secret put CF_ACCESS_TOKEN  # optional - Access: Apps Read, for the dashboard's /apps
+wrangler secret put CF_ACCOUNT_ID
+wrangler secret put BWS_ACCESS_TOKEN  # optional - read-only Secrets Manager machine account, for /secrets (names only)
+wrangler secret put BWS_REGION        # optional - "eu" (default) or "us"
 wrangler deploy
 ```
 
-`wrangler.jsonc` already declares `"routes": [{ "pattern": "api.tone.rip", "custom_domain": true }]`, so `wrangler deploy` provisions the custom domain itself - no dashboard click needed. Verify `curl https://api.tone.rip/status` and `curl https://api.tone.rip/.well-known/api-catalog` before moving on.
+An `api` Worker deployed before the dashboard dropped its status column still
+holds secrets nothing reads any more. They are harmless, but a credential
+with no consumer is one to revoke rather than keep:
+
+```bash
+cd apps/api
+wrangler secret delete TAILSCALE_OAUTH_CLIENT_ID
+wrangler secret delete TAILSCALE_OAUTH_CLIENT_SECRET
+wrangler secret delete TAILSCALE_OAUTH_SCOPE    # only if it was ever set
+wrangler secret delete TAILSCALE_TAILNET
+wrangler secret delete TAILSCALE_STATUS_DEVICE
+wrangler secret delete PROBE_PATHS
+```
+
+`wrangler secret list` shows what is actually there; the Tailscale OAuth
+client itself is revoked in the Tailscale admin console, not here.
+
+`wrangler.jsonc` already declares `"routes": [{ "pattern": "api.tone.rip", "custom_domain": true }]`, so `wrangler deploy` provisions the custom domain itself - no dashboard click needed. Verify `curl https://api.tone.rip/.well-known/api-catalog` (and that `curl -i https://api.tone.rip/apps` answers 401 without an Access JWT) before moving on.
 
 ### 2. Verify `apps/web` and `apps/dashboard` before touching production DNS
 
@@ -46,7 +63,7 @@ cd apps/web && wrangler dev          # http://localhost:8787 - click through the
 `apps/dashboard` doesn't set `workers_dev: false`, so its preview URL works after a real deploy:
 
 ```bash
-cd apps/dashboard && wrangler deploy  # check the printed *.workers.dev URL - tiles render, /status is populated from api.tone.rip
+cd apps/dashboard && wrangler deploy  # check the printed *.workers.dev URL - tiles render from api.tone.rip's /apps
 ```
 
 If you want a pre-cutover check against the real Worker (not just local `wrangler dev`) for `apps/web` too, temporarily bind a throwaway custom domain (e.g. `web-preview.tone.rip`) to it, verify, then remove that binding before the real cutover in step 3.

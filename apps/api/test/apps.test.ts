@@ -1,44 +1,14 @@
 import { SELF } from "cloudflare:test";
-import { type SelfHostedApp, toSelfHostedApps } from "@repo/validation";
-import { sign } from "hono/jwt";
+import { toSelfHostedApps } from "@repo/validation";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { withProbePaths } from "../src/services/access-apps";
 
-const ACCESS_TEAM_DOMAIN = "riptone.cloudflareaccess.com";
-const ACCESS_ISSUER = `https://${ACCESS_TEAM_DOMAIN}`;
-const ACCESS_AUD =
-  "28a3efd8f96a2e859f3bcd8158570e67538c297b25a8d7de9803b877e8a1881a";
-const ACCESS_JWKS_URL = `${ACCESS_ISSUER}/cdn-cgi/access/certs`;
-const ACCESS_HEADER = "Cf-Access-Jwt-Assertion";
-const KID = "test-kid";
-
-async function generateSignedAccessToken(payload: Record<string, unknown>) {
-  const keyPair = (await crypto.subtle.generateKey(
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      hash: "SHA-256",
-      modulusLength: 2048,
-      publicExponent: new Uint8Array([1, 0, 1]),
-    },
-    true,
-    ["sign", "verify"],
-  )) as CryptoKeyPair;
-  const privateJwk = (await crypto.subtle.exportKey(
-    "jwk",
-    keyPair.privateKey,
-  )) as JsonWebKey;
-  const publicJwk = (await crypto.subtle.exportKey(
-    "jwk",
-    keyPair.publicKey,
-  )) as JsonWebKey;
-  const token = await sign(
-    payload,
-    { ...privateJwk, alg: "RS256", kid: KID },
-    "RS256",
-  );
-  const jwks = { keys: [{ ...publicJwk, alg: "RS256", kid: KID, use: "sig" }] };
-  return { token, jwks };
-}
+import {
+  ACCESS_AUD,
+  ACCESS_HEADER,
+  ACCESS_ISSUER,
+  ACCESS_JWKS_URL,
+  generateSignedAccessToken,
+} from "./support/access-jwt";
 
 /* The mapping is pure, so it is tested directly rather than through a fetch.
    Every case here is a shape Cloudflare genuinely returns. */
@@ -60,7 +30,6 @@ describe("toSelfHostedApps", () => {
         name: "Secrets",
         href: "https://secrets.example.com/",
         tags: ["Security", "Self-Hosted"],
-        probePath: "/",
         iconUrl: "https://cdn.example/icon.webp",
       },
     ]);
@@ -112,7 +81,6 @@ describe("toSelfHostedApps", () => {
         name: "Plain",
         href: "https://plain.example.com/",
         tags: ["Self-Hosted"],
-        probePath: "/",
         iconUrl: null,
       },
     ]);
@@ -134,9 +102,9 @@ describe("toSelfHostedApps", () => {
     expect(app?.iconUrl).toBeNull();
   });
 
-  // The domain is typed into a form by an administrator and ends up in the
-  // dashboard's connect-src. Anything new URL() would throw on is dropped
-  // here, where it costs one tile instead of a 500.
+  // The domain is typed into a form by an administrator and ends up as a
+  // tile's href. Anything new URL() would throw on is dropped here, where it
+  // costs one tile instead of a 500.
   it("drops a domain that cannot be parsed", () => {
     expect(
       toSelfHostedApps([
@@ -203,11 +171,13 @@ describe("toSelfHostedApps", () => {
     expect(apps.map((a) => a.name)).toEqual(["Padded", "Shouty"]);
   });
 
-  // The launcher tag is kept in the data even though the UI hides it:
-  // apps/api's isTailnetOnly reads it to decide whether the edge may probe a
-  // host, and a host on Tailscale CGNAT is unreachable from Cloudflare. Strip
-  // it here and every tile gets probed and reported "down".
-  it("keeps the launcher tag, because the probe depends on it", () => {
+  // The launcher tag is kept in the data even though the dashboard hides it:
+  // the mapping reports an application's tags as Access holds them, and
+  // which labels are worth drawing is the page's call, made where it draws
+  // them. Stripping it here would bake one consumer's presentation into the
+  // API - and the last time that happened, it broke the consumer that did
+  // need the tag.
+  it("keeps the launcher tag, leaving presentation to the page", () => {
     const [app] = toSelfHostedApps([
       {
         id: "1",
@@ -303,60 +273,5 @@ describe("GET /apps", () => {
       "https://api.example.com/.well-known/api-catalog",
     );
     expect(await res.text()).toContain("/apps");
-  });
-});
-
-/* PROBE_PATHS is a secret typed by hand, and a typo in it should cost one app
-   an accurate probe rather than the whole board - so the parsing is total. */
-describe("withProbePaths", () => {
-  const app = (name: string, host: string): SelfHostedApp => ({
-    name,
-    href: `https://${host}/`,
-    tags: ["Self-Hosted"],
-    probePath: "/",
-    iconUrl: null,
-  });
-
-  it("overrides only the hosts it names", () => {
-    const [a, b] = withProbePaths(
-      [app("A", "a.example.com"), app("B", "b.example.com")],
-      "a.example.com=/favicon.ico",
-    );
-    expect(a?.probePath).toBe("/favicon.ico");
-    expect(b?.probePath).toBe("/");
-  });
-
-  it("takes several pairs", () => {
-    const [a, b] = withProbePaths(
-      [app("A", "a.example.com"), app("B", "b.example.com")],
-      "a.example.com=/favicon.ico, b.example.com=/health",
-    );
-    expect(a?.probePath).toBe("/favicon.ico");
-    expect(b?.probePath).toBe("/health");
-  });
-
-  // The host is compared lowercased because it is typed into a secret, where
-  // a capital letter is a plausible slip and a silent no-op would look like
-  // the override simply not working.
-  it("matches the host whatever case it was typed in", () => {
-    const [a] = withProbePaths(
-      [app("A", "a.example.com")],
-      "A.Example.COM=/favicon.ico",
-    );
-    expect(a?.probePath).toBe("/favicon.ico");
-  });
-
-  it("ignores malformed pairs instead of throwing", () => {
-    const [a] = withProbePaths(
-      [app("A", "a.example.com")],
-      "no-equals-sign,=/orphan,a.example.com=missing-leading-slash",
-    );
-    expect(a?.probePath).toBe("/");
-  });
-
-  it("leaves the list alone when the secret is absent or empty", () => {
-    const apps = [app("A", "a.example.com")];
-    expect(withProbePaths(apps, undefined)).toBe(apps);
-    expect(withProbePaths(apps, "")).toBe(apps);
   });
 });

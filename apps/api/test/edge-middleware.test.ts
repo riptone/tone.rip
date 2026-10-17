@@ -14,7 +14,6 @@ describe("app-wide middleware", () => {
       "https://api.tone.rip/apps",
       "https://api.tone.rip/projects",
       "https://api.tone.rip/projects/{repo}/readme",
-      "https://api.tone.rip/status",
       "https://api.tone.rip/csp-report",
       "https://api.tone.rip/info/{slug}",
     ]);

@@ -7,25 +7,29 @@ import { collectConsoleProblems } from "@repo/playwright-config";
    problems" assertions below meaningful. */
 
 /*
- * dashboard.ts pings every tile's real host on load (client-probe.ts) to
- * show it as up/down - by design, since that's the whole point of the
- * launcher. A CI run has no route to any of them (they're behind the user's
- * own Tailscale/home network), and even where one resolved, having this
- * suite ping someone's actual password manager on every run is not
- * something a test should do as a side effect. Answer every cross-origin
- * request with a harmless 200 so the probe logic still runs (and doesn't
- * itself log anything) without depending on, or touching, real
- * infrastructure.
+ * The board used to probe every tile's real host from the browser to show it
+ * as up/down, so this suite answered every cross-origin request with a
+ * harmless 200 rather than ping someone's actual password manager on every
+ * run. The probes are gone, and so is the reason to tolerate any
+ * cross-origin traffic: connect-src is 'self' now, and the fixtures carry no
+ * icons. So the stub stays - nothing reaches real infrastructure even if a
+ * regression starts making requests - but it also records them, and the
+ * tests assert there were none.
  */
-async function stubExternalProbes(
+async function recordExternalRequests(
   page: import("@playwright/test").Page,
   baseURL: string,
-): Promise<void> {
+): Promise<string[]> {
   const sameOrigin = new URL(baseURL).origin;
+  const external: string[] = [];
   await page.route(
     (url) => url.origin !== sameOrigin,
-    (route) => route.fulfill({ status: 200, body: "" }),
+    (route) => {
+      external.push(route.request().url());
+      return route.fulfill({ status: 200, body: "" });
+    },
   );
+  return external;
 }
 
 test("the launcher loads clean and lists the self-hosted apps", async ({
@@ -33,7 +37,7 @@ test("the launcher loads clean and lists the self-hosted apps", async ({
   baseURL,
 }) => {
   const problems = collectConsoleProblems(page);
-  await stubExternalProbes(page, baseURL ?? "");
+  const external = await recordExternalRequests(page, baseURL ?? "");
 
   await page.goto("/");
   await expect(page.locator("h1")).toHaveText("self-hosted");
@@ -41,11 +45,12 @@ test("the launcher loads clean and lists the self-hosted apps", async ({
 
   expect(problems.errors, problems.errors.join("\n")).toEqual([]);
   expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);
+  expect(external, external.join("\n")).toEqual([]);
 });
 
 test("the filter narrows the visible tiles", async ({ page, baseURL }) => {
   const problems = collectConsoleProblems(page);
-  await stubExternalProbes(page, baseURL ?? "");
+  const external = await recordExternalRequests(page, baseURL ?? "");
 
   await page.goto("/");
   // A single compound selector, not `items.locator(":visible")`: a chained
@@ -69,6 +74,28 @@ test("the filter narrows the visible tiles", async ({ page, baseURL }) => {
 
   expect(problems.errors, problems.errors.join("\n")).toEqual([]);
   expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);
+  expect(external, external.join("\n")).toEqual([]);
+});
+
+test("the secrets section lists names only, collapsed until opened", async ({
+  page,
+  baseURL,
+}) => {
+  const problems = collectConsoleProblems(page);
+  const external = await recordExternalRequests(page, baseURL ?? "");
+
+  await page.goto("/");
+  const section = page.locator("[data-secrets]");
+  await expect(section).not.toHaveAttribute("open");
+  await section.locator("summary").click();
+  await expect(section.locator(".secret").first()).toBeVisible();
+  await expect(section.locator(".secret__name").first()).toHaveText(
+    "EXAMPLE_API_KEY",
+  );
+
+  expect(problems.errors, problems.errors.join("\n")).toEqual([]);
+  expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);
+  expect(external, external.join("\n")).toEqual([]);
 });
 
 /* This app's 404 used to be a `<meta http-equiv="refresh">` bounce to `/`,

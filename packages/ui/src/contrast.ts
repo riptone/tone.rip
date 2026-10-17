@@ -7,11 +7,14 @@
  * are computed from the stylesheets themselves, and a colour that drops below
  * the threshold fails the build instead of the next audit.
  *
- * This lives in `src/` rather than beside the test that first needed it
- * because a second stylesheet now needs the same guard: apps/dashboard paints
- * four status colours per theme, in hex, outside the token layer. Two copies
- * of the sRGB luminance formula is two chances to get it subtly wrong in one
- * of them - and the wrong one would be the one that passes.
+ * It was exported for a while, with a `parseHex()`, because a second
+ * stylesheet needed the same guard: apps/dashboard painted four status
+ * colours per theme in hex, outside the token layer. The status column is
+ * gone, so this is back to one consumer - test/contrast.test.ts - and no
+ * longer part of the package's public surface. If another colour outside the
+ * tokens appears, re-export this rather than copying the luminance formula:
+ * two copies are two chances to get it subtly wrong, and the wrong one would
+ * be the one that passes.
  */
 
 export type Rgb = [number, number, number];
@@ -40,24 +43,6 @@ export function flatten(ink: Rgb, alpha: number, background: Rgb): Rgb {
   return ink.map((c, i) =>
     Math.round(c * alpha + (background[i] ?? 0) * (1 - alpha)),
   ) as Rgb;
-}
-
-/** `#rgb` or `#rrggbb`. Throws rather than guessing - a silent 0,0,0 would pass. */
-export function parseHex(hex: string): Rgb {
-  const h = hex.replace("#", "").trim();
-  const full =
-    h.length === 3
-      ? h
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : h;
-  if (!/^[0-9a-f]{6}$/i.test(full)) throw new Error(`not a hex colour: ${hex}`);
-  return [
-    Number.parseInt(full.slice(0, 2), 16),
-    Number.parseInt(full.slice(2, 4), 16),
-    Number.parseInt(full.slice(4, 6), 16),
-  ];
 }
 
 /** WCAG 2.1 AA for normal-size text. */

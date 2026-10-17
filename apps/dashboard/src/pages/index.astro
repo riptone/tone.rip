@@ -23,6 +23,7 @@ import "../styles/dashboard.css";
 import { CONTACT } from "@repo/content";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "../consts";
 import { DEV_APPS } from "../dev-apps";
+import { DEV_SECRETS } from "../dev-secrets";
 import { ACCESS_JWT_HEADER, callApi } from "../lib/api";
 
 /* The launcher, rebuilt on the same frame as tone.rip.
@@ -32,8 +33,15 @@ import { ACCESS_JWT_HEADER, callApi } from "../lib/api";
    that metaphor, and a launcher is a list of links: it wants the same
    reading column, the same hairline rules and the same restraint about
    colour, so it now takes them from @repo/ui rather than reimplementing
-   them. What is left in this app is what is genuinely its own: search,
-   filtering, and live status.
+   them. What is left in this app is what is genuinely its own: the list,
+   and the search and filter over it.
+
+   There is no status column, and that is a decision rather than a gap. The
+   board used to colour every row up/down/vpn from a mix of server probes,
+   browser probes and a WebRTC guess at whether the visitor was on the
+   tailnet. The services no longer sit behind Tailscale, and a launcher's job
+   is to get you to the thing - which then tells you far more reliably than a
+   dot whether it is up.
 
    The gradient field comes along too. On a utility page it collapses to the
    narrow rail - enough to tie the two properties together, not enough to
@@ -56,9 +64,6 @@ interface Tile {
   name: string;
   href: string;
   tags: string[];
-  /* Where to probe this app. Comes from the API, which gets the exceptions
-     from a secret - the hostnames that need one are not in this repo. */
-  probePath: string;
   iconUrl: string | null;
 }
 
@@ -68,17 +73,53 @@ interface Tile {
    to asserting on whatever it happens to contain. That is what made them pass
    here and fail in CI. Not making the request is the only version of this
    that cannot depend on production. */
+/* What Bitwarden Secrets Manager holds, by name - apps/api's GET /secrets.
+   Never values: the API does not read them, so this page cannot show them.
+   It is here to answer "is that key backed up, and since when", which is
+   the question a launcher for the services that use those keys gets asked. */
+interface SecretRow {
+  name: string;
+  projects: string[];
+  revisedAt: string;
+}
+type SecretsState = "ok" | "unconfigured" | "unavailable";
+
 let apps: Tile[] = [];
+let secrets: SecretRow[] = [];
+let secretsState: SecretsState = "unavailable";
+
+async function loadSecrets(): Promise<void> {
+  try {
+    const response = await callApi("/secrets", {
+      jwt: Astro.request.headers.get(ACCESS_JWT_HEADER),
+      timeoutMs: 4000,
+    });
+    if (!response.ok) return;
+    const body = (await response.json()) as {
+      secrets?: SecretRow[];
+      state?: SecretsState;
+    };
+    secrets = body.secrets ?? [];
+    secretsState = body.state ?? "unavailable";
+  } catch {
+    // Same rule as the tiles: a missing section, not an error page.
+  }
+}
+
 if (DEV_HOSTNAMES.has(Astro.url.hostname)) {
   apps = DEV_APPS;
+  secrets = DEV_SECRETS;
+  secretsState = "ok";
 } else {
+  // In parallel with the tiles: the render waits for the slower of the two,
+  // not for their sum.
+  const secretsLoaded = loadSecrets();
   try {
     /* Through the `API` service binding rather than out to
        https://api.tone.rip and back - this render blocks on the answer, so
        the round trip was sitting in TTFB. See src/lib/api.ts.
 
-       The deadline is this app's only one on this path: unlike /status,
-       nothing downstream is waiting on a shorter clock, so it just has to be
+       The deadline is this app's only one on this path, so it just has to be
        short enough that an unreachable API degrades to an empty board
        instead of hanging the page. */
     const response = await callApi("/apps", {
@@ -92,20 +133,26 @@ if (DEV_HOSTNAMES.has(Astro.url.hostname)) {
     // Left empty on purpose - an empty board is the honest answer when the
     // source of truth is unreachable. See the note above the interface.
   }
+  await secretsLoaded;
 }
+
+/* The day only: when a key last changed is a question of days, and the
+   time would invite reading it as when it was last *used*. */
+const day = (iso: string) => iso.slice(0, 10);
+const SECRETS_NOTE: Record<SecretsState, string | null> = {
+  ok: null,
+  unconfigured: "Not connected to Bitwarden.",
+  unavailable: "Bitwarden did not answer.",
+};
 
 /* "Self-Hosted" is on every application by definition - it is the tag the API
    filters on - so as a *label* it distinguishes nothing and as a filter option
-   it would select everything. It is hidden from both.
+   it would select everything. It is hidden from both, and from `data-tags`
+   too: that attribute exists only for the filter, and nothing in the browser
+   needs to know why a tile is on the board.
 
-   It is not removed from `data-tags`, and that distinction is the whole point:
-   dashboard.ts reads that attribute to decide `isSelfHosted`, which decides
-   whether the browser probes a host at all. Strip it there and every tile is
-   treated as publicly reachable - so the browser pings six Tailscale-only
-   hosts it cannot reach, fills the console with ERR_TUNNEL_CONNECTION_FAILED,
-   and shows "down" where the honest answer is "vpn".
-
-   Data keeps the tag. Presentation hides it. */
+   The API still returns it (see @repo/validation's toSelfHostedApps). Hiding a
+   label is this page's concern, so it is done where the labels are drawn. */
 const LAUNCHER_TAG = "self-hosted";
 const visibleTags = (tags: string[]) =>
   tags.filter((tag) => tag.trim().toLowerCase() !== LAUNCHER_TAG);
@@ -170,56 +217,6 @@ const MENU: ContextMenuEntry[] = [
 
         <header class="dash__head">
           <h1 class="dash__title">self-hosted</h1>
-          {/*
-            Tailscale sits here rather than in the list because it is not one
-            of these services - it is the network they are on. As a tile it
-            was the one entry you could not probe (its status is the reason
-            the others have a status at all) and the one that was not
-            self-hosted, which is now also the tag the list is built from.
-
-            An admin link, next to the other admin control.
-          */}
-          <a
-            class="dash__iconbtn"
-            href="https://login.tailscale.com/admin/"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Tailscale admin console"
-            title="Tailscale admin console"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              {/*
-                Tailscale's mark: a three-by-three grid with the middle row
-                and the lower-left filled. Drawn rather than fetched from the
-                icon CDN so the header does not wait on a remote image.
-              */}
-              <g fill="currentColor">
-                <circle cx="5" cy="5" r="2.1" opacity="0.4"></circle>
-                <circle cx="12" cy="5" r="2.1" opacity="0.4"></circle>
-                <circle cx="19" cy="5" r="2.1" opacity="0.4"></circle>
-                <circle cx="5" cy="12" r="2.1"></circle>
-                <circle cx="12" cy="12" r="2.1"></circle>
-                <circle cx="19" cy="12" r="2.1"></circle>
-                <circle cx="5" cy="19" r="2.1"></circle>
-                <circle cx="12" cy="19" r="2.1" opacity="0.4"></circle>
-                <circle cx="19" cy="19" r="2.1" opacity="0.4"></circle>
-              </g>
-            </svg>
-          </a>
-          <button
-            class="dash__iconbtn dash__refresh"
-            id="refresh"
-            type="button"
-            aria-label="Refresh statuses"
-            title="Refresh statuses"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M17.65 6.35A7.95 7.95 0 0012 4a8 8 0 108 8h-2a6 6 0 11-6-6c1.66 0 3.14.69 4.22 1.78L14 10h6V4l-2.35 2.35z"
-              ></path>
-            </svg>
-          </button>
         </header>
 
         <section class="dash__controls" aria-label="Search and filters">
@@ -257,9 +254,7 @@ const MENU: ContextMenuEntry[] = [
                   rel="noopener noreferrer"
                   data-filter-item
                   data-name={app.name.toLowerCase()}
-                  data-href={app.href}
-                  data-probe-path={app.probePath}
-                  data-tags={app.tags.join(",")}
+                  data-tags={visibleTags(app.tags).join(",")}
                 >
                   {/*
                     A plain <img>, not astro:assets' <Image>.
@@ -295,15 +290,6 @@ const MENU: ContextMenuEntry[] = [
                   </span>
                   <span class="tile__name">{app.name}</span>
                   <span class="tile__tags">{visibleTags(app.tags).join(" · ")}</span>
-                  <span
-                    class="status"
-                    data-status="unknown"
-                    role="status"
-                    aria-label="Status: unknown"
-                  >
-                    <span class="dot" aria-hidden="true" />
-                    <span class="text">?</span>
-                  </span>
                 </a>
               </li>
             ))
@@ -312,12 +298,36 @@ const MENU: ContextMenuEntry[] = [
 
         <p class="dash__empty" hidden data-filter-empty>No matches.</p>
 
+        {/*
+          Collapsed by default: the launcher is what this page is for, and a
+          list of credential names is something you open on purpose, not
+          something that sits in view while you click through to an app.
+        */}
+        <details class="dash__secrets" data-secrets>
+          <summary class="dash__secretshead">
+            <span class="dash__fieldlabel">secrets</span>
+            <span class="dash__count">{secrets.length}</span>
+          </summary>
+          {SECRETS_NOTE[secretsState] ? (
+            <p class="dash__note">{SECRETS_NOTE[secretsState]}</p>
+          ) : (
+            <ul class="dash__secretlist" aria-label="Secrets in Bitwarden">
+              {secrets.map((secret) => (
+                <li class="secret">
+                  <code class="secret__name">{secret.name}</code>
+                  <span class="secret__projects">{secret.projects.join(" · ") || "no project"}</span>
+                  <time class="secret__date" datetime={secret.revisedAt}>{day(secret.revisedAt)}</time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
+
         <Footer
           class="dashfoot"
           github="https://tone.rip"
           handle="tone.rip"
           email={CONTACT.email}
-          links={[{ label: "status", href: "/api/status" }]}
         />
       </div>
 
@@ -329,10 +339,19 @@ const MENU: ContextMenuEntry[] = [
     <ContextMenu entries={MENU} />
 
     <script>
-      import { mountContact, mountContextMenu, syncField } from "@repo/ui/site";
-      import { initDashboard } from "../scripts/dashboard";
+      import {
+        mountContact,
+        mountContextMenu,
+        mountFilter,
+        syncField,
+      } from "@repo/ui/site";
 
-      initDashboard();
+      // Search, tag and count are @repo/ui's - the same control the work list
+      // uses. All this page supplies is the markup and its data attributes.
+      // That was once wrapped in a scripts/dashboard.ts, alongside the status
+      // checks; with those gone the wrapper would only be a second name for
+      // this one call.
+      mountFilter();
       mountContact();
       mountContextMenu();
       // No options: the same field the site runs, differing only in the

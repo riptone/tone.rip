@@ -202,7 +202,7 @@ Examples:
 
 ```
 GET /projects
-GET /status
+GET /apps
 POST /csp-report
 GET /info/:slug
 ```

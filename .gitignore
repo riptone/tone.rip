@@ -8,7 +8,7 @@ node_modules
 # Local env files
 .env
 # Wrangler's local secrets file, which holds real credentials (GitHub token,
-# Tailscale OAuth client secret). apps/api/.gitignore already covers its own
+# Cloudflare API token). apps/api/.gitignore already covers its own
 # copy; this is here so a second Worker added later is covered from the
 # first commit rather than from the first time someone notices.
 .dev.vars

@@ -7,8 +7,8 @@
 # crawler well-behaved enough to ask.
 #
 # So the two surfaces built to be read are allowed, and nothing else is.
-# /status and /apps would answer 401 anyway - they are behind Cloudflare
-# Access - and /ssh/authorize is deliberately absent from the catalog too.
+# /apps would answer 401 anyway - it is behind Cloudflare Access - and
+# /ssh/authorize is deliberately absent from the catalog too.
 #
 # Content-Signal (contentsignals.org) states the usage policy separately from
 # the access policy, which is the point of it: `Disallow` only binds a crawler

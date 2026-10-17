@@ -83,11 +83,12 @@ page that answers 200.
 ### `contrast.ts`
 
 WCAG 2.1 relative contrast, plus `flatten()` for compositing an `rgba()` ink
-onto a background and `parseHex()`. Exported rather than kept beside its test
-because two stylesheets now need the guard: this package's text tokens, and
-`apps/dashboard`'s four status colours, which live in hex outside the token
-layer. Two copies of the sRGB luminance formula is two chances to get it
-subtly wrong in one of them - and the wrong one would be the one that passes.
+onto a background, used by `test/contrast.test.ts` to keep the text tokens
+legible. Not exported: it was, while `apps/dashboard` guarded four status
+colours of its own with it, and that column is gone. If a colour outside the
+tokens appears again, re-export this rather than copy it - two copies of the
+sRGB luminance formula is two chances to get it subtly wrong in one of them,
+and the wrong one would be the one that passes.
 
 ### `brand/` and `scripts/`
 

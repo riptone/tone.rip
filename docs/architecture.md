@@ -13,10 +13,10 @@ Both Astro apps are deliberately thin: they render markup and ship the client-si
 
 ## Why the API is centralized
 
-Before this monorepo existed, the site and dashboard were separate repos, each with its own Cloudflare Worker doing its own GitHub-proxy caching, its own Tailscale OAuth probing, its own CSP-report ingestion. Centralizing all of that in `apps/api` means:
+Before this monorepo existed, the site and dashboard were separate repos, each with its own Cloudflare Worker doing its own GitHub-proxy caching, its own app-health probing, its own CSP-report ingestion. Centralizing all of that in `apps/api` means:
 
 - One cache/ETag-revalidation implementation for the GitHub repos proxy (`GET /projects`), not two.
-- One Tailscale-OAuth + app-health-probing implementation (`GET /status`), reusable by both `apps/web` (if it ever needs live status) and `apps/dashboard`.
+- One reader for the Cloudflare Access applications the dashboard lists (`GET /apps`), holding the only API token that can see them.
 - One CSP-report ingestion endpoint (`POST /csp-report`), validated with Zod (`packages/validation`) instead of hand-parsed JSON.
 
 ## Why `apps/ssh-cv` is not on Cloudflare Workers
@@ -47,9 +47,9 @@ because the CV is as public as the website. See `apps/ssh-cv/README.md`.
 
 ## Why `apps/dashboard` is gated by Cloudflare Access, not app code
 
-`apps/dashboard` sits entirely behind a Cloudflare Access application (an edge-level login wall tied to the account's identity providers) rather than any homegrown session/login system - there's exactly one internal-facing app that needs gating, so paying for a Hono/Astro auth stack (sessions, a login form, password storage) would be solving a problem Cloudflare's edge already solves for free. `packages/hono-middleware/src/cloudflare-access.ts` exports `requireCloudflareAccess()`, a small Hono middleware that verifies a Cloudflare Access JWT against the team's JWKS - it exists because `apps/api`'s `/status` route is reached cross-hostname via a server-to-server proxy (`apps/dashboard/src/pages/api/status.ts` forwards its own already-Access-verified request's JWT to `api.tone.rip`), a hop Access's own edge gating doesn't cover since that gating is scoped to `dash.tone.rip`, not `api.tone.rip`.
+`apps/dashboard` sits entirely behind a Cloudflare Access application (an edge-level login wall tied to the account's identity providers) rather than any homegrown session/login system - there's exactly one internal-facing app that needs gating, so paying for a Hono/Astro auth stack (sessions, a login form, password storage) would be solving a problem Cloudflare's edge already solves for free. `packages/hono-middleware/src/cloudflare-access.ts` exports `requireCloudflareAccess()`, a small Hono middleware that verifies a Cloudflare Access JWT against the team's JWKS - it exists because `apps/api`'s `/apps` route is reached cross-hostname by a server-to-server call (`apps/dashboard/src/lib/api.ts` forwards its own already-Access-verified request's JWT to `api.tone.rip`), a hop Access's own edge gating doesn't cover since that gating is scoped to `dash.tone.rip`, not `api.tone.rip`.
 
-That proxy, and the dashboard's server-side render of the tile list, reach `apps/api` through a Cloudflare **service binding** (`API` in `apps/dashboard/wrangler.jsonc`) rather than over the public internet - both Workers are on the same account, and the round trip through DNS, TLS and Cloudflare's edge was sitting in the dashboard's TTFB. The binding skips the edge, and therefore skips the Access gate on `api.tone.rip` - which changes nothing, because that gate never protected those routes from this caller in the first place. `requireCloudflareAccess()` inside `apps/api` is what does, and it still verifies the JWT the dashboard forwards. See `apps/dashboard/src/lib/api.ts`.
+That call - the dashboard's server-side render of the tile list - reaches `apps/api` through a Cloudflare **service binding** (`API` in `apps/dashboard/wrangler.jsonc`) rather than over the public internet - both Workers are on the same account, and the round trip through DNS, TLS and Cloudflare's edge was sitting in the dashboard's TTFB. The binding skips the edge, and therefore skips the Access gate on `api.tone.rip` - which changes nothing, because that gate never protected those routes from this caller in the first place. `requireCloudflareAccess()` inside `apps/api` is what does, and it still verifies the JWT the dashboard forwards. See `apps/dashboard/src/lib/api.ts`.
 
 ## Why every app runs the same Hono middleware
 
@@ -87,7 +87,7 @@ signal.
 
 | Package | What it holds | Consumed by |
 |---|---|---|
-| `packages/ui` | Everything both front ends share: `BaseHead.astro`, the design tokens and reset, the frame (`shell.css`), the chrome (`site/`: `Footer.astro`, `ContextMenu.astro`, the filter, the language switch, the field controller), the brand mark, the noise gradient field (`gradient/`, `motion/`), the 404 page (`site/NotFound.astro`), the WCAG contrast helpers both colour guards use (`contrast.ts`), and the static assets those reference (`public/`: the font, the favicons, the icon set) - see `packages/ui/README.md` | `apps/web`, `apps/dashboard` |
+| `packages/ui` | Everything both front ends share: `BaseHead.astro`, the design tokens and reset, the frame (`shell.css`), the chrome (`site/`: `Footer.astro`, `ContextMenu.astro`, the filter, the language switch, the field controller), the brand mark, the noise gradient field (`gradient/`, `motion/`), the 404 page (`site/NotFound.astro`), the WCAG contrast helpers the token guard uses (`contrast.ts`), and the static assets those reference (`public/`: the font, the favicons, the icon set) - see `packages/ui/README.md` | `apps/web`, `apps/dashboard` |
 | `packages/content` | The CV (`cv.ts`), GitHub-repo simplification, CSP-report summarizing, per-site info/markdown, the `Person` schema, and the contact facts (`contact.ts`) every surface states | `apps/api`, `apps/dashboard`, `apps/web`, `apps/ssh-cv` |
 | `packages/validation` | Zod schemas, an RFC 7807 validation-failure hook for `@hono/zod-validator` | `apps/api`, `apps/web`, `apps/dashboard` |
 | `packages/net` | `fetchWithTimeout` / `withTimeout` - the AbortController-plus-timer every reachability check needs | `apps/api`, `apps/web`, `apps/dashboard` |

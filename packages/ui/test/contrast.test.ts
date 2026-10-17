@@ -10,8 +10,8 @@ import {
 
 /* The text tokens have to stay legible, and "legible" is a number.
  *
- * The arithmetic is in src/contrast.ts, shared with apps/dashboard's own
- * status-colour test; the reasoning for measuring at all is there too. What
+ * The arithmetic is in src/contrast.ts, along with the reasoning for
+ * measuring at all. What
  * is here is the part specific to tokens.css: pulling `rgba()` inks out of
  * the right theme block and compositing them onto that theme's background. */
 

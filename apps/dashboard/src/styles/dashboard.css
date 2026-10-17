@@ -6,7 +6,7 @@
    the wordmark come from @repo/ui/styles/shell.css; the footer and the
    right-click menu are @repo/ui components. What is left in this file is
    what is genuinely this app's own and nothing else's: the header, the
-   search and filter controls, the app rows, and the status colours.
+   search and filter controls, and the app rows.
 
    It used to be ~540 lines describing a floating "window" card with a
    titlebar - a desktop metaphor the site itself has since dropped. Deleting
@@ -54,48 +54,6 @@ select {
   font-size: clamp(1.375rem, 1.9vw, 1.75rem);
   font-weight: var(--fw-medium);
   letter-spacing: -0.012em;
-}
-
-/* Worn by both the refresh <button> and the Tailscale <a>, so it has to
-   neutralise a link's defaults as well as a button's - `text-decoration`
-   would otherwise put a rule under the icon, and `flex-shrink` keeps the
-   pair square when the title beside them is long. */
-.dash__iconbtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: none;
-  color: var(--text-muted);
-  text-decoration: none;
-  cursor: pointer;
-  transition: var(--transition-border);
-}
-
-.dash__iconbtn:hover,
-.dash__iconbtn:focus-visible {
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-
-.dash__iconbtn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.dash__refresh.spinning svg {
-  animation: dash-spin 520ms ease-in-out;
-}
-
-@keyframes dash-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* ---- search and filters ---- */
@@ -152,12 +110,12 @@ select {
   list-style: none;
 }
 
-/* One grid, so names and statuses line up down the page instead of each row
-   solving its own layout. The tags column collapses first because it is the
-   least load-bearing thing in the row. */
+/* One grid, so icons, names and tags line up down the page instead of each
+   row solving its own layout. The tags column collapses first because it is
+   the least load-bearing thing in the row. */
 .tile {
   display: grid;
-  grid-template-columns: 28px 1fr auto auto;
+  grid-template-columns: 28px 1fr auto;
   align-items: center;
   gap: 0 0.9rem;
   padding: 0.7rem 0;
@@ -233,85 +191,6 @@ select {
   padding-right: var(--gutter);
 }
 
-/* ---- status ---- */
-
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 4.5rem;
-  justify-content: flex-end;
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  line-height: 1;
-  white-space: nowrap;
-  user-select: none;
-  pointer-events: none;
-}
-
-.status .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1px solid var(--border-strong);
-  background: transparent;
-}
-
-/* One custom property per status, resolved by theme, and the rules that paint
-   from it. It used to be twenty-four declarations - a colour written three
-   times per status per theme, into `color`, `background` and `border-color` -
-   which is three chances to change two of them.
-
-   Dark is the base and light is the opt-in, matching tokens.css. That was the
-   other way round here, and the inversion mattered beyond tidiness: every page
-   in both apps renders dark, so a status added without its dark override, or a
-   document that somehow lost `data-theme`, fell back to a colour picked for
-   white paper and rendered it on black. Now the fallback is the theme that
-   actually ships.
-
-   These are still hex rather than tokens because nothing else in the repo has
-   a semantic status colour - see the note in tokens.css about moving them when
-   a second surface needs them. What they do have is a guard:
-   test/status-contrast.test.ts reads them straight out of this file and fails
-   the build if any drops under WCAG AA on its own theme's background. */
-.status[data-status="up"] {
-  --status: #86efac;
-}
-.status[data-status="down"] {
-  --status: #fca5a5;
-}
-.status[data-status="checking"] {
-  --status: #fbbf24;
-}
-.status[data-status="vpn"] {
-  --status: #93c5fd;
-}
-
-/* Dark enough to read on #f7f7f5, where the dark set would wash out. */
-html[data-theme="light"] .status[data-status="up"] {
-  --status: #0b7a2a;
-}
-html[data-theme="light"] .status[data-status="down"] {
-  --status: #b42318;
-}
-html[data-theme="light"] .status[data-status="checking"] {
-  --status: #946200;
-}
-html[data-theme="light"] .status[data-status="vpn"] {
-  --status: #1d4ed8;
-}
-
-/* `[data-status]` rather than `.status`, so a tile whose status has not
-   resolved yet keeps the neutral dot from the block above instead of
-   inheriting a half-set colour. */
-.status[data-status] {
-  color: var(--status, inherit);
-}
-.status[data-status] .dot {
-  background: var(--status, transparent);
-  border-color: var(--status, var(--border-strong));
-}
-
 /* ---- footer ---- */
 
 /* The shared footer assumes it is the last row of a reading column and
@@ -336,19 +215,13 @@ html[data-theme="light"] .status[data-status="vpn"] {
   }
 
   .tile {
-    grid-template-columns: 28px 1fr auto;
+    grid-template-columns: 28px 1fr;
   }
 
-  /* The tags are the first thing to go: the name and the status are what a
-     row is for. */
+  /* The tags are the first thing to go: the icon and the name are what a row
+     is for. */
   .tile__tags {
     display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dash__refresh.spinning svg {
-    animation: none;
   }
 }
 
@@ -366,4 +239,78 @@ html[data-theme="light"] .status[data-status="vpn"] {
   color: var(--text-muted);
   font-size: 13px;
   text-transform: uppercase;
+}
+
+/* ---- secrets ---- */
+
+/* The same hairline-and-mono vocabulary as the app rows, so the section reads
+   as part of the list's page rather than a panel bolted under it. */
+.dash__secrets {
+  margin-top: 2.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.dash__secretshead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.7rem 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.dash__secretshead::-webkit-details-marker {
+  display: none;
+}
+
+.dash__secretshead:focus-visible {
+  outline: 1px solid var(--text-faint);
+  outline-offset: 2px;
+}
+
+.dash__note {
+  margin: 0 0 0.7rem;
+  color: var(--text-faint);
+}
+
+.dash__secretlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.secret {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0 0.9rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.secret__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.secret__projects,
+.secret__date {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+
+/* On a phone the project column goes first, for the same reason the tags do
+   on the app rows: it is the least load-bearing thing in the row. */
+@media (max-width: 34rem) {
+  .secret {
+    grid-template-columns: 1fr auto;
+  }
+  .secret__projects {
+    display: none;
+  }
 }

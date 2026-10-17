@@ -16,7 +16,8 @@ export interface CloudflareAccessOptions {
  * verifyWithJwks - Hono's already a dependency everywhere, no need for a
  * separate JWT library). Reads the JWT from a header rather than Access's
  * own CF_Authorization cookie: this is for routes reached via a
- * server-to-server forward (see apps/dashboard's api/status.ts) from an app
+ * server-to-server forward (apps/dashboard's call to apps/api's /apps, in
+ * its src/lib/api.ts) from an app
  * that's already behind its own Access policy on a different hostname, not
  * directly behind Access itself. Throws a 401 if the header is missing or
  * the token doesn't verify.

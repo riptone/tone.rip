@@ -9,7 +9,7 @@
  *
  * And what it cost was reproducibility. `wrangler types` infers bindings
  * from `.dev.vars` as well as from wrangler.jsonc, and `.dev.vars` is
- * gitignored: on a machine that has one, the six secrets below are generated
+ * gitignored: on a machine that has one, the secrets below are generated
  * as required `string`s; on CI, or a fresh clone, they are absent entirely.
  * Extending that made this file typecheck differently depending on whether
  * the person running it happened to have local credentials - and it failed
@@ -21,13 +21,8 @@
  *
  * So this interface states what the code expects, and the generated file is
  * left to describe the runtime. */
-export interface Bindings {
+interface Bindings {
   GITHUB_TOKEN?: string;
-  TAILSCALE_OAUTH_CLIENT_ID?: string;
-  TAILSCALE_OAUTH_CLIENT_SECRET?: string;
-  TAILSCALE_OAUTH_SCOPE?: string;
-  TAILSCALE_TAILNET?: string;
-  TAILSCALE_STATUS_DEVICE?: string;
   /** Bearer token apps/ssh-cv presents to POST /ssh/authorize. */
   SSH_GATEWAY_TOKEN?: string;
   /** Newline-separated allowlist; see services/ssh-allowlist.ts for the format. */
@@ -41,11 +36,14 @@ export interface Bindings {
   CF_ACCESS_TOKEN?: string;
   CF_ACCOUNT_ID?: string;
   /**
-   * Hosts needing a probe path other than "/", as `host=path` pairs separated
-   * by commas. A secret, not a constant: this repository is public and the
-   * hostnames are the sensitive part. See services/access-apps.ts.
+   * A Bitwarden Secrets Manager machine account access token, read-only and
+   * scoped to the projects the dashboard lists, and its region ("eu" or
+   * "us"; "eu" when unset). Without the token /secrets answers
+   * "unconfigured". Only names and dates are ever read - see
+   * services/bitwarden-secrets.ts.
    */
-  PROBE_PATHS?: string;
+  BWS_ACCESS_TOKEN?: string;
+  BWS_REGION?: string;
 }
 
 export interface AppEnv {

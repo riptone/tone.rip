@@ -3,18 +3,17 @@ import { withTimeout } from "@repo/net";
 
 /* apps/api, reached the short way.
  *
- * This app makes two server-to-server calls to apps/api - the SSR tile fetch
- * in pages/index.astro and the /status proxy in pages/api/status.ts - and
- * both used to name `https://api.tone.rip` and go out through the public
- * internet to reach a Worker on the same account: DNS, TLS, a second pass
- * through Cloudflare's edge, a billed subrequest.
+ * This app makes one server-to-server call to apps/api - the SSR tile fetch
+ * in pages/index.astro - and it used to name `https://api.tone.rip` and go
+ * out through the public internet to reach a Worker on the same account:
+ * DNS, TLS, a second pass through Cloudflare's edge, a billed subrequest.
  *
  * wrangler.jsonc now binds that Worker as `API`, so the call is dispatched
  * in-process. Nothing about authorisation changes: apps/api verifies the
  * Access JWT this app forwards, on its own routes, exactly as before - see
  * the note in wrangler.jsonc.
  *
- * Both routes are `Cache-Control: no-store` upstream, so there was nothing in
+ * /apps is `Cache-Control: no-store` upstream, so there was nothing in
  * Cloudflare's edge cache for the binding to skip past. The cache apps/api
  * keeps for the Access API is its own `caches.default`, inside the Worker,
  * and is reached either way.
@@ -42,9 +41,8 @@ interface CallOptions {
  * genuinely absent - `astro dev` outside wrangler, or a fork with no `api`
  * Worker. It is not the local-development path: `wrangler dev` reports the
  * binding as present but `[not connected]` when apps/api is not also running,
- * which is truthy here. Nothing local depends on that, because both callers
- * stop before this: index.astro uses fixtures on localhost, and the /status
- * proxy answers early when there is no Access identity to forward.
+ * which is truthy here. Nothing local depends on that, because the one caller
+ * stops before this: index.astro uses fixtures on localhost.
  */
 export function callApi(
   path: string,

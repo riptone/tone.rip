@@ -12,15 +12,15 @@ import { appsRoute } from "./routes/apps";
 import { cspReportRoute } from "./routes/csp-report";
 import { infoRoute } from "./routes/info";
 import { projectsRoute } from "./routes/projects";
+import { secretsRoute } from "./routes/secrets";
 import { sshRoute } from "./routes/ssh";
-import { statusRoute } from "./routes/status";
 
 const API_ORIGIN = "https://api.tone.rip";
 
 // /projects is fetched client-side from tone.rip's browser scripts, so it
-// needs real CORS. /status and /csp-report aren't browser cross-origin
-// fetches - status is proxied server-to-server by apps/dashboard (see its
-// api/status.ts), and csp-report is posted by the browser's own CSP
+// needs real CORS. /apps and /csp-report aren't browser cross-origin
+// fetches - apps is called server-to-server by apps/dashboard (see its
+// src/lib/api.ts), and csp-report is posted by the browser's own CSP
 // reporting mechanism, not application JS subject to CORS.
 const ALLOWED_ORIGINS = new Set(["https://tone.rip", "https://www.tone.rip"]);
 const LOCAL_DEV_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
@@ -70,7 +70,7 @@ app.use(
   "*",
   securityHeaders({
     devHostnames: ["localhost", "127.0.0.1"],
-    connectSrc: ["https://api.github.com", "https://api.tailscale.com"],
+    connectSrc: ["https://api.github.com"],
     // This API is deliberately consumed cross-origin by every frontend in
     // the monorepo (unlike apps/web/apps/dashboard, which default to
     // same-origin) - otherwise browsers block the response even with CORS
@@ -82,17 +82,12 @@ app.use(
 const ENDPOINTS = [
   {
     href: `${API_ORIGIN}/apps`,
-    description:
-      "Self-hosted applications. Requires a Cloudflare Access JWT, like /status.",
+    description: "Self-hosted applications. Requires a Cloudflare Access JWT.",
   },
   { href: `${API_ORIGIN}/projects`, description: "Public GitHub repo list." },
   {
     href: `${API_ORIGIN}/projects/{repo}/readme`,
     description: "Rendered README for one repo.",
-  },
-  {
-    href: `${API_ORIGIN}/status`,
-    description: "Self-hosted app health. Requires a Cloudflare Access JWT.",
   },
   { href: `${API_ORIGIN}/csp-report`, description: "CSP violation sink." },
   {
@@ -101,6 +96,9 @@ const ENDPOINTS = [
   },
 ];
 
+// Also absent: /secrets, for the reason /apps would be if it had a second
+// client - it exists for the dashboard alone, and the catalog would only tell a
+// stranger that a list of credential names sits behind Access.
 // Deliberately absent from ENDPOINTS: /ssh/authorize is a control-plane
 // endpoint for exactly one client (apps/ssh-cv), not a public API. Listing it
 // in the RFC 9727 catalog and on GET / would advertise its existence to
@@ -125,7 +123,7 @@ app.get("/", (c) =>
 
 app.route("/apps", appsRoute);
 app.route("/projects", projectsRoute);
-app.route("/status", statusRoute);
+app.route("/secrets", secretsRoute);
 app.route("/csp-report", cspReportRoute);
 app.route("/info", infoRoute);
 app.route("/ssh", sshRoute);
