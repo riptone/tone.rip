@@ -47,6 +47,12 @@ describe("htmlToText", () => {
     ).toBe("Texto");
   });
 
+  it("drops a script spliced together by removing another", () => {
+    expect(
+      htmlToText("<scr<script></script>ipt>x()</script><p>Texto</p>"),
+    ).toBe("Texto");
+  });
+
   it("decodes the common entities once", () => {
     expect(
       htmlToText(

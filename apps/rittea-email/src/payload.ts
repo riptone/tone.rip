@@ -55,14 +55,27 @@ const ENTITIES: Record<string, string> = {
 };
 
 /**
+ * Removes `SCRIPT_OR_STYLE` until none is left: one pass can splice a new
+ * block together, as `<scr<script></script>ipt>` does.
+ */
+function removeScriptsAndStyles(html: string): string {
+  let previous: string;
+  let current = html;
+  do {
+    previous = current;
+    current = current.replace(SCRIPT_OR_STYLE, "");
+  } while (current !== previous);
+  return current;
+}
+
+/**
  * A readable plain-text rendering of an HTML body, for the emails that
  * arrive without a text part. Not a sanitiser: rittea treats the result as
  * text. Entities are decoded in one pass, so `&amp;lt;` becomes `&lt;` and
  * not `<`.
  */
 export function htmlToText(html: string): string {
-  return html
-    .replace(SCRIPT_OR_STYLE, "")
+  return removeScriptsAndStyles(html)
     .replace(LINE_BREAK_TAG, "\n")
     .replace(ANY_TAG, "")
     .replace(ENTITY, (_, name: string) => ENTITIES[name] ?? "")
