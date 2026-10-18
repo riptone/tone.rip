@@ -100,7 +100,7 @@ describe("fetchSecretNames", () => {
     vi.stubGlobal("fetch", await fakeBitwarden(calls));
     expect(
       await fetchSecretNames({ accessToken: undefined, region: "eu" }),
-    ).toEqual({ state: "unconfigured", secrets: [] });
+    ).toEqual({ state: "unconfigured", secrets: [], vaultUrl: null });
     expect(calls).toEqual([]);
   });
 
@@ -126,6 +126,7 @@ describe("fetchSecretNames", () => {
           revisedAt: "2026-10-12T00:00:00Z",
         },
       ],
+      vaultUrl: `https://vault.bitwarden.eu/#/sm/${ORG}/secrets`,
     });
     expect(calls).toEqual([
       "https://identity.bitwarden.eu/connect/token",
@@ -161,7 +162,7 @@ describe("fetchSecretNames", () => {
     );
     expect(
       await fetchSecretNames({ accessToken: TOKEN, region: "eu" }),
-    ).toEqual({ state: "unavailable", secrets: [] });
+    ).toEqual({ state: "unavailable", secrets: [], vaultUrl: null });
     expect(JSON.stringify(warn.mock.calls)).not.toContain("client-secret");
   });
 });

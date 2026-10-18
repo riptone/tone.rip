@@ -19,11 +19,13 @@ secretsRoute.use(
 );
 
 secretsRoute.get("/", async (c) => {
-  const { secrets, state } = await fetchSecretNames({
+  const { secrets, state, vaultUrl } = await fetchSecretNames({
     accessToken: c.env.BWS_ACCESS_TOKEN,
     region: c.env.BWS_REGION,
   });
   if (state === "unconfigured")
     console.warn("[secrets] no BWS_ACCESS_TOKEN; serving no secrets");
-  return c.json({ secrets, state }, 200, { "Cache-Control": "no-store" });
+  return c.json({ secrets, state, vaultUrl }, 200, {
+    "Cache-Control": "no-store",
+  });
 });

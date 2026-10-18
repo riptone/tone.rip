@@ -62,7 +62,12 @@
       ]
     },
     "//#check-bundle-size": {
-      "dependsOn": ["web#build", "dashboard#build", "api#build"],
+      "dependsOn": [
+        "web#build",
+        "dashboard#build",
+        "api#build",
+        "rittea-email#build"
+      ],
       "inputs": [
         "scripts/check-bundle-size.ts",
         "apps/*/wrangler.jsonc",

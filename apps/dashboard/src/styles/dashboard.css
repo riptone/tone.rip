@@ -288,6 +288,12 @@ select {
   border-top: 1px solid var(--border);
 }
 
+/* The same `[hidden]` trap as `.tile`: the grid above beats the UA's
+   `display: none`. */
+.secret[hidden] {
+  display: none;
+}
+
 .secret__name {
   min-width: 0;
   overflow: hidden;
@@ -313,4 +319,17 @@ select {
   .secret__projects {
     display: none;
   }
+}
+
+/* The way to a value: out to Bitwarden, which asks for its own login. */
+.dash__vault {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.dash__vault:hover,
+.dash__vault:focus-visible {
+  color: var(--text);
 }

@@ -38,10 +38,12 @@ const REGIONS = {
   eu: {
     identity: "https://identity.bitwarden.eu",
     api: "https://api.bitwarden.eu",
+    vault: "https://vault.bitwarden.eu",
   },
   us: {
     identity: "https://identity.bitwarden.com",
     api: "https://api.bitwarden.com",
+    vault: "https://vault.bitwarden.com",
   },
 } as const;
 type BitwardenRegion = keyof typeof REGIONS;
@@ -52,9 +54,13 @@ interface SecretName {
   revisedAt: string;
 }
 
+/* `vaultUrl` is where the values are read: the organization's secrets in
+   Bitwarden's own web app, behind its own login and 2FA. The web app has no
+   route for a single secret (one opens as a dialog over the list), so this is
+   the list, and the name from the dashboard goes in its search box. */
 export type SecretNamesResult =
-  | { state: "ok"; secrets: SecretName[] }
-  | { state: "unconfigured" | "unavailable"; secrets: [] };
+  | { state: "ok"; secrets: SecretName[]; vaultUrl: string }
+  | { state: "unconfigured" | "unavailable"; secrets: []; vaultUrl: null };
 
 interface Session {
   bearer: string;
@@ -64,7 +70,8 @@ interface Session {
 }
 
 let session: { token: string; value: Session } | null = null;
-let memory: { at: number; secrets: SecretName[] } | null = null;
+let memory: { at: number; secrets: SecretName[]; vaultUrl: string } | null =
+  null;
 
 export function __resetBitwardenForTests(): void {
   session = null;
@@ -155,17 +162,17 @@ export async function fetchSecretNames(opts: {
   now?: number;
 }): Promise<SecretNamesResult> {
   const region: BitwardenRegion = opts.region === "us" ? "us" : "eu";
-  if (!opts.accessToken) return { state: "unconfigured", secrets: [] };
+  if (!opts.accessToken)
+    return { state: "unconfigured", secrets: [], vaultUrl: null };
   const now = opts.now ?? Date.now();
   if (memory && now - memory.at < MEMORY_TTL_MS)
-    return { state: "ok", secrets: memory.secrets };
+    return { state: "ok", secrets: memory.secrets, vaultUrl: memory.vaultUrl };
   try {
-    const secrets = await list(
-      await login(opts.accessToken, region, now),
-      region,
-    );
-    memory = { at: now, secrets };
-    return { state: "ok", secrets };
+    const s = await login(opts.accessToken, region, now);
+    const secrets = await list(s, region);
+    const vaultUrl = `${REGIONS[region].vault}/#/sm/${s.organizationId}/secrets`;
+    memory = { at: now, secrets, vaultUrl };
+    return { state: "ok", secrets, vaultUrl };
   } catch (e) {
     // The message, never the token: what failed is enough to act on.
     console.warn(
@@ -173,6 +180,6 @@ export async function fetchSecretNames(opts: {
       e instanceof Error ? e.message : String(e),
     );
     session = null;
-    return { state: "unavailable", secrets: [] };
+    return { state: "unavailable", secrets: [], vaultUrl: null };
   }
 }

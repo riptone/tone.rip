@@ -92,10 +92,31 @@ test("the secrets section lists names only, collapsed until opened", async ({
   await expect(section.locator(".secret__name").first()).toHaveText(
     "EXAMPLE_API_KEY",
   );
+  // Values are read in Bitwarden, not here.
+  await expect(section.locator("[data-vault]")).toHaveAttribute(
+    "href",
+    /^https:\/\/vault\.bitwarden\.eu\/#\/sm\/[0-9a-f-]+\/secrets$/,
+  );
 
   expect(problems.errors, problems.errors.join("\n")).toEqual([]);
   expect(problems.cspViolations, problems.cspViolations.join("\n")).toEqual([]);
   expect(external, external.join("\n")).toEqual([]);
+});
+
+test("the search box narrows the secrets too, and opens them on a match", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const section = page.locator("[data-secrets]");
+  await page.locator("[data-filter-search]").fill("webhook");
+  await expect(section).toHaveAttribute("open");
+  await expect(section.locator(".secret:visible")).toHaveCount(1);
+  await expect(section.locator(".secret__name:visible")).toHaveText(
+    "EXAMPLE_WEBHOOK_SECRET",
+  );
+  await expect(section.locator("[data-secrets-count]")).toHaveText(
+    /^1 \/ \d+$/,
+  );
 });
 
 /* This app's 404 used to be a `<meta http-equiv="refresh">` bounce to `/`,

@@ -13,6 +13,8 @@ This monorepo deploys three Cloudflare Workers from **one** repo - `apps/web`, `
 
 So: **3 Workers, all from this repo**, with `www.tone.rip` as a second custom domain on `apps/web` (no separate Worker).
 
+A fourth, `apps/rittea-email`, has no hostname: it is an Email Worker that Email Routing binds to by name, it is not in the `deploy` job, and its one-time setup is in `apps/rittea-email/README.md`.
+
 ## Why not fewer Workers?
 
 You asked whether `www` could just be folded into `api` - it's simpler to fold it into `web` instead, since `web` already contains the exact redirect logic (ported verbatim from the original middleware) and serving it from `api` would mean `api` needs to know about `web`'s hostname concerns, which is the wrong direction of coupling. One Worker, two custom domains (`tone.rip` + `www.tone.rip`) pointed at it, is the standard Cloudflare pattern for this.

@@ -2,11 +2,12 @@
 
 How the apps and packages fit together, and why things live where they do. For the visual/brand philosophy, see [constitution.md](./constitution.md). For technical conventions, see [engineering.md](./engineering.md). For deploying this, see [deployment.md](./deployment.md).
 
-## The four apps
+## The apps
 
 - **`apps/web`** - the public site, tone.rip. Astro, server-rendered, its own Cloudflare Worker.
 - **`apps/dashboard`** - the self-hosted-services launcher, dash.tone.rip. Astro, its own Cloudflare Worker, gated behind a Cloudflare Access policy (not app-level auth code).
 - **`apps/api`** - api.tone.rip. Hono, Cloudflare Workers, the single source of truth for anything both apps (or an external agent) might need.
+- **`apps/rittea-email`** - an Email Worker, no URL. Cloudflare Email Routing hands it the mail for `suporte@rittea.tone.rip`; replies to a ticket (`suporte+<token>@`) are posted to rittea (a separate product, its own repo), everything else is forwarded to a human. See its README.
 - **`apps/ssh-cv`** - the CV over SSH (`ssh cv.tone.rip`). Go, not Workers, for the reason below. Serves the same CV content the website renders, at more depth: the company names and the per-role detail `/cv` leaves out.
 
 Both Astro apps are deliberately thin: they render markup and ship the client-side interaction (the gradient field, the filter, the language switch, the right-click menu). Neither has its own API routes for data that isn't page-specific - that's what `apps/api` is for.

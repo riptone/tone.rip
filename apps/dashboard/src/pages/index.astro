@@ -75,6 +75,8 @@ interface Tile {
    that cannot depend on production. */
 /* What Bitwarden Secrets Manager holds, by name - apps/api's GET /secrets.
    Never values: the API does not read them, so this page cannot show them.
+   A value is read in Bitwarden itself, behind its own login and 2FA - the
+   section links there, so a compromised dashboard still hands over nothing.
    It is here to answer "is that key backed up, and since when", which is
    the question a launcher for the services that use those keys gets asked. */
 interface SecretRow {
@@ -87,6 +89,7 @@ type SecretsState = "ok" | "unconfigured" | "unavailable";
 let apps: Tile[] = [];
 let secrets: SecretRow[] = [];
 let secretsState: SecretsState = "unavailable";
+let vaultUrl: string | null = null;
 
 async function loadSecrets(): Promise<void> {
   try {
@@ -98,9 +101,13 @@ async function loadSecrets(): Promise<void> {
     const body = (await response.json()) as {
       secrets?: SecretRow[];
       state?: SecretsState;
+      vaultUrl?: string | null;
     };
     secrets = body.secrets ?? [];
     secretsState = body.state ?? "unavailable";
+    vaultUrl = body.vaultUrl?.startsWith("https://vault.bitwarden.")
+      ? body.vaultUrl
+      : null;
   } catch {
     // Same rule as the tiles: a missing section, not an error page.
   }
@@ -110,6 +117,8 @@ if (DEV_HOSTNAMES.has(Astro.url.hostname)) {
   apps = DEV_APPS;
   secrets = DEV_SECRETS;
   secretsState = "ok";
+  vaultUrl =
+    "https://vault.bitwarden.eu/#/sm/00000000-0000-4000-8000-000000000000/secrets";
 } else {
   // In parallel with the tiles: the render waits for the slower of the two,
   // not for their sum.
@@ -306,20 +315,30 @@ const MENU: ContextMenuEntry[] = [
         <details class="dash__secrets" data-secrets>
           <summary class="dash__secretshead">
             <span class="dash__fieldlabel">secrets</span>
-            <span class="dash__count">{secrets.length}</span>
+            <span class="dash__count" data-secrets-count>{secrets.length}</span>
           </summary>
           {SECRETS_NOTE[secretsState] ? (
             <p class="dash__note">{SECRETS_NOTE[secretsState]}</p>
           ) : (
             <ul class="dash__secretlist" aria-label="Secrets in Bitwarden">
               {secrets.map((secret) => (
-                <li class="secret">
+                <li
+                  class="secret"
+                  data-secret
+                  data-name={secret.name.toLowerCase()}
+                  data-tags={secret.projects.join(",")}
+                >
                   <code class="secret__name">{secret.name}</code>
                   <span class="secret__projects">{secret.projects.join(" · ") || "no project"}</span>
                   <time class="secret__date" datetime={secret.revisedAt}>{day(secret.revisedAt)}</time>
                 </li>
               ))}
             </ul>
+          )}
+          {vaultUrl && (
+            <a class="dash__vault" href={vaultUrl} target="_blank" rel="noopener noreferrer" data-vault>
+              values in Bitwarden ↗
+            </a>
           )}
         </details>
 
@@ -340,6 +359,7 @@ const MENU: ContextMenuEntry[] = [
 
     <script>
       import {
+        matchesFilter,
         mountContact,
         mountContextMenu,
         mountFilter,
@@ -352,6 +372,29 @@ const MENU: ContextMenuEntry[] = [
       // checks; with those gone the wrapper would only be a second name for
       // this one call.
       mountFilter();
+
+      // The same search box narrows the secrets too, by name or project, and
+      // opens the section when something in it matches - a match hidden in a
+      // closed <details> reads as "not there". The tag picker is the apps'
+      // own vocabulary, so it stays out of this list.
+      const box = document.querySelector<HTMLDetailsElement>("[data-secrets]");
+      const search = document.querySelector<HTMLInputElement>("[data-filter-search]");
+      const rows = Array.from(box?.querySelectorAll<HTMLElement>("[data-secret]") ?? []);
+      const secretsCount = box?.querySelector<HTMLElement>("[data-secrets-count]");
+      search?.addEventListener("input", () => {
+        const query = search.value;
+        let shown = 0;
+        for (const row of rows) {
+          const show =
+            matchesFilter({ name: row.dataset.name ?? "", tags: "" }, query, "") ||
+            matchesFilter({ name: (row.dataset.tags ?? "").toLowerCase(), tags: "" }, query, "");
+          row.hidden = !show;
+          if (show) shown++;
+        }
+        if (secretsCount)
+          secretsCount.textContent = query.trim() ? `${shown} / ${rows.length}` : String(rows.length);
+        if (box && query.trim() && shown > 0) box.open = true;
+      });
       mountContact();
       mountContextMenu();
       // No options: the same field the site runs, differing only in the

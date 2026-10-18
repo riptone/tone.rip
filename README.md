@@ -32,8 +32,8 @@
 
 ## What's in here
 
-Four applications, five shared packages and four tooling configs, in one
-repository. Three of the applications are Cloudflare Workers. One is a Go
+Five applications, five shared packages and four tooling configs, in one
+repository. Four of the applications are Cloudflare Workers. One is a Go
 binary, because the protocol it speaks [leaves no choice](#the-ssh-cv).
 
 ```
@@ -41,6 +41,7 @@ apps/
   web         tone.rip               Astro, server-rendered on Workers
   dashboard   dash.tone.rip          Astro, behind Cloudflare Access
   api         api.tone.rip           Hono on Workers
+  rittea-email  suporte@rittea.tone.rip  Email Worker - ticket replies to rittea
   ssh-cv      ssh cv.tone.rip        Go - Charm Wish + Bubble Tea
   doti        dotfiles installer     Go - retired (see apps/doti/README.md)
 

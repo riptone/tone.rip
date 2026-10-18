@@ -1,0 +1,4 @@
+# Same value as rittea's EMAIL_ENTRADA_SEGREDO.
+EMAIL_ENTRADA_SEGREDO=
+# A verified Email Routing destination address.
+FORWARD_TO=

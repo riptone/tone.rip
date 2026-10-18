@@ -24,9 +24,9 @@ interface WorkerApp {
    * Whether this app's `deploy` script passes `--minify`, so the number here
    * is the one that actually ships.
    *
-   * Only apps/api does, and the asymmetry is real rather than an oversight:
-   * wrangler bundles that Worker straight from TypeScript, so minifying it
-   * takes 153 KiB gzip to 115. apps/web and apps/dashboard hand wrangler a
+   * apps/api and apps/rittea-email do, and the asymmetry is real rather
+   * than an oversight: wrangler bundles those Workers straight from
+   * TypeScript, so minifying apps/api takes 153 KiB gzip to 115. apps/web and apps/dashboard hand wrangler a
    * build Astro has already minified - measured at 194.06 KiB with the flag
    * and 194.06 without, to the byte.
    *
@@ -41,6 +41,7 @@ const APPS: WorkerApp[] = [
   { dir: "apps/web", budgetKiB: 2048 },
   { dir: "apps/dashboard", budgetKiB: 2048 },
   { dir: "apps/api", budgetKiB: 2048, minify: true },
+  { dir: "apps/rittea-email", budgetKiB: 2048, minify: true },
 ];
 
 const TOTAL_UPLOAD_LINE =
