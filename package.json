@@ -43,7 +43,7 @@
       "typescript": "5.9.2",
       "vitest": "4.1.11",
       "@vitest/coverage-v8": "4.1.11",
-      "@vitest/coverage-istanbul": "4.1.11",
+      "@vitest/coverage-istanbul": "5.0.5",
       "hono": "^4.13.13",
       "zod": "^4.5.2",
       "@hono/zod-validator": "^0.9.1",
