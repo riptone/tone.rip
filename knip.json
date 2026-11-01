@@ -7,7 +7,6 @@
     "apps/dashboard": {
       "entry": ["src/fetch.ts!"]
     },
-    "apps/rittea-email": {},
     "apps/web": {
       "entry": ["src/fetch.ts!"]
     },

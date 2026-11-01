@@ -65,8 +65,7 @@
       "dependsOn": [
         "web#build",
         "dashboard#build",
-        "api#build",
-        "rittea-email#build"
+        "api#build"
       ],
       "inputs": [
         "scripts/check-bundle-size.ts",

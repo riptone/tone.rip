@@ -63,22 +63,6 @@
       "name": "@repo/doti",
       "version": "0.0.0",
     },
-    "apps/rittea-email": {
-      "name": "rittea-email",
-      "version": "0.0.0",
-      "dependencies": {
-        "@repo/net": "*",
-        "postal-mime": "4.0.7",
-      },
-      "devDependencies": {
-        "@cloudflare/vitest-pool-workers": "^0.23.0",
-        "@repo/typescript-config": "*",
-        "@repo/vitest-config": "*",
-        "@vitest/coverage-istanbul": "catalog:",
-        "vitest": "catalog:",
-        "wrangler": "catalog:",
-      },
-    },
     "apps/ssh-cv": {
       "name": "@repo/ssh-cv",
       "version": "0.0.0",
@@ -1445,8 +1429,6 @@
     "restore-cursor": ["restore-cursor@3.1.0", "", { "dependencies": { "onetime": "^5.1.0", "signal-exit": "^3.0.2" } }, "sha512-l+sSefzHpj5qimhFSE5a8nufZYAM3sBSVMAPtYkmC+4EH2anSGaEMXSD0izRQbu9nfyQ9y5JrVmp7E8oZrUjvA=="],
 
     "retext-smartypants": ["retext-smartypants@6.2.0", "", { "dependencies": { "@types/nlcst": "^2.0.0", "nlcst-to-string": "^4.0.0", "unist-util-visit": "^5.0.0" } }, "sha512-kk0jOU7+zGv//kfjXEBjdIryL1Acl4i9XNkHxtM7Tm5lFiCog576fjNC9hjoR7LTKQ0DsPWy09JummSsH1uqfQ=="],
-
-    "rittea-email": ["rittea-email@workspace:apps/rittea-email"],
 
     "robots-parser": ["robots-parser@3.0.1", "", {}, "sha512-s+pyvQeIKIZ0dx5iJiQk1tPLJAWln39+MI5jtM8wnyws+G5azk+dMnMX0qfbqNetKKNgcWWOdi0sfm+FbQbgdQ=="],
 

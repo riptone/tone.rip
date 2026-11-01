@@ -13,7 +13,6 @@ This monorepo deploys three Cloudflare Workers from **one** repo - `apps/web`, `
 
 So: **3 Workers, all from this repo**, with `www.tone.rip` as a second custom domain on `apps/web` (no separate Worker).
 
-A fourth, `apps/rittea-email`, has no hostname: it is an Email Worker that Email Routing binds to by name, it is not in the `deploy` job, and its one-time setup is in `apps/rittea-email/README.md`.
 
 ## Why not fewer Workers?
 
