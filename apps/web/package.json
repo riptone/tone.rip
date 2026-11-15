@@ -39,9 +39,9 @@
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "bun-types": "catalog:",
-    "chrome-launcher": "^1.2.2",
+    "chrome-launcher": "^1.2.3",
     "jsdom": "catalog:",
-    "lighthouse": "^13.5.0",
+    "lighthouse": "^13.6.0",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"
